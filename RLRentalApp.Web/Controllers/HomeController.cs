@@ -125,7 +125,8 @@ public class HomeController : Controller
             LeaseStartDate = activeLease.StartDate,
             LatestRent = latestRent,
             CurrentMonthServiceTotal = serviceTotal,
-            CurrentMonthPaymentTotal = paymentTotal
+            CurrentMonthPaymentTotal = paymentTotal,
+            CurrentBalance = ((latestRent ?? 0m) + serviceTotal) - paymentTotal
         };
     }
 

@@ -26,4 +26,5 @@ public class PropertyStatusVm
     public decimal? LatestRent { get; set; }
     public decimal CurrentMonthServiceTotal { get; set; }
     public decimal CurrentMonthPaymentTotal { get; set; }
+    public decimal CurrentBalance { get; set; }
 }

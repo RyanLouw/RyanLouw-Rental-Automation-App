@@ -119,7 +119,8 @@
                     ['Lease Start', status.leaseStartDate ? new Date(status.leaseStartDate).toLocaleDateString() : 'N/A'],
                     ['Latest Rent', status.latestRent !== null ? Number(status.latestRent).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : 'N/A'],
                     ['Current Month Services', Number(status.currentMonthServiceTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })],
-                    ['Current Month Payments', Number(status.currentMonthPaymentTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })]
+                    ['Current Month Payments', Number(status.currentMonthPaymentTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })],
+                    ['Current Balance', Number(status.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })]
                 ];
 
                 statusDetails.innerHTML = values.map(([key, value]) =>
