@@ -1,0 +1,45 @@
+﻿@model RLRentalApp.Web.Models.LoginVm
+
+@{
+    ViewData["Title"] = "Login";
+}
+
+<div class="container" style="max-width:400px; padding-top:80px;">
+    <h3 class="mb-4 text-center">RLRentalApp Login</h3>
+
+    <form asp-action="Login" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="ReturnUrl" />
+
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input asp-for="Email" class="form-control" />
+            <span asp-validation-for="Email" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input asp-for="Password" type="password" class="form-control" />
+            <span asp-validation-for="Password" class="text-danger"></span>
+        </div>
+
+        <div class="form-check mb-3">
+            <input asp-for="RememberMe" class="form-check-input" />
+            <label asp-for="RememberMe" class="form-check-label">
+                Remember me
+            </label>
+        </div>
+
+        <div class="text-danger mb-2">
+            @Html.ValidationSummary(false)
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">
+            Login
+        </button>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
