@@ -45,6 +45,19 @@ public class HomeController : Controller
         return Json(status);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> PropertyStatement(int propertyId)
+    {
+        var statement = await LoadPropertyStatementAsync(propertyId);
+
+        if (statement is null)
+        {
+            return NotFound();
+        }
+
+        return Json(statement);
+    }
+
     public IActionResult Privacy()
     {
         return View();
@@ -112,6 +125,7 @@ public class HomeController : Controller
         var latestRent = await LoadLatestRentAsync(connection, activeLease.LeaseId);
         var serviceTotal = await LoadCurrentMonthServiceTotalAsync(connection, activeLease.LeaseId);
         var paymentTotal = await LoadCurrentMonthPaymentTotalAsync(connection, activeLease.LeaseId);
+        var openingOutstanding = await LoadOpeningOutstandingAsync(connection, activeLease.TenantId);
 
         return new PropertyStatusVm
         {
@@ -121,12 +135,51 @@ public class HomeController : Controller
             IsPropertyActive = property.IsActive,
             HasActiveLease = true,
             LeaseId = activeLease.LeaseId,
+            TenantId = activeLease.TenantId,
             TenantName = activeLease.TenantName,
             LeaseStartDate = activeLease.StartDate,
             LatestRent = latestRent,
+            OpeningOutstanding = openingOutstanding,
             CurrentMonthServiceTotal = serviceTotal,
             CurrentMonthPaymentTotal = paymentTotal,
-            CurrentBalance = ((latestRent ?? 0m) + serviceTotal) - paymentTotal
+            CurrentBalance = openingOutstanding + (latestRent ?? 0m) + serviceTotal - paymentTotal
+        };
+    }
+
+    private async Task<PropertyStatementVm?> LoadPropertyStatementAsync(int propertyId)
+    {
+        await using var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var property = await LoadPropertyAsync(connection, propertyId);
+        var activeLease = await LoadActiveLeaseAsync(connection, propertyId);
+
+        if (property is null || activeLease is null)
+        {
+            return null;
+        }
+
+        var openingOutstanding = await LoadOpeningOutstandingAsync(connection, activeLease.TenantId);
+        var latestRent = await LoadLatestRentAsync(connection, activeLease.LeaseId);
+        var statementEntries = await LoadCurrentMonthEntriesAsync(connection, activeLease.LeaseId, latestRent);
+
+        var runningBalance = openingOutstanding;
+        foreach (var entry in statementEntries)
+        {
+            runningBalance += entry.Amount;
+            entry.RunningBalance = runningBalance;
+        }
+
+        return new PropertyStatementVm
+        {
+            PropertyId = property.Id,
+            LeaseId = activeLease.LeaseId,
+            TenantId = activeLease.TenantId,
+            PropertyName = property.Name,
+            TenantName = activeLease.TenantName,
+            OpeningOutstanding = openingOutstanding,
+            CurrentBalance = runningBalance,
+            Entries = statementEntries
         };
     }
 
@@ -172,7 +225,7 @@ public class HomeController : Controller
     {
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT l.id, t.full_name, l.start_date
+            SELECT l.id, l.tenant_id, t.full_name, l.start_date
             FROM lease l
             INNER JOIN tenant t ON t.id = l.tenant_id
             WHERE l.property_id = @propertyId AND l.end_date IS NULL
@@ -194,9 +247,28 @@ public class HomeController : Controller
         return new ActiveLeaseVm
         {
             LeaseId = reader.GetInt32(0),
-            TenantName = reader.GetString(1),
-            StartDate = reader.GetDateTime(2)
+            TenantId = reader.GetInt32(1),
+            TenantName = reader.GetString(2),
+            StartDate = reader.GetDateTime(3)
         };
+    }
+
+    private static async Task<decimal> LoadOpeningOutstandingAsync(DbConnection connection, int tenantId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COALESCE(current_amount_outstanding, 0)
+            FROM tenant
+            WHERE id = @tenantId
+            LIMIT 1;";
+
+        var parameter = cmd.CreateParameter();
+        parameter.ParameterName = "@tenantId";
+        parameter.Value = tenantId;
+        cmd.Parameters.Add(parameter);
+
+        var value = await cmd.ExecuteScalarAsync();
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
     }
 
     private static async Task<decimal?> LoadLatestRentAsync(DbConnection connection, int leaseId)
@@ -254,9 +326,61 @@ public class HomeController : Controller
         return value is null or DBNull ? 0m : Convert.ToDecimal(value);
     }
 
+    private static async Task<List<PropertyStatementEntryVm>> LoadCurrentMonthEntriesAsync(DbConnection connection, int leaseId, decimal? latestRent)
+    {
+        var entries = new List<PropertyStatementEntryVm>();
+
+        if (latestRent.HasValue)
+        {
+            entries.Add(new PropertyStatementEntryVm
+            {
+                EntryDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
+                EntryType = "Rent",
+                Description = "Current month rent",
+                Amount = latestRent.Value
+            });
+        }
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT billing_period, 'Service' AS entry_type, 'Service charge' AS description, amount
+            FROM service_charge
+            WHERE lease_id = @leaseId
+              AND date_trunc('month', billing_period) = date_trunc('month', CURRENT_DATE)
+
+            UNION ALL
+
+            SELECT paid_on, 'Payment' AS entry_type, COALESCE(reference, 'Payment received') AS description, -amount
+            FROM payment
+            WHERE lease_id = @leaseId
+              AND date_trunc('month', paid_on) = date_trunc('month', CURRENT_DATE)
+
+            ORDER BY 1, 2;";
+
+        var parameter = cmd.CreateParameter();
+        parameter.ParameterName = "@leaseId";
+        parameter.Value = leaseId;
+        cmd.Parameters.Add(parameter);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            entries.Add(new PropertyStatementEntryVm
+            {
+                EntryDate = reader.GetDateTime(0),
+                EntryType = reader.GetString(1),
+                Description = reader.GetString(2),
+                Amount = reader.GetDecimal(3)
+            });
+        }
+
+        return entries.OrderBy(x => x.EntryDate).ThenBy(x => x.EntryType).ToList();
+    }
+
     private sealed class ActiveLeaseVm
     {
         public int LeaseId { get; set; }
+        public int TenantId { get; set; }
         public string TenantName { get; set; } = string.Empty;
         public DateTime StartDate { get; set; }
     }
