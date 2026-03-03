@@ -220,22 +220,55 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         var result = new SewerageParseVm();
 
         var accountSection = GetSection(text, "ACCOUNT DETAILS", string.Empty);
+        var keywordMatches = Regex.Matches(accountSection, @"(?i)(SEWERAGE|SEWER|SANITATION)");
 
-        // Try to find an account detail line containing sewer/sewerage/sanitation with date, code and amount.
-        var lineMatch = Regex.Match(
-            accountSection,
-            @"(?is)(\d{2}[\-/]\d{2}[\-/]\d{4})\s*([A-Za-z0-9]{4,})?\s*([A-Za-z\s\-]*?(SEWERAGE|SEWER|SANITATION)[A-Za-z\s\-]*?)\s*.*?([\d,]+(?:\.\d{1,2}))");
-
-        if (lineMatch.Success)
+        if (keywordMatches.Count > 0)
         {
-            result.Date = lineMatch.Groups[1].Value;
-            result.Code = lineMatch.Groups[2].Value;
-            result.AmountInclVat = TryParseDecimal(lineMatch.Groups[5].Value);
-            return result;
+            decimal total = 0m;
+
+            foreach (Match keyword in keywordMatches)
+            {
+                var keywordIndex = keyword.Index;
+
+                // Try to read the date+code immediately before this sewerage phrase.
+                var backStart = Math.Max(0, keywordIndex - 60);
+                var backWindow = accountSection.Substring(backStart, keywordIndex - backStart);
+                var dateCodeMatches = Regex.Matches(backWindow, @"(\d{2}[\-/]\d{2}[\-/]\d{4})(\d{4,8})");
+                var dateCode = dateCodeMatches.Count > 0 ? dateCodeMatches[^1] : null;
+
+                if (string.IsNullOrWhiteSpace(result.Date) && dateCode is not null)
+                {
+                    result.Date = dateCode.Groups[1].Value;
+                    result.Code = dateCode.Groups[2].Value;
+                }
+
+                // Read forward until next date row (or a bounded length), then extract amount tokens.
+                var forward = accountSection.Substring(keywordIndex, Math.Min(260, accountSection.Length - keywordIndex));
+                var nextDate = Regex.Match(forward[1..], @"\d{2}[\-/]\d{2}[\-/]\d{4}");
+                var chunk = nextDate.Success ? forward[..(nextDate.Index + 1)] : forward;
+
+                var decimalTokens = Regex.Matches(chunk, @"-?\d+(?:,\d{3})*(?:\.\d{2})")
+                    .Cast<Match>()
+                    .Select(m => TryParseDecimal(m.Value))
+                    .Where(v => v.HasValue)
+                    .Select(v => v!.Value)
+                    .ToList();
+
+                if (decimalTokens.Count > 0)
+                {
+                    total += decimalTokens[^1];
+                }
+            }
+
+            if (total != 0m)
+            {
+                result.AmountInclVat = total;
+                return result;
+            }
         }
 
         // Fallback pattern around sewerage keywords.
-        var block = Regex.Match(text, @"(?is)(sewerage|sewer|sanitation)[\s\S]{0,320}").Value;
+        var block = Regex.Match(text, @"(?is)(sewerage|sewer|sanitation)[\s\S]{0,420}").Value;
         if (string.IsNullOrWhiteSpace(block))
         {
             return result;
