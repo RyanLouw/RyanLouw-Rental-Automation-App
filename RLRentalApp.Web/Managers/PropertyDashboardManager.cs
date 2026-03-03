@@ -589,9 +589,32 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static int InferStatementYear(string text)
     {
-        var years = Regex.Matches(text, @"\b20\d{2}\b")
+        var explicitYear = Regex.Match(text, @"(?is)Staatdatum\s*:\s*\d{1,2}\s+[A-Za-z]+\s+(20\d{2})");
+        if (explicitYear.Success && int.TryParse(explicitYear.Groups[1].Value, out var stateYear))
+        {
+            return stateYear;
+        }
+
+        var periodYear = Regex.Match(text, @"(?is)Staat\s*Periode\s*:\s*\d{1,2}\s+[A-Za-z]+\s+(20\d{2})\s+tot\s+\d{1,2}\s+[A-Za-z]+\s+(20\d{2})");
+        if (periodYear.Success)
+        {
+            var first = int.TryParse(periodYear.Groups[1].Value, out var y1) ? y1 : 0;
+            var second = int.TryParse(periodYear.Groups[2].Value, out var y2) ? y2 : 0;
+
+            if (first >= 2000 && first <= 2100)
+            {
+                return first;
+            }
+
+            if (second >= 2000 && second <= 2100)
+            {
+                return second;
+            }
+        }
+
+        var years = Regex.Matches(text, @"(?<!\d)(20\d{2})(?![\d,.])")
             .Cast<Match>()
-            .Select(x => int.TryParse(x.Value, out var value) ? value : 0)
+            .Select(x => int.TryParse(x.Groups[1].Value, out var value) ? value : 0)
             .Where(x => x >= 2000 && x <= 2100)
             .ToList();
 
