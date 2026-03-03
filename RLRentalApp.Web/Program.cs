@@ -2,13 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
 using RLRentalApp.Web.Data;
-using RLRentalApp.Web.Data;
+using RLRentalApp.Web.DataAccess;
+using RLRentalApp.Web.Managers;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddControllersWithViews();
 
 builder.Services.AddControllersWithViews(options =>
 {
@@ -18,9 +16,13 @@ builder.Services.AddControllersWithViews(options =>
 
     options.Filters.Add(new AuthorizeFilter(policy));
 });
+
 // Identity DB (Postgres)
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("rentaldb")));
+
+builder.Services.AddScoped<IPropertyDashboardDataAccess, PropertyDashboardDataAccess>();
+builder.Services.AddScoped<IPropertyDashboardManager, PropertyDashboardManager>();
 
 // Identity services
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
@@ -39,7 +41,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
 });
-builder.Services.AddControllersWithViews();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -57,7 +59,6 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
 
 app.MapControllerRoute(
     name: "default",
