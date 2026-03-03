@@ -91,3 +91,22 @@ public class RefuseParseVm
     public string Code { get; set; } = string.Empty;
     public decimal? AmountInclVat { get; set; }
 }
+
+
+public class SaveServicesRequestVm
+{
+    public int PropertyId { get; set; }
+    public DateTime BillingPeriod { get; set; }
+    public decimal? ElectricityAmount { get; set; }
+    public decimal? WaterAmount { get; set; }
+    public decimal? SewerageAmount { get; set; }
+    public decimal? RefuseAmount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class SaveServicesResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int AddedCount { get; set; }
+}

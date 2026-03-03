@@ -9,4 +9,5 @@ public interface IPropertyDashboardManager
     Task<PropertyStatusVm?> GetPropertyStatusAsync(int propertyId);
     Task<PropertyStatementVm?> GetPropertyStatementAsync(int propertyId);
     Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file);
+    Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request);
 }

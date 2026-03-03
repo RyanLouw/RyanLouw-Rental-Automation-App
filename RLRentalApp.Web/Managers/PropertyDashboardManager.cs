@@ -132,6 +132,45 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
+
+    public async Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request)
+    {
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new SaveServicesResultVm
+            {
+                Success = false,
+                Message = "No active lease found for the selected property."
+            };
+        }
+
+        var charges = new List<ServiceChargeInsertDataModel>();
+
+        AddCharge(charges, "Electricity", request.ElectricityAmount, request.BillingPeriod, request.Notes);
+        AddCharge(charges, "Water", request.WaterAmount, request.BillingPeriod, request.Notes);
+        AddCharge(charges, "Sanitation", request.SewerageAmount, request.BillingPeriod, request.Notes);
+        AddCharge(charges, "Refuse", request.RefuseAmount, request.BillingPeriod, request.Notes);
+
+        if (charges.Count == 0)
+        {
+            return new SaveServicesResultVm
+            {
+                Success = false,
+                Message = "Please capture at least one service amount."
+            };
+        }
+
+        var inserted = await _dataAccess.InsertServiceChargesAsync(activeLease.LeaseId, charges);
+
+        return new SaveServicesResultVm
+        {
+            Success = inserted > 0,
+            AddedCount = inserted,
+            Message = inserted > 0 ? $"Saved {inserted} service charge(s)." : "No service charges were saved."
+        };
+    }
+
     public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file)
     {
         if (file is null || file.Length == 0)
@@ -166,6 +205,23 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Refuse = refuse,
             RawTextPreview = text.Length > 4000 ? text[..4000] : text
         };
+    }
+
+
+    private static void AddCharge(List<ServiceChargeInsertDataModel> charges, string serviceType, decimal? amount, DateTime billingPeriod, string notes)
+    {
+        if (!amount.HasValue || amount.Value <= 0)
+        {
+            return;
+        }
+
+        charges.Add(new ServiceChargeInsertDataModel
+        {
+            ServiceTypeName = serviceType,
+            Amount = amount.Value,
+            BillingPeriod = new DateTime(billingPeriod.Year, billingPeriod.Month, 1),
+            Notes = string.IsNullOrWhiteSpace(notes) ? "Captured from dashboard" : notes
+        });
     }
 
     private static string ExtractPdfText(Stream stream)

@@ -65,6 +65,20 @@ public class HomeController : Controller
         return Json(result);
     }
 
+
+    [HttpPost]
+    public async Task<IActionResult> SaveServices([FromBody] SaveServicesRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SaveServicesAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
     public IActionResult Privacy()
     {
         return View();
