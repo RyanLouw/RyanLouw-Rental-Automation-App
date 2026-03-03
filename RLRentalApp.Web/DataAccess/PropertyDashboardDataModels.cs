@@ -15,3 +15,11 @@ public sealed class StatementEntryDataModel
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
 }
+
+public sealed class ServiceChargeInsertDataModel
+{
+    public string ServiceTypeName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public DateTime BillingPeriod { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
