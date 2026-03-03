@@ -75,7 +75,53 @@
 </div>
 
 <div class="modal fade" id="didPayModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Did they pay?</h2><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Capture the payment amount, date, and reference for this property.</div></div></div>
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Did they pay?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload a bank statement PDF. We will only pull entries with the description <strong>Betaling Van Heino Huur</strong>.</p>
+                <div class="mb-3">
+                    <label for="paymentPdfFile" class="form-label">Statement PDF</label>
+                    <input class="form-control" type="file" id="paymentPdfFile" accept="application/pdf,.pdf" />
+                </div>
+                <button class="btn btn-primary" type="button" id="parsePaymentPdfBtn">Parse PDF</button>
+
+                <div id="paymentPdfError" class="alert alert-danger mt-3 d-none"></div>
+
+                <div id="paymentResults" class="mt-3 d-none">
+                    <h3 class="h6">Detected payments</h3>
+                    <p class="small text-muted mb-2">You can remove any row before saving. Duplicate same amount on the same day is automatically blocked.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th class="text-end">Amount</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="paymentNotesInput">Notes (optional)</label>
+                        <input type="text" class="form-control" id="paymentNotesInput" maxlength="400" />
+                    </div>
+                    <button class="btn btn-success" type="button" id="savePaymentsBtn">Save payments</button>
+                    <div id="savePaymentsMsg" class="alert mt-3 d-none"></div>
+
+                    <details>
+                        <summary>Raw text preview</summary>
+                        <pre id="paymentPdfRawText" class="small mt-2 mb-0"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="addServicesModal" tabindex="-1" aria-hidden="true">
@@ -242,6 +288,15 @@
             const servicesNotesInput = document.getElementById('servicesNotesInput');
             const saveServicesBtn = document.getElementById('saveServicesBtn');
             const saveServicesMsg = document.getElementById('saveServicesMsg');
+            const parsePaymentPdfBtn = document.getElementById('parsePaymentPdfBtn');
+            const paymentPdfFile = document.getElementById('paymentPdfFile');
+            const paymentPdfError = document.getElementById('paymentPdfError');
+            const paymentResults = document.getElementById('paymentResults');
+            const paymentTableBody = document.getElementById('paymentTableBody');
+            const paymentNotesInput = document.getElementById('paymentNotesInput');
+            const savePaymentsBtn = document.getElementById('savePaymentsBtn');
+            const savePaymentsMsg = document.getElementById('savePaymentsMsg');
+            const paymentPdfRawText = document.getElementById('paymentPdfRawText');
 
             let selectedPropertyId = null;
 
@@ -376,6 +431,125 @@
                 servicePdfResults?.classList.remove('d-none');
             });
 
+
+
+
+            let parsedPayments = [];
+
+            const renderPaymentRows = () => {
+                if (!paymentTableBody) {
+                    return;
+                }
+
+                paymentTableBody.innerHTML = parsedPayments.map((payment, index) => `
+                    <tr>
+                        <td>${new Date(payment.paidOn).toLocaleDateString()}</td>
+                        <td>${payment.description}</td>
+                        <td class="text-end">${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-index="${index}" type="button">Delete</button></td>
+                    </tr>
+                `).join('');
+            };
+
+            paymentTableBody?.addEventListener('click', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
+
+                const deleteBtn = target.closest('button[data-index]');
+                if (!deleteBtn) {
+                    return;
+                }
+
+                const index = Number(deleteBtn.getAttribute('data-index'));
+                if (Number.isNaN(index)) {
+                    return;
+                }
+
+                parsedPayments.splice(index, 1);
+                renderPaymentRows();
+            });
+
+            parsePaymentPdfBtn?.addEventListener('click', async () => {
+                paymentPdfError?.classList.add('d-none');
+                paymentResults?.classList.add('d-none');
+                savePaymentsMsg?.classList.add('d-none');
+
+                const file = paymentPdfFile?.files?.[0];
+                if (!file) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = 'Please select a PDF first.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('pdfFile', file);
+
+                const response = await fetch('/Home/ParsePaymentPdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = payload.errorMessage || 'Could not parse this PDF.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                parsedPayments = payload.payments || [];
+                renderPaymentRows();
+                paymentPdfRawText.textContent = payload.rawTextPreview || '';
+                paymentResults?.classList.remove('d-none');
+            });
+
+            savePaymentsBtn?.addEventListener('click', async () => {
+                savePaymentsMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                if (!parsedPayments.length) {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = 'No payment rows to save.';
+                    savePaymentsMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    payments: parsedPayments,
+                    notes: paymentNotesInput?.value || ''
+                };
+
+                const response = await fetch('/Home/SavePayments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = payload.message || 'Could not save payments.';
+                    savePaymentsMsg.classList.remove('d-none');
+                    return;
+                }
+
+                savePaymentsMsg.className = 'alert alert-success mt-3';
+                savePaymentsMsg.textContent = payload.message;
+                savePaymentsMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
+            });
 
             saveServicesBtn?.addEventListener('click', async () => {
                 saveServicesMsg?.classList.add('d-none');

@@ -110,3 +110,33 @@ public class SaveServicesResultVm
     public string Message { get; set; } = string.Empty;
     public int AddedCount { get; set; }
 }
+
+public class PaymentPdfParseResultVm
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public string RawTextPreview { get; set; } = string.Empty;
+}
+
+public class PaymentCandidateVm
+{
+    public DateTime PaidOn { get; set; }
+    public decimal Amount { get; set; }
+    public string Description { get; set; } = string.Empty;
+}
+
+public class SavePaymentsRequestVm
+{
+    public int PropertyId { get; set; }
+    public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class SavePaymentsResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int AddedCount { get; set; }
+    public int SkippedDuplicates { get; set; }
+}

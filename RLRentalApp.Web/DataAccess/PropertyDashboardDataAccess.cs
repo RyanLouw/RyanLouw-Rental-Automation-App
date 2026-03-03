@@ -274,6 +274,59 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return inserted;
     }
 
+    public async Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT 1
+            FROM payment
+            WHERE lease_id = @leaseId
+              AND paid_on = @paidOn
+              AND amount = @amount
+            LIMIT 1;";
+
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@paidOn", paidOn.Date);
+        AddParameter(cmd, "@amount", amount);
+
+        var exists = await cmd.ExecuteScalarAsync();
+        return exists is not null and not DBNull;
+    }
+
+    public async Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments)
+    {
+        if (payments.Count == 0)
+        {
+            return 0;
+        }
+
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var inserted = 0;
+
+        foreach (var payment in payments)
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO payment (lease_id, paid_on, amount, reference, notes)
+                VALUES (@leaseId, @paidOn, @amount, @reference, @notes);";
+
+            AddParameter(cmd, "@leaseId", leaseId);
+            AddParameter(cmd, "@paidOn", payment.PaidOn.Date);
+            AddParameter(cmd, "@amount", payment.Amount);
+            AddParameter(cmd, "@reference", payment.Reference);
+            AddParameter(cmd, "@notes", payment.Notes);
+
+            inserted += await cmd.ExecuteNonQueryAsync();
+        }
+
+        return inserted;
+    }
+
     private static void AddParameter(DbCommand cmd, string name, object? value)
     {
         var parameter = cmd.CreateParameter();

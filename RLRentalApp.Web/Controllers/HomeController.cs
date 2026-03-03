@@ -79,6 +79,34 @@ public class HomeController : Controller
         return Json(result);
     }
 
+
+    [HttpPost]
+    public async Task<IActionResult> ParsePaymentPdf(IFormFile? pdfFile)
+    {
+        var result = await _propertyDashboardManager.ParsePaymentPdfAsync(pdfFile);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SavePayments([FromBody] SavePaymentsRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SavePaymentsAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
     public IActionResult Privacy()
     {
         return View();

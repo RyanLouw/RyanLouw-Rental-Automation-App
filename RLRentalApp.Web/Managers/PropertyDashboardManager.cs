@@ -4,6 +4,7 @@ using RLRentalApp.Web.DataAccess;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Linq;
 using UglyToad.PdfPig;
 
 namespace RLRentalApp.Web.Managers;
@@ -170,6 +171,100 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Message = inserted > 0 ? $"Saved {inserted} service charge(s)." : "No service charges were saved."
         };
     }
+
+
+
+    public async Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request)
+    {
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new SavePaymentsResultVm
+            {
+                Success = false,
+                Message = "No active lease found for the selected property."
+            };
+        }
+
+        var cleanedPayments = request.Payments
+            .Where(x => x.Amount > 0)
+            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount })
+            .Select(g => g.First())
+            .ToList();
+
+        if (cleanedPayments.Count == 0)
+        {
+            return new SavePaymentsResultVm
+            {
+                Success = false,
+                Message = "No valid payment items to save."
+            };
+        }
+
+        var toInsert = new List<PaymentInsertDataModel>();
+        var skippedDuplicates = 0;
+
+        foreach (var payment in cleanedPayments)
+        {
+            var exists = await _dataAccess.PaymentExistsAsync(activeLease.LeaseId, payment.PaidOn, payment.Amount);
+            if (exists)
+            {
+                skippedDuplicates++;
+                continue;
+            }
+
+            toInsert.Add(new PaymentInsertDataModel
+            {
+                PaidOn = payment.PaidOn.Date,
+                Amount = payment.Amount,
+                Reference = payment.Description,
+                Notes = string.IsNullOrWhiteSpace(request.Notes) ? "Captured from statement PDF" : request.Notes
+            });
+        }
+
+        var inserted = await _dataAccess.InsertPaymentsAsync(activeLease.LeaseId, toInsert);
+
+        return new SavePaymentsResultVm
+        {
+            Success = inserted > 0,
+            AddedCount = inserted,
+            SkippedDuplicates = skippedDuplicates,
+            Message = inserted > 0
+                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s)."
+                : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."
+        };
+    }
+
+    public async Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Please choose a PDF file." };
+        }
+
+        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Only PDF files are supported." };
+        }
+
+        await using var stream = file.OpenReadStream();
+        var text = ExtractPdfText(stream);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Could not read text from the PDF." };
+        }
+
+        var payments = ParsePaymentRows(text, "Betaling Van Heino Huur");
+
+        return new PaymentPdfParseResultVm
+        {
+            Success = true,
+            Payments = payments,
+            RawTextPreview = text.Length > 4000 ? text[..4000] : text
+        };
+    }
+
 
     public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file)
     {
@@ -395,6 +490,60 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         return result;
     }
+
+
+
+    private static List<PaymentCandidateVm> ParsePaymentRows(string text, string descriptionFilter)
+    {
+        var lines = text
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        var results = new List<PaymentCandidateVm>();
+
+        foreach (var line in lines)
+        {
+            if (!line.Contains(descriptionFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var dateMatch = Regex.Match(line, @"\b(\d{1,2}\s+[A-Za-z]{3})\b");
+            var amountMatch = Regex.Match(line, @"(-?\d{1,3}(?:,\d{3})*(?:\.\d{2}))\s*(?:[CK]T)?\s*$");
+
+            if (!dateMatch.Success || !amountMatch.Success)
+            {
+                continue;
+            }
+
+            if (!DateTime.TryParseExact(dateMatch.Groups[1].Value + " " + DateTime.UtcNow.Year,
+                "d MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var paidOn))
+            {
+                continue;
+            }
+
+            var amount = TryParseDecimal(amountMatch.Groups[1].Value);
+            if (!amount.HasValue || amount.Value <= 0)
+            {
+                continue;
+            }
+
+            results.Add(new PaymentCandidateVm
+            {
+                PaidOn = paidOn.Date,
+                Amount = amount.Value,
+                Description = descriptionFilter
+            });
+        }
+
+        return results
+            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount })
+            .Select(g => g.First())
+            .OrderBy(x => x.PaidOn)
+            .ThenBy(x => x.Amount)
+            .ToList();
+    }
+
 
     private static string GetSection(string fullText, string startMarker, string endMarker)
     {

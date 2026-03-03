@@ -23,3 +23,12 @@ public sealed class ServiceChargeInsertDataModel
     public DateTime BillingPeriod { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
+
+
+public sealed class PaymentInsertDataModel
+{
+    public DateTime PaidOn { get; set; }
+    public decimal Amount { get; set; }
+    public string Reference { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+}

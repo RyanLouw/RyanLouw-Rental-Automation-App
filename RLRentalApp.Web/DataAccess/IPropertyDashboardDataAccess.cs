@@ -13,4 +13,6 @@ public interface IPropertyDashboardDataAccess
     Task<decimal> LoadCurrentMonthPaymentTotalAsync(int leaseId);
     Task<List<StatementEntryDataModel>> LoadCurrentMonthEntriesAsync(int leaseId);
     Task<int> InsertServiceChargesAsync(int leaseId, List<ServiceChargeInsertDataModel> charges);
+    Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount);
+    Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments);
 }
