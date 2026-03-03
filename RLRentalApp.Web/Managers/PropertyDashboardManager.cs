@@ -73,7 +73,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
-    public async Task<PropertyStatementVm?> GetPropertyStatementAsync(int propertyId)
+    public async Task<PropertyStatementVm?> GetPropertyStatementAsync(int propertyId, DateTime? statementMonth = null)
     {
         var property = await _dataAccess.LoadPropertyAsync(propertyId);
         var activeLease = await _dataAccess.LoadActiveLeaseAsync(propertyId);
@@ -85,7 +85,8 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         var openingOutstanding = await _dataAccess.LoadOpeningOutstandingAsync(activeLease.TenantId);
         var latestRent = await _dataAccess.LoadLatestRentAsync(activeLease.LeaseId);
-        var rawEntries = await _dataAccess.LoadCurrentMonthEntriesAsync(activeLease.LeaseId);
+        var monthStart = new DateTime((statementMonth ?? DateTime.UtcNow).Year, (statementMonth ?? DateTime.UtcNow).Month, 1);
+        var rawEntries = await _dataAccess.LoadMonthEntriesAsync(activeLease.LeaseId, monthStart);
 
         var statementEntries = rawEntries
             .Select(x => new PropertyStatementEntryVm
@@ -101,7 +102,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         {
             statementEntries.Add(new PropertyStatementEntryVm
             {
-                EntryDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
+                EntryDate = monthStart,
                 EntryType = "Rent",
                 Description = "Current month rent",
                 Amount = latestRent.Value
@@ -129,6 +130,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             TenantName = activeLease.TenantName,
             OpeningOutstanding = openingOutstanding,
             CurrentBalance = runningBalance,
+            StatementMonth = monthStart,
             Entries = statementEntries
         };
     }

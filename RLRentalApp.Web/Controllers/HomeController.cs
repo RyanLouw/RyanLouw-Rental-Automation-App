@@ -39,9 +39,15 @@ public class HomeController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> PropertyStatement(int propertyId)
+    public async Task<IActionResult> PropertyStatement(int propertyId, string? month)
     {
-        var statement = await _propertyDashboardManager.GetPropertyStatementAsync(propertyId);
+        DateTime? statementMonth = null;
+        if (!string.IsNullOrWhiteSpace(month) && DateTime.TryParse($"{month}-01", out var parsedMonth))
+        {
+            statementMonth = parsedMonth;
+        }
+
+        var statement = await _propertyDashboardManager.GetPropertyStatementAsync(propertyId, statementMonth);
 
         if (statement is null)
         {

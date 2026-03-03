@@ -232,6 +232,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="statementMonthInput">Statement month</label>
+                        <input type="month" class="form-control" id="statementMonthInput" />
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button class="btn btn-outline-primary" type="button" id="reloadStatementBtn">Reload</button>
+                    </div>
+                </div>
                 <div id="statementSummary" class="mb-3 text-muted"></div>
                 <div class="table-responsive">
                     <table class="table table-sm table-striped">
@@ -265,6 +274,8 @@
             const statementButton = document.getElementById('viewStatementBtn');
             const statementSummary = document.getElementById('statementSummary');
             const statementTableBody = document.getElementById('statementTableBody');
+            const statementMonthInput = document.getElementById('statementMonthInput');
+            const reloadStatementBtn = document.getElementById('reloadStatementBtn');
             const switcherSection = document.getElementById('propertySwitcherSection');
             const switchPropertySelect = document.getElementById('propertySwitchSelect');
             const switchPropertyBtn = document.getElementById('switchPropertyBtn');
@@ -316,6 +327,11 @@
             if (billingPeriodInput) {
                 const now = new Date();
                 billingPeriodInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+
+            if (statementMonthInput) {
+                const now = new Date();
+                statementMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             }
 
             propertySelect?.addEventListener('change', () => {
@@ -557,7 +573,13 @@
                 const savedRowsText = savedRows.length
                     ? ` Saved rows: ${savedRows.join(', ')}.`
                     : '';
-                savePaymentsMsg.textContent = `${payload.message}${savedRowsText} Note: the statement table shows current-month entries.`;
+
+                if (payload.savedPayments?.length && statementMonthInput) {
+                    const firstSaved = new Date(payload.savedPayments[0].paidOn);
+                    statementMonthInput.value = `${firstSaved.getFullYear()}-${String(firstSaved.getMonth() + 1).padStart(2, '0')}`;
+                }
+
+                savePaymentsMsg.textContent = `${payload.message}${savedRowsText} Tip: open View statement and click Reload for the saved month.`;
                 savePaymentsMsg.classList.remove('d-none');
 
                 await loadProperty(selectedPropertyId, false);
@@ -610,12 +632,13 @@
                 await loadProperty(selectedPropertyId, false);
             });
 
-            statementButton?.addEventListener('click', async () => {
+            const loadStatement = async () => {
                 if (!selectedPropertyId) {
                     return;
                 }
 
-                const response = await fetch(`/Home/PropertyStatement?propertyId=${selectedPropertyId}`);
+                const monthQuery = statementMonthInput?.value ? `&month=${statementMonthInput.value}` : '';
+                const response = await fetch(`/Home/PropertyStatement?propertyId=${selectedPropertyId}${monthQuery}`);
                 if (!response.ok) {
                     statementSummary.textContent = 'Could not load statement.';
                     statementTableBody.innerHTML = '';
@@ -623,7 +646,7 @@
                 }
 
                 const statement = await response.json();
-                statementSummary.textContent = `${statement.tenantName} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
+                statementSummary.textContent = `${statement.tenantName} | Month: ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
 
                 statementTableBody.innerHTML = statement.entries.map(entry => `
                     <tr>
@@ -634,7 +657,10 @@
                         <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
                     </tr>
                 `).join('');
-            });
+            };
+
+            statementButton?.addEventListener('click', loadStatement);
+            reloadStatementBtn?.addEventListener('click', loadStatement);
         })();
     </script>
 }

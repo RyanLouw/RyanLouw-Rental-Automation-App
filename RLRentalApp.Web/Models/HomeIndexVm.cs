@@ -40,6 +40,7 @@ public class PropertyStatementVm
     public string TenantName { get; set; } = string.Empty;
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentBalance { get; set; }
+    public DateTime StatementMonth { get; set; }
     public List<PropertyStatementEntryVm> Entries { get; set; } = [];
 }
 

@@ -150,6 +150,8 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         parameter.Value = leaseId;
         cmd.Parameters.Add(parameter);
 
+        AddParameter(cmd, "@monthStart", monthStart.Date);
+
         var value = await cmd.ExecuteScalarAsync();
         return value is null or DBNull ? null : Convert.ToDecimal(value);
     }
@@ -164,7 +166,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             SELECT COALESCE(SUM(amount), 0)
             FROM service_charge
             WHERE lease_id = @leaseId
-              AND date_trunc('month', billing_period) = date_trunc('month', CURRENT_DATE);";
+              AND date_trunc('month', billing_period) = date_trunc('month', @monthStart);";
 
         var parameter = cmd.CreateParameter();
         parameter.ParameterName = "@leaseId";
@@ -185,7 +187,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             SELECT COALESCE(SUM(amount), 0)
             FROM payment
             WHERE lease_id = @leaseId
-              AND date_trunc('month', paid_on) = date_trunc('month', CURRENT_DATE);";
+              AND date_trunc('month', paid_on) = date_trunc('month', @monthStart);";
 
         var parameter = cmd.CreateParameter();
         parameter.ParameterName = "@leaseId";
@@ -196,7 +198,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return value is null or DBNull ? 0m : Convert.ToDecimal(value);
     }
 
-    public async Task<List<StatementEntryDataModel>> LoadCurrentMonthEntriesAsync(int leaseId)
+    public async Task<List<StatementEntryDataModel>> LoadMonthEntriesAsync(int leaseId, DateTime monthStart)
     {
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
@@ -206,14 +208,14 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             SELECT billing_period, 'Service' AS entry_type, 'Service charge' AS description, amount
             FROM service_charge
             WHERE lease_id = @leaseId
-              AND date_trunc('month', billing_period) = date_trunc('month', CURRENT_DATE)
+              AND date_trunc('month', billing_period) = date_trunc('month', @monthStart)
 
             UNION ALL
 
             SELECT paid_on, 'Payment' AS entry_type, COALESCE(reference, 'Payment received') AS description, -amount
             FROM payment
             WHERE lease_id = @leaseId
-              AND date_trunc('month', paid_on) = date_trunc('month', CURRENT_DATE)
+              AND date_trunc('month', paid_on) = date_trunc('month', @monthStart)
 
             ORDER BY 1, 2;";
 
@@ -221,6 +223,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         parameter.ParameterName = "@leaseId";
         parameter.Value = leaseId;
         cmd.Parameters.Add(parameter);
+        AddParameter(cmd, "@monthStart", monthStart.Date);
 
         var entries = new List<StatementEntryDataModel>();
         await using var reader = await cmd.ExecuteReaderAsync();
