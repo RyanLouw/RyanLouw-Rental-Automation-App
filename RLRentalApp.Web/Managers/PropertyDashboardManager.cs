@@ -160,7 +160,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Success = true,
             Electricity = electricity,
             Sewerage = sewerage,
-            RawTextPreview = text.Length > 1200 ? text[..1200] : text
+            RawTextPreview = text.Length > 4000 ? text[..4000] : text
         };
     }
 
@@ -181,13 +181,36 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     {
         var result = new ElectricityParseVm();
 
+        var meterSection = GetSection(text, "METER READINGS", "ACCOUNT DETAILS");
+
+        // Table-style row pattern (works for many municipality statement layouts)
+        var rowMatches = Regex.Matches(
+            meterSection,
+            @"(?is)ELECTRICITY\s*(\d+\.\d{3})\s*(\d+\.\d{3})\s*I?\s*(\d*\.\d{3})\s*([\d,]+\.\d{2})");
+
+        if (rowMatches.Count > 0)
+        {
+            // Prefer a row with actual usage, otherwise first row.
+            var selected = rowMatches
+                .Cast<Match>()
+                .FirstOrDefault(m => (TryParseDecimal(m.Groups[3].Value) ?? 0m) > 0)
+                ?? rowMatches[0];
+
+            result.OldReading = TryParseDecimal(selected.Groups[1].Value);
+            result.NewReading = TryParseDecimal(selected.Groups[2].Value);
+            result.LeviedAmount = TryParseDecimal(selected.Groups[4].Value);
+
+            return result;
+        }
+
+        // Fallback for non-tabular/OCR text
         var oldMatch = Regex.Match(text, @"(?i)electricity[\s\S]{0,120}?old\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
         var newMatch = Regex.Match(text, @"(?i)electricity[\s\S]{0,120}?new\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
-        var leviedMatch = Regex.Match(text, @"(?i)electricity[\s\S]{0,200}?levied\s*amount\s*[:\-]?\s*(?:R)?\s*([\d,]+(?:\.\d{1,2})?)");
+        var leviedMatch = Regex.Match(text, @"(?i)electricity[\s\S]{0,200}?(levied\s*amount|amount\s*incl\s*vat|amount)\s*[:\-]?\s*(?:R)?\s*([\d,]+(?:\.\d{1,2})?)");
 
         result.OldReading = TryParseDecimal(oldMatch.Groups[1].Value);
         result.NewReading = TryParseDecimal(newMatch.Groups[1].Value);
-        result.LeviedAmount = TryParseDecimal(leviedMatch.Groups[1].Value);
+        result.LeviedAmount = TryParseDecimal(leviedMatch.Groups[2].Value);
 
         return result;
     }
@@ -196,7 +219,23 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     {
         var result = new SewerageParseVm();
 
-        var block = Regex.Match(text, @"(?is)(sewerage|sewer)[\s\S]{0,240}").Value;
+        var accountSection = GetSection(text, "ACCOUNT DETAILS", string.Empty);
+
+        // Try to find an account detail line containing sewer/sewerage/sanitation with date, code and amount.
+        var lineMatch = Regex.Match(
+            accountSection,
+            @"(?is)(\d{2}[\-/]\d{2}[\-/]\d{4})\s*([A-Za-z0-9]{4,})?\s*([A-Za-z\s\-]*?(SEWERAGE|SEWER|SANITATION)[A-Za-z\s\-]*?)\s*.*?([\d,]+(?:\.\d{1,2}))");
+
+        if (lineMatch.Success)
+        {
+            result.Date = lineMatch.Groups[1].Value;
+            result.Code = lineMatch.Groups[2].Value;
+            result.AmountInclVat = TryParseDecimal(lineMatch.Groups[5].Value);
+            return result;
+        }
+
+        // Fallback pattern around sewerage keywords.
+        var block = Regex.Match(text, @"(?is)(sewerage|sewer|sanitation)[\s\S]{0,320}").Value;
         if (string.IsNullOrWhiteSpace(block))
         {
             return result;
@@ -204,13 +243,38 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         var dateMatch = Regex.Match(block, @"\b(\d{4}[\-/]\d{2}[\-/]\d{2}|\d{2}[\-/]\d{2}[\-/]\d{4})\b");
         var codeMatch = Regex.Match(block, @"(?i)code\s*[:\-]?\s*([A-Za-z0-9\-]+)");
-        var amountMatch = Regex.Match(block, @"(?i)(amount\s*incl\s*vat|incl\s*vat)\s*[:\-]?\s*(?:R)?\s*([\d,]+(?:\.\d{1,2})?)");
+        var amountMatch = Regex.Match(block, @"(?i)(amount\s*incl\s*vat|incl\s*vat|amount)\s*[:\-]?\s*(?:R)?\s*([\d,]+(?:\.\d{1,2})?)");
 
         result.Date = dateMatch.Groups[1].Value;
         result.Code = codeMatch.Groups[1].Value;
         result.AmountInclVat = TryParseDecimal(amountMatch.Groups[2].Value);
 
         return result;
+    }
+
+
+    private static string GetSection(string fullText, string startMarker, string endMarker)
+    {
+        if (string.IsNullOrWhiteSpace(fullText))
+        {
+            return string.Empty;
+        }
+
+        var startIndex = fullText.IndexOf(startMarker, StringComparison.OrdinalIgnoreCase);
+        if (startIndex < 0)
+        {
+            return fullText;
+        }
+
+        var remaining = fullText[startIndex..];
+
+        if (string.IsNullOrWhiteSpace(endMarker))
+        {
+            return remaining;
+        }
+
+        var endIndex = remaining.IndexOf(endMarker, startMarker.Length, StringComparison.OrdinalIgnoreCase);
+        return endIndex > 0 ? remaining[..endIndex] : remaining;
     }
 
     private static decimal? TryParseDecimal(string input)
