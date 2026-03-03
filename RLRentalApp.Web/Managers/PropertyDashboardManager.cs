@@ -501,25 +501,39 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var statementYear = InferStatementYear(text);
-        var normalizedFilter = Regex.Replace(descriptionFilter, @"\s+", @"\s+");
-
-        var matches = Regex.Matches(
-            text,
-            $@"(?is)(?<date>\b\d{{1,2}}\s+[A-Za-z]{{3}})[\s\S]{{0,120}}?(?<description>{normalizedFilter})[\s\S]{{0,40}}?(?<amount>-?\d{{1,3}}(?:,\d{{3}})*(?:\.\d{{2}}))\s*(?:Kt|CT|Dt|Cr|Dr)?");
+        var descriptionPattern = BuildLooseDescriptionPattern(descriptionFilter);
+        var descriptionMatches = Regex.Matches(text, descriptionPattern, RegexOptions.IgnoreCase);
 
         var results = new List<PaymentCandidateVm>();
 
-        foreach (Match match in matches)
+        foreach (Match descriptionMatch in descriptionMatches)
         {
-            var dateToken = match.Groups["date"].Value;
-            var amountToken = match.Groups["amount"].Value;
+            var backStart = Math.Max(0, descriptionMatch.Index - 120);
+            var backWindow = text.Substring(backStart, descriptionMatch.Index - backStart);
 
+            var forwardStart = descriptionMatch.Index + descriptionMatch.Length;
+            var forwardWindowLength = Math.Min(140, Math.Max(0, text.Length - forwardStart));
+            var forwardWindow = forwardWindowLength > 0 ? text.Substring(forwardStart, forwardWindowLength) : string.Empty;
+
+            var dateMatches = Regex.Matches(backWindow, @"(?i)(?<!\d)(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)");
+            if (dateMatches.Count == 0)
+            {
+                continue;
+            }
+
+            var dateToken = dateMatches[^1].Value;
             if (!TryParseStatementDate(dateToken, statementYear, out var paidOn))
             {
                 continue;
             }
 
-            var amount = TryParseDecimal(amountToken);
+            var amountMatch = Regex.Match(forwardWindow, @"(-?\d{1,3}(?:,\d{3})*(?:\.\d{2})|-?\d+(?:\.\d{2}))\s*(?:Kt|CT|Dt|Cr|Dr)?");
+            if (!amountMatch.Success)
+            {
+                continue;
+            }
+
+            var amount = TryParseDecimal(amountMatch.Groups[1].Value);
             if (!amount.HasValue || amount.Value <= 0)
             {
                 continue;
@@ -540,6 +554,22 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             .ThenBy(x => x.Amount)
             .ToList();
     }
+
+    private static string BuildLooseDescriptionPattern(string description)
+    {
+        var tokens = description
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Regex.Escape)
+            .ToList();
+
+        if (tokens.Count == 0)
+        {
+            return Regex.Escape(description);
+        }
+
+        return string.Join(@"\W*", tokens);
+    }
+
 
     private static int InferStatementYear(string text)
     {
