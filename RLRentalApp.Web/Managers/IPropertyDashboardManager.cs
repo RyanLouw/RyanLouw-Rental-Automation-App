@@ -10,6 +10,6 @@ public interface IPropertyDashboardManager
     Task<PropertyStatementVm?> GetPropertyStatementAsync(int propertyId);
     Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file);
     Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request);
-    Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file);
+    Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains);
     Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request);
 }

@@ -235,7 +235,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
-    public async Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file)
+    public async Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains)
     {
         if (file is null || file.Length == 0)
         {
@@ -255,7 +255,14 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Could not read text from the PDF." };
         }
 
-        var payments = ParsePaymentRows(text, "Betaling Van Heino Huur");
+        var filter = string.IsNullOrWhiteSpace(descriptionContains) ? "Betaling Van Heino Huur" : descriptionContains.Trim();
+
+        if (filter.Length < 3)
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Search text must be at least 3 characters." };
+        }
+
+        var payments = ParsePaymentRows(text, filter);
 
         return new PaymentPdfParseResultVm
         {

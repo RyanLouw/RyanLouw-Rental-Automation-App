@@ -82,7 +82,12 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Upload a bank statement PDF. We will only pull entries with the description <strong>Betaling Van Heino Huur</strong>.</p>
+                <p class="text-muted">Upload a bank statement PDF. We will pull entries where the description contains your search text.</p>
+                <div class="mb-3">
+                    <label for="paymentDescriptionContains" class="form-label">Description contains</label>
+                    <input class="form-control" id="paymentDescriptionContains" value="Heino Huur" />
+                    <div class="form-text">Examples: <code>Heino Huur</code> or <code>Betaling Van Heino Huur</code>.</div>
+                </div>
                 <div class="mb-3">
                     <label for="paymentPdfFile" class="form-label">Statement PDF</label>
                     <input class="form-control" type="file" id="paymentPdfFile" accept="application/pdf,.pdf" />
@@ -297,6 +302,7 @@
             const savePaymentsBtn = document.getElementById('savePaymentsBtn');
             const savePaymentsMsg = document.getElementById('savePaymentsMsg');
             const paymentPdfRawText = document.getElementById('paymentPdfRawText');
+            const paymentDescriptionContains = document.getElementById('paymentDescriptionContains');
 
             let selectedPropertyId = null;
 
@@ -487,6 +493,7 @@
 
                 const formData = new FormData();
                 formData.append('pdfFile', file);
+                formData.append('descriptionContains', paymentDescriptionContains?.value || '');
 
                 const response = await fetch('/Home/ParsePaymentPdf', {
                     method: 'POST',
