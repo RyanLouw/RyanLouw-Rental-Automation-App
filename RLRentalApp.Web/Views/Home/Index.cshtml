@@ -86,7 +86,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Upload the property services PDF and we will extract key values for Electricity and Sewerage.</p>
+                <p class="text-muted">Upload the property services PDF and we will extract key values for Electricity, Water, Sewerage, and Refuse.</p>
                 <div class="mb-3">
                     <label for="servicePdfFile" class="form-label">Services PDF</label>
                     <input class="form-control" type="file" id="servicePdfFile" accept="application/pdf,.pdf" />
@@ -103,11 +103,25 @@
                         <li>Levied amount: <strong id="electricityLeviedAmount">-</strong></li>
                     </ul>
 
+                    <h3 class="h6">Water</h3>
+                    <ul class="mb-3">
+                        <li>Old reading: <strong id="waterOldReading">-</strong></li>
+                        <li>New reading: <strong id="waterNewReading">-</strong></li>
+                        <li>Levied amount: <strong id="waterLeviedAmount">-</strong></li>
+                    </ul>
+
                     <h3 class="h6">Sewerage</h3>
                     <ul class="mb-3">
                         <li>Date: <strong id="sewerageDate">-</strong></li>
                         <li>Code: <strong id="sewerageCode">-</strong></li>
                         <li>Amount incl VAT: <strong id="sewerageAmount">-</strong></li>
+                    </ul>
+
+                    <h3 class="h6">Refuse</h3>
+                    <ul class="mb-3">
+                        <li>Date: <strong id="refuseDate">-</strong></li>
+                        <li>Code: <strong id="refuseCode">-</strong></li>
+                        <li>Amount incl VAT: <strong id="refuseAmount">-</strong></li>
                     </ul>
 
                     <details>
@@ -179,9 +193,15 @@
             const electricityOldReading = document.getElementById('electricityOldReading');
             const electricityNewReading = document.getElementById('electricityNewReading');
             const electricityLeviedAmount = document.getElementById('electricityLeviedAmount');
+            const waterOldReading = document.getElementById('waterOldReading');
+            const waterNewReading = document.getElementById('waterNewReading');
+            const waterLeviedAmount = document.getElementById('waterLeviedAmount');
             const sewerageDate = document.getElementById('sewerageDate');
             const sewerageCode = document.getElementById('sewerageCode');
             const sewerageAmount = document.getElementById('sewerageAmount');
+            const refuseDate = document.getElementById('refuseDate');
+            const refuseCode = document.getElementById('refuseCode');
+            const refuseAmount = document.getElementById('refuseAmount');
             const servicePdfRawText = document.getElementById('servicePdfRawText');
 
             let selectedPropertyId = null;
@@ -291,9 +311,17 @@
                 electricityNewReading.textContent = payload.electricity.newReading ?? '-';
                 electricityLeviedAmount.textContent = money(payload.electricity.leviedAmount);
 
+                waterOldReading.textContent = payload.water.oldReading ?? '-';
+                waterNewReading.textContent = payload.water.newReading ?? '-';
+                waterLeviedAmount.textContent = money(payload.water.leviedAmount);
+
                 sewerageDate.textContent = payload.sewerage.date || '-';
                 sewerageCode.textContent = payload.sewerage.code || '-';
                 sewerageAmount.textContent = money(payload.sewerage.amountInclVat);
+
+                refuseDate.textContent = payload.refuse.date || '-';
+                refuseCode.textContent = payload.refuse.code || '-';
+                refuseAmount.textContent = money(payload.refuse.amountInclVat);
 
                 servicePdfRawText.textContent = payload.rawTextPreview || '';
                 servicePdfResults?.classList.remove('d-none');

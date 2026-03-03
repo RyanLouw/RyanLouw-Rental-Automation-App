@@ -57,7 +57,9 @@ public class ServicePdfParseResultVm
     public bool Success { get; set; }
     public string? ErrorMessage { get; set; }
     public ElectricityParseVm Electricity { get; set; } = new();
+    public WaterParseVm Water { get; set; } = new();
     public SewerageParseVm Sewerage { get; set; } = new();
+    public RefuseParseVm Refuse { get; set; } = new();
     public string RawTextPreview { get; set; } = string.Empty;
 }
 
@@ -68,7 +70,22 @@ public class ElectricityParseVm
     public decimal? LeviedAmount { get; set; }
 }
 
+
+public class WaterParseVm
+{
+    public decimal? OldReading { get; set; }
+    public decimal? NewReading { get; set; }
+    public decimal? LeviedAmount { get; set; }
+}
+
 public class SewerageParseVm
+{
+    public string Date { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public decimal? AmountInclVat { get; set; }
+}
+
+public class RefuseParseVm
 {
     public string Date { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
