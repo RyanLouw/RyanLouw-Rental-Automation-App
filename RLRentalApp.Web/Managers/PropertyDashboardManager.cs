@@ -495,34 +495,31 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static List<PaymentCandidateVm> ParsePaymentRows(string text, string descriptionFilter)
     {
-        var lines = text
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        var statementYear = InferStatementYear(text);
+        var normalizedFilter = Regex.Replace(descriptionFilter, @"\s+", @"\s+");
+
+        var matches = Regex.Matches(
+            text,
+            $@"(?is)(?<date>\b\d{{1,2}}\s+[A-Za-z]{{3}})[\s\S]{{0,120}}?(?<description>{normalizedFilter})[\s\S]{{0,40}}?(?<amount>-?\d{{1,3}}(?:,\d{{3}})*(?:\.\d{{2}}))\s*(?:Kt|CT|Dt|Cr|Dr)?");
 
         var results = new List<PaymentCandidateVm>();
 
-        foreach (var line in lines)
+        foreach (Match match in matches)
         {
-            if (!line.Contains(descriptionFilter, StringComparison.OrdinalIgnoreCase))
+            var dateToken = match.Groups["date"].Value;
+            var amountToken = match.Groups["amount"].Value;
+
+            if (!TryParseStatementDate(dateToken, statementYear, out var paidOn))
             {
                 continue;
             }
 
-            var dateMatch = Regex.Match(line, @"\b(\d{1,2}\s+[A-Za-z]{3})\b");
-            var amountMatch = Regex.Match(line, @"(-?\d{1,3}(?:,\d{3})*(?:\.\d{2}))\s*(?:[CK]T)?\s*$");
-
-            if (!dateMatch.Success || !amountMatch.Success)
-            {
-                continue;
-            }
-
-            if (!DateTime.TryParseExact(dateMatch.Groups[1].Value + " " + DateTime.UtcNow.Year,
-                "d MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var paidOn))
-            {
-                continue;
-            }
-
-            var amount = TryParseDecimal(amountMatch.Groups[1].Value);
+            var amount = TryParseDecimal(amountToken);
             if (!amount.HasValue || amount.Value <= 0)
             {
                 continue;
@@ -542,6 +539,25 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             .OrderBy(x => x.PaidOn)
             .ThenBy(x => x.Amount)
             .ToList();
+    }
+
+    private static int InferStatementYear(string text)
+    {
+        var years = Regex.Matches(text, @"\b20\d{2}\b")
+            .Cast<Match>()
+            .Select(x => int.TryParse(x.Value, out var value) ? value : 0)
+            .Where(x => x >= 2000 && x <= 2100)
+            .ToList();
+
+        return years.Count > 0 ? years.Max() : DateTime.UtcNow.Year;
+    }
+
+    private static bool TryParseStatementDate(string dateToken, int year, out DateTime date)
+    {
+        var composed = $"{dateToken} {year}";
+
+        return DateTime.TryParseExact(composed, "d MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
+               || DateTime.TryParseExact(composed, "dd MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
     }
 
 
