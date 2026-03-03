@@ -10,6 +10,21 @@
 
     <div id="selectedPropertyHeader" class="alert alert-primary d-none"></div>
 
+    <section id="propertySwitcherSection" class="card shadow-sm mb-3 d-none">
+        <div class="card-body d-flex flex-wrap align-items-end gap-2">
+            <div>
+                <label for="propertySwitchSelect" class="form-label mb-1">Switch property</label>
+                <select class="form-select" id="propertySwitchSelect">
+                    @foreach (var property in Model.Properties)
+                    {
+                        <option value="@property.Id">@property.Name (@property.AddressLine1)</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-outline-primary" type="button" id="switchPropertyBtn">Load property</button>
+        </div>
+    </section>
+
     <section id="propertyStatusCard" class="card shadow-sm mb-4 d-none">
         <div class="card-body">
             <h2 class="h4 mb-3">Current Status</h2>
@@ -116,6 +131,9 @@
             const statementButton = document.getElementById('viewStatementBtn');
             const statementSummary = document.getElementById('statementSummary');
             const statementTableBody = document.getElementById('statementTableBody');
+            const switcherSection = document.getElementById('propertySwitcherSection');
+            const switchPropertySelect = document.getElementById('propertySwitchSelect');
+            const switchPropertyBtn = document.getElementById('switchPropertyBtn');
 
             let selectedPropertyId = null;
 
@@ -130,8 +148,7 @@
                 confirmButton.disabled = !propertySelect.value;
             });
 
-            confirmButton?.addEventListener('click', async () => {
-                const propertyId = propertySelect?.value;
+            const loadProperty = async (propertyId, hidePicker = false) => {
                 if (!propertyId) {
                     return;
                 }
@@ -145,6 +162,10 @@
                 const status = await response.json();
                 selectedHeader.classList.remove('d-none');
                 selectedHeader.textContent = `Selected property: ${status.propertyName}`;
+
+                if (switchPropertySelect) {
+                    switchPropertySelect.value = propertyId;
+                }
 
                 const values = [
                     ['Address', status.propertyAddress || 'N/A'],
@@ -162,9 +183,23 @@
                 statusDetails.innerHTML = values.map(([key, value]) =>
                     `<dt class="col-sm-4">${key}</dt><dd class="col-sm-8">${value}</dd>`).join('');
 
+                switcherSection?.classList.remove('d-none');
                 statusCard.classList.remove('d-none');
                 actionSection.classList.remove('d-none');
-                pickerModal.hide();
+
+                if (hidePicker) {
+                    pickerModal.hide();
+                }
+            };
+
+            confirmButton?.addEventListener('click', async () => {
+                const propertyId = propertySelect?.value;
+                await loadProperty(propertyId, true);
+            });
+
+            switchPropertyBtn?.addEventListener('click', async () => {
+                const propertyId = switchPropertySelect?.value;
+                await loadProperty(propertyId, false);
             });
 
             statementButton?.addEventListener('click', async () => {
