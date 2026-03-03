@@ -17,7 +17,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<List<PropertyOptionVm>> LoadPropertiesAsync()
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
@@ -45,7 +45,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<PropertyOptionVm?> LoadPropertyAsync(int propertyId)
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
@@ -78,7 +78,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<ActiveLeaseDataModel?> LoadActiveLeaseAsync(int propertyId)
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
@@ -113,7 +113,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<decimal> LoadOpeningOutstandingAsync(int tenantId)
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
@@ -134,7 +134,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<decimal?> LoadLatestRentAsync(int leaseId)
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
@@ -156,7 +156,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<decimal> LoadCurrentMonthServiceTotalAsync(int leaseId)
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
@@ -177,7 +177,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<decimal> LoadCurrentMonthPaymentTotalAsync(int leaseId)
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
@@ -198,7 +198,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
     public async Task<List<StatementEntryDataModel>> LoadCurrentMonthEntriesAsync(int leaseId)
     {
-        await using var connection = _authDbContext.Database.GetDbConnection();
+        var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
         await using var cmd = connection.CreateCommand();
