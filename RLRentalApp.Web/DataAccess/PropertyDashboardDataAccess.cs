@@ -239,6 +239,49 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return entries;
     }
 
+
+    public async Task<int> InsertServiceChargesAsync(int leaseId, List<ServiceChargeInsertDataModel> charges)
+    {
+        if (charges.Count == 0)
+        {
+            return 0;
+        }
+
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var inserted = 0;
+
+        foreach (var charge in charges)
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO service_charge (lease_id, service_type_id, billing_period, amount, notes)
+                SELECT @leaseId, st.id, @billingPeriod, @amount, @notes
+                FROM service_type st
+                WHERE LOWER(st.name) = LOWER(@serviceTypeName)
+                LIMIT 1;";
+
+            AddParameter(cmd, "@leaseId", leaseId);
+            AddParameter(cmd, "@billingPeriod", charge.BillingPeriod.Date);
+            AddParameter(cmd, "@amount", charge.Amount);
+            AddParameter(cmd, "@notes", charge.Notes);
+            AddParameter(cmd, "@serviceTypeName", charge.ServiceTypeName);
+
+            inserted += await cmd.ExecuteNonQueryAsync();
+        }
+
+        return inserted;
+    }
+
+    private static void AddParameter(DbCommand cmd, string name, object? value)
+    {
+        var parameter = cmd.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value ?? DBNull.Value;
+        cmd.Parameters.Add(parameter);
+    }
+
     private static async Task EnsureConnectionOpenAsync(DbConnection connection)
     {
         if (connection.State != ConnectionState.Open)

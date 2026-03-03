@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RLRentalApp.Models;
 using RLRentalApp.Web.Managers;
@@ -48,6 +49,34 @@ public class HomeController : Controller
         }
 
         return Json(statement);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile)
+    {
+        var result = await _propertyDashboardManager.ParseServicePdfAsync(pdfFile);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SaveServices([FromBody] SaveServicesRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SaveServicesAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
     }
 
     public IActionResult Privacy()

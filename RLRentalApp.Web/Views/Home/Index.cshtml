@@ -79,7 +79,90 @@
 </div>
 
 <div class="modal fade" id="addServicesModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Add services</h2><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Add utility/service charges (water, electricity, refuse, etc.) for the selected property.</div></div></div>
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Add services</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload the property services PDF and we will extract key values for Electricity, Water, Sewerage, and Refuse.</p>
+                <div class="mb-3">
+                    <label for="servicePdfFile" class="form-label">Services PDF</label>
+                    <input class="form-control" type="file" id="servicePdfFile" accept="application/pdf,.pdf" />
+                </div>
+                <button class="btn btn-primary" type="button" id="parseServicePdfBtn">Parse PDF</button>
+
+                <hr />
+                <h3 class="h6">Manual capture / edit</h3>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="billingPeriodInput">Billing month</label>
+                        <input type="month" class="form-control" id="billingPeriodInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityAmountInput">Electricity amount</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="waterAmountInput">Water amount</label>
+                        <input type="number" step="0.01" class="form-control" id="waterAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="sewerageAmountInput">Sewerage amount</label>
+                        <input type="number" step="0.01" class="form-control" id="sewerageAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="refuseAmountInput">Refuse amount</label>
+                        <input type="number" step="0.01" class="form-control" id="refuseAmountInput" />
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label" for="servicesNotesInput">Notes</label>
+                        <input type="text" class="form-control" id="servicesNotesInput" placeholder="Captured manually or from PDF" />
+                    </div>
+                </div>
+                <button class="btn btn-success mt-3" type="button" id="saveServicesBtn">Add services to statement</button>
+                <div id="saveServicesMsg" class="alert mt-3 d-none"></div>
+
+                <div id="servicePdfError" class="alert alert-danger mt-3 d-none"></div>
+
+                <div id="servicePdfResults" class="mt-3 d-none">
+                    <h3 class="h6">Electricity</h3>
+                    <ul class="mb-3">
+                        <li>Old reading: <strong id="electricityOldReading">-</strong></li>
+                        <li>New reading: <strong id="electricityNewReading">-</strong></li>
+                        <li>Levied amount: <strong id="electricityLeviedAmount">-</strong></li>
+                    </ul>
+
+                    <h3 class="h6">Water</h3>
+                    <ul class="mb-3">
+                        <li>Old reading: <strong id="waterOldReading">-</strong></li>
+                        <li>New reading: <strong id="waterNewReading">-</strong></li>
+                        <li>Levied amount: <strong id="waterLeviedAmount">-</strong></li>
+                    </ul>
+
+                    <h3 class="h6">Sewerage</h3>
+                    <ul class="mb-3">
+                        <li>Date: <strong id="sewerageDate">-</strong></li>
+                        <li>Code: <strong id="sewerageCode">-</strong></li>
+                        <li>Amount incl VAT: <strong id="sewerageAmount">-</strong></li>
+                    </ul>
+
+                    <h3 class="h6">Refuse</h3>
+                    <ul class="mb-3">
+                        <li>Date: <strong id="refuseDate">-</strong></li>
+                        <li>Code: <strong id="refuseCode">-</strong></li>
+                        <li>Amount incl VAT: <strong id="refuseAmount">-</strong></li>
+                    </ul>
+
+                    <details>
+                        <summary>Raw text preview</summary>
+                        <pre id="servicePdfRawText" class="small mt-2 mb-0"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="addRentModal" tabindex="-1" aria-hidden="true">
@@ -134,6 +217,31 @@
             const switcherSection = document.getElementById('propertySwitcherSection');
             const switchPropertySelect = document.getElementById('propertySwitchSelect');
             const switchPropertyBtn = document.getElementById('switchPropertyBtn');
+            const parseServicePdfBtn = document.getElementById('parseServicePdfBtn');
+            const servicePdfFile = document.getElementById('servicePdfFile');
+            const servicePdfError = document.getElementById('servicePdfError');
+            const servicePdfResults = document.getElementById('servicePdfResults');
+            const electricityOldReading = document.getElementById('electricityOldReading');
+            const electricityNewReading = document.getElementById('electricityNewReading');
+            const electricityLeviedAmount = document.getElementById('electricityLeviedAmount');
+            const waterOldReading = document.getElementById('waterOldReading');
+            const waterNewReading = document.getElementById('waterNewReading');
+            const waterLeviedAmount = document.getElementById('waterLeviedAmount');
+            const sewerageDate = document.getElementById('sewerageDate');
+            const sewerageCode = document.getElementById('sewerageCode');
+            const sewerageAmount = document.getElementById('sewerageAmount');
+            const refuseDate = document.getElementById('refuseDate');
+            const refuseCode = document.getElementById('refuseCode');
+            const refuseAmount = document.getElementById('refuseAmount');
+            const servicePdfRawText = document.getElementById('servicePdfRawText');
+            const billingPeriodInput = document.getElementById('billingPeriodInput');
+            const electricityAmountInput = document.getElementById('electricityAmountInput');
+            const waterAmountInput = document.getElementById('waterAmountInput');
+            const sewerageAmountInput = document.getElementById('sewerageAmountInput');
+            const refuseAmountInput = document.getElementById('refuseAmountInput');
+            const servicesNotesInput = document.getElementById('servicesNotesInput');
+            const saveServicesBtn = document.getElementById('saveServicesBtn');
+            const saveServicesMsg = document.getElementById('saveServicesMsg');
 
             let selectedPropertyId = null;
 
@@ -143,6 +251,11 @@
 
             const pickerModal = new bootstrap.Modal(pickerElement);
             pickerModal.show();
+
+            if (billingPeriodInput) {
+                const now = new Date();
+                billingPeriodInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
 
             propertySelect?.addEventListener('change', () => {
                 confirmButton.disabled = !propertySelect.value;
@@ -200,6 +313,115 @@
             switchPropertyBtn?.addEventListener('click', async () => {
                 const propertyId = switchPropertySelect?.value;
                 await loadProperty(propertyId, false);
+            });
+
+
+            const money = (value) => value !== null && value !== undefined
+                ? Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })
+                : '-';
+
+            parseServicePdfBtn?.addEventListener('click', async () => {
+                servicePdfError?.classList.add('d-none');
+                servicePdfResults?.classList.add('d-none');
+
+                const file = servicePdfFile?.files?.[0];
+                if (!file) {
+                    if (servicePdfError) {
+                        servicePdfError.textContent = 'Please select a PDF first.';
+                        servicePdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('pdfFile', file);
+
+                const response = await fetch('/Home/ParseServicePdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    if (servicePdfError) {
+                        servicePdfError.textContent = payload.errorMessage || 'Could not parse this PDF.';
+                        servicePdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                electricityOldReading.textContent = payload.electricity.oldReading ?? '-';
+                electricityNewReading.textContent = payload.electricity.newReading ?? '-';
+                electricityLeviedAmount.textContent = money(payload.electricity.leviedAmount);
+
+                waterOldReading.textContent = payload.water.oldReading ?? '-';
+                waterNewReading.textContent = payload.water.newReading ?? '-';
+                waterLeviedAmount.textContent = money(payload.water.leviedAmount);
+
+                sewerageDate.textContent = payload.sewerage.date || '-';
+                sewerageCode.textContent = payload.sewerage.code || '-';
+                sewerageAmount.textContent = money(payload.sewerage.amountInclVat);
+
+                refuseDate.textContent = payload.refuse.date || '-';
+                refuseCode.textContent = payload.refuse.code || '-';
+                refuseAmount.textContent = money(payload.refuse.amountInclVat);
+
+                servicePdfRawText.textContent = payload.rawTextPreview || '';
+
+                electricityAmountInput.value = payload.electricity.leviedAmount ?? '';
+                waterAmountInput.value = payload.water.leviedAmount ?? '';
+                sewerageAmountInput.value = payload.sewerage.amountInclVat ?? '';
+                refuseAmountInput.value = payload.refuse.amountInclVat ?? '';
+                servicePdfResults?.classList.remove('d-none');
+            });
+
+
+            saveServicesBtn?.addEventListener('click', async () => {
+                saveServicesMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                const billingPeriodValue = billingPeriodInput?.value;
+                if (!billingPeriodValue) {
+                    saveServicesMsg.className = 'alert alert-danger mt-3';
+                    saveServicesMsg.textContent = 'Please choose a billing month.';
+                    saveServicesMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    billingPeriod: `${billingPeriodValue}-01`,
+                    electricityAmount: electricityAmountInput.value ? Number(electricityAmountInput.value) : null,
+                    waterAmount: waterAmountInput.value ? Number(waterAmountInput.value) : null,
+                    sewerageAmount: sewerageAmountInput.value ? Number(sewerageAmountInput.value) : null,
+                    refuseAmount: refuseAmountInput.value ? Number(refuseAmountInput.value) : null,
+                    notes: servicesNotesInput.value || ''
+                };
+
+                const response = await fetch('/Home/SaveServices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    saveServicesMsg.className = 'alert alert-danger mt-3';
+                    saveServicesMsg.textContent = payload.message || 'Could not save services.';
+                    saveServicesMsg.classList.remove('d-none');
+                    return;
+                }
+
+                saveServicesMsg.className = 'alert alert-success mt-3';
+                saveServicesMsg.textContent = payload.message;
+                saveServicesMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
             });
 
             statementButton?.addEventListener('click', async () => {
