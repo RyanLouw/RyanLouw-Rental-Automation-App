@@ -223,12 +223,21 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var inserted = await _dataAccess.InsertPaymentsAsync(activeLease.LeaseId, toInsert);
+        var savedPayments = toInsert
+            .Select(x => new PaymentCandidateVm
+            {
+                PaidOn = x.PaidOn,
+                Amount = x.Amount,
+                Description = x.Reference
+            })
+            .ToList();
 
         return new SavePaymentsResultVm
         {
             Success = inserted > 0,
             AddedCount = inserted,
             SkippedDuplicates = skippedDuplicates,
+            SavedPayments = savedPayments,
             Message = inserted > 0
                 ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s)."
                 : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."

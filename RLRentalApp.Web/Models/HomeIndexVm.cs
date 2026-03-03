@@ -139,4 +139,5 @@ public class SavePaymentsResultVm
     public string Message { get; set; } = string.Empty;
     public int AddedCount { get; set; }
     public int SkippedDuplicates { get; set; }
+    public List<PaymentCandidateVm> SavedPayments { get; set; } = [];
 }

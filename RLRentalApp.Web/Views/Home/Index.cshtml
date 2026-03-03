@@ -552,7 +552,12 @@
                 }
 
                 savePaymentsMsg.className = 'alert alert-success mt-3';
-                savePaymentsMsg.textContent = payload.message;
+                const savedRows = (payload.savedPayments || []).map(x =>
+                    `${new Date(x.paidOn).toLocaleDateString()} ${Number(x.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`);
+                const savedRowsText = savedRows.length
+                    ? ` Saved rows: ${savedRows.join(', ')}.`
+                    : '';
+                savePaymentsMsg.textContent = `${payload.message}${savedRowsText} Note: the statement table shows current-month entries.`;
                 savePaymentsMsg.classList.remove('d-none');
 
                 await loadProperty(selectedPropertyId, false);
