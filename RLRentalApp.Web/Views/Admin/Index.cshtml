@@ -1,0 +1,104 @@
+@model RLRentalApp.Models.AdminVm
+
+@{
+    ViewData["Title"] = "Admin";
+}
+
+<div class="container py-4">
+    <h1 class="mb-3">Admin Setup</h1>
+    <p class="text-muted">Create properties, onboard existing properties with saldo taken over, and add a new tenant to an existing property with deposit entered by hand.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">@Model.ErrorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.Message))
+    {
+        <div class="alert alert-success">@Model.Message</div>
+    }
+
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">Create new property only</div>
+                <div class="card-body">
+                    <form asp-action="CreateProperty" method="post">
+                        <div class="mb-2">
+                            <label class="form-label">Property name</label>
+                            <input class="form-control" name="Name" required />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Address line 1</label>
+                            <input class="form-control" name="AddressLine1" required />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Address line 2</label>
+                            <input class="form-control" name="AddressLine2" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Notes</label>
+                            <input class="form-control" name="Notes" />
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="isActive" name="IsActive" value="true" checked />
+                            <label class="form-check-label" for="isActive">Active property</label>
+                        </div>
+                        <button class="btn btn-primary" type="submit">Save property</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">Onboard existing property (saldo taken over)</div>
+                <div class="card-body">
+                    <form asp-action="OnboardExistingProperty" method="post">
+                        <div class="mb-2"><label class="form-label">Property name</label><input class="form-control" name="PropertyName" required /></div>
+                        <div class="mb-2"><label class="form-label">Property address</label><input class="form-control" name="PropertyAddressLine1" required /></div>
+                        <div class="mb-2"><label class="form-label">Address line 2</label><input class="form-control" name="PropertyAddressLine2" /></div>
+                        <div class="mb-2"><label class="form-label">Property notes</label><input class="form-control" name="PropertyNotes" /></div>
+                        <hr />
+                        <div class="mb-2"><label class="form-label">Tenant full name</label><input class="form-control" name="TenantFullName" required /></div>
+                        <div class="mb-2"><label class="form-label">Tenant email</label><input class="form-control" type="email" name="TenantEmail" /></div>
+                        <div class="mb-2"><label class="form-label">Tenant phone</label><input class="form-control" name="TenantPhone" /></div>
+                        <div class="mb-2"><label class="form-label">Lease start date</label><input class="form-control" type="date" name="LeaseStartDate" required /></div>
+                        <div class="mb-2"><label class="form-label">Opening saldo taken over</label><input class="form-control" type="number" step="0.01" name="OpeningOutstanding" value="0" /></div>
+                        <div class="mb-2"><label class="form-label">Deposit held (entered by hand)</label><input class="form-control" type="number" step="0.01" name="DepositHeld" value="0" /></div>
+                        <div class="mb-3"><label class="form-label">Initial rent</label><input class="form-control" type="number" step="0.01" name="InitialRent" required /></div>
+                        <button class="btn btn-success" type="submit">Onboard existing property</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">Add new tenant in existing property</div>
+                <div class="card-body">
+                    <form asp-action="AddTenantToProperty" method="post">
+                        <div class="mb-2">
+                            <label class="form-label">Existing property</label>
+                            <select class="form-select" name="PropertyId" required>
+                                <option value="">-- Select property --</option>
+                                @foreach (var property in Model.Properties)
+                                {
+                                    <option value="@property.Id">@property.Name (@property.AddressLine1)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-2"><label class="form-label">Tenant full name</label><input class="form-control" name="TenantFullName" required /></div>
+                        <div class="mb-2"><label class="form-label">Tenant email</label><input class="form-control" type="email" name="TenantEmail" /></div>
+                        <div class="mb-2"><label class="form-label">Tenant phone</label><input class="form-control" name="TenantPhone" /></div>
+                        <div class="mb-2"><label class="form-label">Lease start date</label><input class="form-control" type="date" name="LeaseStartDate" required /></div>
+                        <div class="mb-2"><label class="form-label">Opening saldo carried in</label><input class="form-control" type="number" step="0.01" name="OpeningOutstanding" value="0" /></div>
+                        <div class="mb-2"><label class="form-label">Deposit held (entered by hand)</label><input class="form-control" type="number" step="0.01" name="DepositHeld" value="0" /></div>
+                        <div class="mb-3"><label class="form-label">Initial rent</label><input class="form-control" type="number" step="0.01" name="InitialRent" required /></div>
+                        <button class="btn btn-warning" type="submit">Add tenant</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
