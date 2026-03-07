@@ -1,1 +1,50 @@
 # RyanLouw-Rental-Automation-App
+
+## Gmail SMTP setup (send emails to tenants)
+
+Use the `GmailSmtp` section in `RLRentalApp.Web/appsettings.Development.json` (or environment variables in production).
+
+```json
+"GmailSmtp": {
+  "Host": "smtp.gmail.com",
+  "Port": 587,
+  "EnableSsl": true,
+  "Username": "yourgmail@gmail.com",
+  "AppPassword": "your-gmail-app-password",
+  "FromEmail": "yourgmail@gmail.com",
+  "FromDisplayName": "RLRentalApp"
+}
+```
+
+### Where each value comes from
+
+- `Host`: keep as `smtp.gmail.com`.
+- `Port`: use `587` for TLS (recommended).
+- `EnableSsl`: keep as `true`.
+- `Username`: your full Gmail address (example: `you@gmail.com`).
+- `AppPassword`: a 16-character Google **App Password** (not your normal Gmail password).
+- `FromEmail`: usually the same as `Username`.
+- `FromDisplayName`: friendly sender name tenants see (example: `MH & Sons Properties`).
+
+### How to get `AppPassword`
+
+1. Sign in to the Gmail account you want to send from.
+2. Open your Google Account Security page: `https://myaccount.google.com/security`.
+3. Turn on **2-Step Verification** (required before App Passwords are available).
+4. Go to **App passwords**: `https://myaccount.google.com/apppasswords`.
+5. Choose app **Mail** (or Custom name like `RLRentalApp`) and generate.
+6. Copy the generated 16-character password and place it in `AppPassword`.
+
+### Important security note
+
+Do **not** commit real credentials to git. Prefer local secrets or environment variables.
+
+Example environment variables:
+
+- `GmailSmtp__Host=smtp.gmail.com`
+- `GmailSmtp__Port=587`
+- `GmailSmtp__EnableSsl=true`
+- `GmailSmtp__Username=yourgmail@gmail.com`
+- `GmailSmtp__AppPassword=xxxxxxxxxxxxxxxx`
+- `GmailSmtp__FromEmail=yourgmail@gmail.com`
+- `GmailSmtp__FromDisplayName=MH & Sons Properties`
