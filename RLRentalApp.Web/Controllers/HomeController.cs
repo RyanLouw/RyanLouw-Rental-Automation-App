@@ -75,50 +75,83 @@ public class HomeController : Controller
             return NotFound();
         }
 
+        static string Money(decimal value) => $"R {value:N2}";
+
+        var generatedOn = DateTime.Now;
+        var dueMonth = new DateTime(statement.StatementMonth.Year, statement.StatementMonth.Month, 1).AddMonths(1);
+        var dueDate = new DateTime(dueMonth.Year, dueMonth.Month, 4);
+
         var pdfBytes = Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(24);
+                page.Margin(28);
                 page.DefaultTextStyle(x => x.FontSize(10));
-
-                page.Header()
-                    .Column(column =>
-                    {
-                        column.Item().Text("Tenant Statement")
-                            .SemiBold()
-                            .FontSize(20)
-                            .FontColor(Colors.Blue.Darken3);
-
-                        column.Item().Text($"Generated: {DateTime.Now:dd MMM yyyy}").FontColor(Colors.Grey.Darken1);
-                    });
 
                 page.Content().Column(column =>
                 {
-                    column.Spacing(12);
+                    column.Spacing(16);
 
                     column.Item().Row(row =>
                     {
                         row.RelativeItem().Column(left =>
                         {
-                            left.Item().Text($"Property: {statement.PropertyName}").SemiBold();
-                            left.Item().Text($"Tenant: {statement.TenantName}");
-                            left.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
+                            left.Item().Text("MH & Sons").SemiBold().FontSize(20);
+                            left.Item().Text("Investment").SemiBold().FontSize(20);
+                            left.Item().Text("Properties").SemiBold().FontSize(20);
+                        });
+
+                        row.ConstantItem(140).AlignCenter().Text("✦").FontSize(38).FontColor(Colors.Grey.Darken1);
+
+                        row.RelativeItem().AlignRight().Column(right =>
+                        {
+                            right.Item().Text("Statement")
+                                .Italic()
+                                .SemiBold()
+                                .FontSize(24)
+                                .FontColor(Colors.Grey.Darken1);
+                        });
+                    });
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(left =>
+                        {
+                            left.Item().Text("No 9 Waterberg straat");
+                            left.Item().Text("Noordheuwel X6");
+                            left.Item().Text("Krugersdorp");
+                            left.Item().Text("10/4/1904");
                         });
 
                         row.RelativeItem().Column(right =>
                         {
-                            right.Item().AlignRight().Text($"Opening balance: {statement.OpeningOutstanding:C}");
-                            right.Item().AlignRight().Text($"Current balance: {statement.CurrentBalance:C}").SemiBold();
+                            right.Item().Text("Phone: 084 588 4884").SemiBold();
+                            right.Item().Text("Fax: 086 507 2111").SemiBold();
+                            right.Item().Text("E-mail: hrlouw@justice.gov.za").FontColor(Colors.Blue.Medium);
                         });
                     });
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Text($"Date: {generatedOn:MMMM d, yyyy}").SemiBold();
+                        row.RelativeItem().AlignRight().Column(right =>
+                        {
+                            right.Item().Text("Statement To:").SemiBold().FontColor(Colors.Grey.Darken1);
+                            right.Item().Text(statement.TenantName).SemiBold().FontSize(13);
+                            right.Item().Text(statement.PropertyName).FontSize(13);
+                        });
+                    });
+
+                    column.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
+                    column.Item().Text($"Opening balance: {Money(statement.OpeningOutstanding)}");
+                    column.Item().Text($"Current balance: {Money(statement.CurrentBalance)}").SemiBold();
 
                     column.Item().Table(table =>
                     {
                         table.ColumnsDefinition(columns =>
                         {
-                            columns.ConstantColumn(80);
+                            columns.ConstantColumn(85);
                             columns.ConstantColumn(80);
                             columns.RelativeColumn();
                             columns.ConstantColumn(90);
@@ -128,7 +161,7 @@ public class HomeController : Controller
                         table.Header(header =>
                         {
                             static IContainer HeaderCell(IContainer container) => container
-                                .Background(Colors.Blue.Lighten4)
+                                .Background(Colors.Grey.Lighten3)
                                 .PaddingVertical(6)
                                 .PaddingHorizontal(8)
                                 .BorderBottom(1)
@@ -152,22 +185,23 @@ public class HomeController : Controller
                             table.Cell().Element(BodyCell).Text(entry.EntryDate.ToString("dd MMM yyyy"));
                             table.Cell().Element(BodyCell).Text(entry.EntryType);
                             table.Cell().Element(BodyCell).Text(entry.Description);
-                            table.Cell().Element(BodyCell).AlignRight().Text(entry.Amount.ToString("C"));
-                            table.Cell().Element(BodyCell).AlignRight().Text(entry.RunningBalance.ToString("C"));
+                            table.Cell().Element(BodyCell).AlignRight().Text(Money(entry.Amount));
+                            table.Cell().Element(BodyCell).AlignRight().Text(Money(entry.RunningBalance));
                         }
                     });
+
+                    column.Item().PaddingTop(8).Text($"Amount to be paid by {dueDate:dd MMMM yyyy}: {Money(statement.CurrentBalance)}")
+                        .SemiBold()
+                        .FontSize(13);
                 });
 
-                page.Footer()
-                    .AlignCenter()
-                    .Text(text =>
-                    {
-                        text.Span("This statement was generated by RL Rental Automation App.");
-                        text.Span("  Page ");
-                        text.CurrentPageNumber();
-                        text.Span(" of ");
-                        text.TotalPages();
-                    });
+                page.Footer().AlignRight().Text(text =>
+                {
+                    text.Span("Page ");
+                    text.CurrentPageNumber();
+                    text.Span(" of ");
+                    text.TotalPages();
+                });
             });
         }).GeneratePdf();
 
