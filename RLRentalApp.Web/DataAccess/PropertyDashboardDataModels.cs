@@ -5,6 +5,7 @@ public sealed class ActiveLeaseDataModel
     public int LeaseId { get; set; }
     public int TenantId { get; set; }
     public string TenantName { get; set; } = string.Empty;
+    public string TenantEmail { get; set; } = string.Empty;
     public DateTime StartDate { get; set; }
 }
 

@@ -147,6 +147,20 @@ public class HomeController : Controller
 
 
     [HttpPost]
+    public async Task<IActionResult> SendTenantEmail([FromBody] SendTenantEmailRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SendTenantEmailAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
     public async Task<IActionResult> UpdateStatementEntry([FromBody] UpdateStatementEntryRequestVm request)
     {
         var result = await _propertyDashboardManager.UpdateStatementEntryAsync(request);

@@ -4,6 +4,7 @@ using QuestPDF.Helpers;
 using QuestPDF.Fluent;
 using RLRentalApp.Models;
 using RLRentalApp.Web.DataAccess;
+using RLRentalApp.Web.Services;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -15,10 +16,12 @@ namespace RLRentalApp.Web.Managers;
 public class PropertyDashboardManager : IPropertyDashboardManager
 {
     private readonly IPropertyDashboardDataAccess _dataAccess;
+    private readonly IEmailService _emailService;
 
-    public PropertyDashboardManager(IPropertyDashboardDataAccess dataAccess)
+    public PropertyDashboardManager(IPropertyDashboardDataAccess dataAccess, IEmailService emailService)
     {
         _dataAccess = dataAccess;
+        _emailService = emailService;
     }
 
     private static string BuildFullAddress(PropertyOptionVm property)
@@ -89,6 +92,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             LeaseId = activeLease.LeaseId,
             TenantId = activeLease.TenantId,
             TenantName = activeLease.TenantName,
+            TenantEmail = activeLease.TenantEmail,
             LeaseStartDate = activeLease.StartDate,
             LatestRent = latestRent,
             OpeningOutstanding = openingOutstanding,
@@ -413,6 +417,50 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
+
+    public async Task<SendTenantEmailResultVm> SendTenantEmailAsync(SendTenantEmailRequestVm request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Subject))
+        {
+            return new SendTenantEmailResultVm { Success = false, Message = "Email subject is required." };
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Body))
+        {
+            return new SendTenantEmailResultVm { Success = false, Message = "Email body is required." };
+        }
+
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new SendTenantEmailResultVm { Success = false, Message = "No active lease found for the selected property." };
+        }
+
+        if (string.IsNullOrWhiteSpace(activeLease.TenantEmail))
+        {
+            return new SendTenantEmailResultVm { Success = false, Message = "The active tenant does not have an email address saved.", RecipientEmail = string.Empty };
+        }
+
+        try
+        {
+            await _emailService.SendEmailAsync(activeLease.TenantEmail.Trim(), request.Subject.Trim(), request.Body.Trim());
+            return new SendTenantEmailResultVm
+            {
+                Success = true,
+                RecipientEmail = activeLease.TenantEmail.Trim(),
+                Message = $"Email sent to {activeLease.TenantEmail.Trim()}."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new SendTenantEmailResultVm
+            {
+                Success = false,
+                RecipientEmail = activeLease.TenantEmail.Trim(),
+                Message = $"Failed to send email: {ex.Message}"
+            };
+        }
+    }
 
 
     public async Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request)

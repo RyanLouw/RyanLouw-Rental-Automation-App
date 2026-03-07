@@ -1,6 +1,7 @@
 using RLRentalApp.Models;
 using RLRentalApp.Web.DataAccess;
 using RLRentalApp.Web.Managers;
+using RLRentalApp.Web.Services;
 using Xunit;
 
 namespace RLRentalApp.Web.Tests;
@@ -24,7 +25,7 @@ public class PropertyDashboardManagerTests
             }
         };
 
-        var sut = new PropertyDashboardManager(dataAccess);
+        var sut = new PropertyDashboardManager(dataAccess, new FakeEmailService());
 
         var status = await sut.GetPropertyStatusAsync(7);
 
@@ -63,7 +64,7 @@ public class PropertyDashboardManagerTests
             new StatementEntryDataModel { StatementEntryId = 3, EntryDate = new DateTime(2025, 3, 10), EntryType = "Service", Description = "Water", Amount = 20m, SourceTable = "service_charge" }
         ];
 
-        var sut = new PropertyDashboardManager(dataAccess);
+        var sut = new PropertyDashboardManager(dataAccess, new FakeEmailService());
 
         var statement = await sut.GetPropertyStatementAsync(8, selectedMonth);
 
@@ -99,7 +100,7 @@ public class PropertyDashboardManagerTests
             new StatementEntryDataModel { StatementEntryId = 11, EntryDate = new DateTime(2025, 1, 6), EntryType = "Manual", Description = "Manual", Amount = 10m, SourceTable = "manual_adjustment" }
         ];
 
-        var sut = new PropertyDashboardManager(dataAccess);
+        var sut = new PropertyDashboardManager(dataAccess, new FakeEmailService());
         var statement = await sut.GetPropertyStatementAsync(2, selectedMonth);
 
         Assert.NotNull(statement);
@@ -107,6 +108,51 @@ public class PropertyDashboardManagerTests
         var manualRow = Assert.Single(statement.Entries.Where(x => x.StatementEntryId == 11));
         Assert.True(rentRow.CanEdit);
         Assert.False(manualRow.CanEdit);
+    }
+
+    [Fact]
+    public async Task SendTenantEmailAsync_ReturnsError_WhenTenantEmailMissing()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 1, TenantId = 2, TenantName = "Tenant", TenantEmail = string.Empty, StartDate = DateTime.UtcNow }
+        };
+        var emailService = new FakeEmailService();
+        var sut = new PropertyDashboardManager(dataAccess, emailService);
+
+        var result = await sut.SendTenantEmailAsync(new SendTenantEmailRequestVm
+        {
+            PropertyId = 5,
+            Subject = "Test",
+            Body = "Hello"
+        });
+
+        Assert.False(result.Success);
+        Assert.Contains("does not have an email", result.Message);
+        Assert.Equal(0, emailService.SendCount);
+    }
+
+    [Fact]
+    public async Task SendTenantEmailAsync_SendsToActiveTenantEmail()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 1, TenantId = 2, TenantName = "Tenant", TenantEmail = "tenant@example.com", StartDate = DateTime.UtcNow }
+        };
+        var emailService = new FakeEmailService();
+        var sut = new PropertyDashboardManager(dataAccess, emailService);
+
+        var result = await sut.SendTenantEmailAsync(new SendTenantEmailRequestVm
+        {
+            PropertyId = 5,
+            Subject = "Rent Reminder",
+            Body = "Please remember to pay rent."
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal("tenant@example.com", result.RecipientEmail);
+        Assert.Equal(1, emailService.SendCount);
+        Assert.Equal("tenant@example.com", emailService.LastToEmail);
     }
 
     private sealed class FakePropertyDashboardDataAccess : IPropertyDashboardDataAccess
@@ -140,5 +186,18 @@ public class PropertyDashboardManagerTests
         public Task<int> UpsertRentRateAsync(int leaseId, DateTime effectiveFrom, decimal amount, string notes) => throw new NotImplementedException();
         public Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount) => throw new NotImplementedException();
         public Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeEmailService : IEmailService
+    {
+        public int SendCount { get; private set; }
+        public string LastToEmail { get; private set; } = string.Empty;
+
+        public Task SendEmailAsync(string toEmail, string subject, string body)
+        {
+            SendCount++;
+            LastToEmail = toEmail;
+            return Task.CompletedTask;
+        }
     }
 }
