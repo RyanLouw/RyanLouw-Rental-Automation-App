@@ -81,13 +81,17 @@ public class AdminController : Controller
         try
         {
             var propertyId = await InsertPropertyAsync(connection, tx, request.PropertyName, request.PropertyAddressLine1, request.PropertyAddressLine2, request.PropertyNotes, true);
-            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.OpeningOutstanding, request.DepositHeld, "Onboarded as existing property takeover");
+            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.OpeningOutstanding, 0m, "Onboarded as existing property takeover");
             var leaseId = await InsertLeaseAsync(connection, tx, propertyId, tenantId, request.LeaseStartDate, "Onboarded from admin");
             var rentRateId = await InsertRentRateAsync(connection, tx, leaseId, request.LeaseStartDate, request.InitialRent, "Initial rent on takeover");
             await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rent for statement month", request.InitialRent, "rent_rate", rentRateId);
+            if (request.DepositRequired > 0)
+            {
+                await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Deposit", "Deposit required", request.DepositRequired, "tenant_deposit", tenantId);
+            }
 
             await tx.CommitAsync();
-            TempData["AdminMessage"] = "Existing property takeover created with tenant, lease, opening saldo, deposit and rent.";
+            TempData["AdminMessage"] = "Existing property takeover created with tenant, lease, opening saldo, deposit required and rent.";
         }
         catch (Exception ex)
         {
@@ -120,13 +124,17 @@ public class AdminController : Controller
         try
         {
             await CloseActiveLeaseAsync(connection, tx, request.PropertyId, request.LeaseStartDate);
-            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.OpeningOutstanding, request.DepositHeld, "Added as new tenant to existing property");
+            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.OpeningOutstanding, 0m, "Added as new tenant to existing property");
             var leaseId = await InsertLeaseAsync(connection, tx, request.PropertyId, tenantId, request.LeaseStartDate, "Tenant change from admin");
             var rentRateId = await InsertRentRateAsync(connection, tx, leaseId, request.LeaseStartDate, request.InitialRent, "Initial rent for new tenant");
             await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rent for statement month", request.InitialRent, "rent_rate", rentRateId);
+            if (request.DepositRequired > 0)
+            {
+                await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Deposit", "Deposit required", request.DepositRequired, "tenant_deposit", tenantId);
+            }
 
             await tx.CommitAsync();
-            TempData["AdminMessage"] = "New tenant added to property with deposit and opening saldo captured.";
+            TempData["AdminMessage"] = "New tenant added to property with opening saldo, deposit required, and rent captured.";
         }
         catch (Exception ex)
         {

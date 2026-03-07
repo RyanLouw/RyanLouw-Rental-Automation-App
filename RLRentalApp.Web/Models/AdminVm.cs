@@ -29,7 +29,7 @@ public class OnboardExistingPropertyRequestVm
     public DateTime LeaseStartDate { get; set; }
 
     public decimal OpeningOutstanding { get; set; }
-    public decimal DepositHeld { get; set; }
+    public decimal DepositRequired { get; set; }
     public decimal InitialRent { get; set; }
 }
 
@@ -41,6 +41,6 @@ public class AddTenantToPropertyRequestVm
     public string TenantPhone { get; set; } = string.Empty;
     public DateTime LeaseStartDate { get; set; }
     public decimal OpeningOutstanding { get; set; }
-    public decimal DepositHeld { get; set; }
+    public decimal DepositRequired { get; set; }
     public decimal InitialRent { get; set; }
 }
