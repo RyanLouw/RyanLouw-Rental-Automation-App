@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Infrastructure;
 using RLRentalApp.Web.Data;
 using RLRentalApp.Web.DataAccess;
 using RLRentalApp.Web.Managers;
 
 var builder = WebApplication.CreateBuilder(args);
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 builder.Services.AddControllersWithViews(options =>
 {
