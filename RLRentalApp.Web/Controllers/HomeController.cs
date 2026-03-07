@@ -140,11 +140,11 @@ public class HomeController : Controller
                             right.Item().Text("Statement To:").SemiBold().FontColor(Colors.Grey.Darken1);
                             right.Item().Text(statement.TenantName).SemiBold().FontSize(13);
                             right.Item().Text(statement.PropertyName).FontSize(13);
+                            right.Item().Text(statement.PropertyAddress).FontSize(11).FontColor(Colors.Grey.Darken1);
                         });
                     });
 
                     column.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
-                    column.Item().Text($"Opening balance: {Money(statement.OpeningOutstanding)}");
                     column.Item().Text($"Current balance: {Money(statement.CurrentBalance)}").SemiBold();
 
                     column.Item().Table(table =>

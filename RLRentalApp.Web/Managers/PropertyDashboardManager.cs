@@ -18,6 +18,13 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         _dataAccess = dataAccess;
     }
 
+    private static string BuildFullAddress(PropertyOptionVm property)
+    {
+        return string.IsNullOrWhiteSpace(property.AddressLine2)
+            ? property.AddressLine1
+            : $"{property.AddressLine1}, {property.AddressLine2}";
+    }
+
     public async Task<HomeIndexVm> GetDashboardAsync()
     {
         var properties = await _dataAccess.LoadPropertiesAsync();
@@ -126,6 +133,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             LeaseId = activeLease.LeaseId,
             TenantId = activeLease.TenantId,
             PropertyName = property.Name,
+            PropertyAddress = BuildFullAddress(property),
             TenantName = activeLease.TenantName,
             OpeningOutstanding = statementWindowOpening,
             CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth,
