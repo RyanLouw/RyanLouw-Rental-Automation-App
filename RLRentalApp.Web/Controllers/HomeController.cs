@@ -127,6 +127,20 @@ public class HomeController : Controller
         return Json(result);
     }
 
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateStatementEntry([FromBody] UpdateStatementEntryRequestVm request)
+    {
+        var result = await _propertyDashboardManager.UpdateStatementEntryAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
     public IActionResult Privacy()
     {
         return View();

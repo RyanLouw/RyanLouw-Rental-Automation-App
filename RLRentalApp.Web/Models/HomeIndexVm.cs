@@ -46,11 +46,13 @@ public class PropertyStatementVm
 
 public class PropertyStatementEntryVm
 {
+    public long StatementEntryId { get; set; }
     public DateTime EntryDate { get; set; }
     public string EntryType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public decimal RunningBalance { get; set; }
+    public bool CanEdit { get; set; }
 }
 
 public class ServicePdfParseResultVm
@@ -153,6 +155,22 @@ public class SaveRentRequestVm
 }
 
 public class SaveRentResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+
+public class UpdateStatementEntryRequestVm
+{
+    public int PropertyId { get; set; }
+    public long StatementEntryId { get; set; }
+    public DateTime EntryDate { get; set; }
+    public decimal Amount { get; set; }
+    public string Description { get; set; } = string.Empty;
+}
+
+public class UpdateStatementEntryResultVm
 {
     public bool Success { get; set; }
     public string Message { get; set; } = string.Empty;

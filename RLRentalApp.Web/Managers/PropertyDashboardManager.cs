@@ -85,21 +85,29 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         var openingOutstanding = await _dataAccess.LoadOpeningOutstandingAsync(activeLease.TenantId);
         var monthStart = new DateTime((statementMonth ?? DateTime.UtcNow).Year, (statementMonth ?? DateTime.UtcNow).Month, 1);
-        var rawEntries = await _dataAccess.LoadMonthEntriesAsync(activeLease.LeaseId, monthStart);
+        var rawEntries = new List<StatementEntryDataModel>();
+        for (var i = 2; i >= 0; i--)
+        {
+            var windowMonth = monthStart.AddMonths(-i);
+            var monthEntries = await _dataAccess.LoadMonthEntriesAsync(activeLease.LeaseId, windowMonth);
+            rawEntries.AddRange(monthEntries);
+        }
 
         var statementEntries = rawEntries
+            .OrderBy(x => x.EntryDate)
+            .ThenBy(x => x.EntryType)
             .Select(x => new PropertyStatementEntryVm
             {
+                StatementEntryId = x.StatementEntryId,
                 EntryDate = x.EntryDate,
                 EntryType = x.EntryType,
                 Description = x.Description,
-                Amount = x.Amount
+                Amount = x.Amount,
+                CanEdit = string.Equals(x.SourceTable, "payment", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(x.SourceTable, "service_charge", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(x.SourceTable, "rent_rate", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(x.SourceTable, "tenant_deposit", StringComparison.OrdinalIgnoreCase)
             })
-            .ToList();
-
-        statementEntries = statementEntries
-            .OrderBy(x => x.EntryDate)
-            .ThenBy(x => x.EntryType)
             .ToList();
 
         var runningBalance = openingOutstanding;
@@ -124,6 +132,28 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
+
+
+    public async Task<UpdateStatementEntryResultVm> UpdateStatementEntryAsync(UpdateStatementEntryRequestVm request)
+    {
+        if (request.StatementEntryId <= 0)
+        {
+            return new UpdateStatementEntryResultVm { Success = false, Message = "Invalid statement row." };
+        }
+
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new UpdateStatementEntryResultVm { Success = false, Message = "No active lease found for selected property." };
+        }
+
+        return await _dataAccess.UpdateStatementEntryAsync(
+            activeLease.LeaseId,
+            request.StatementEntryId,
+            request.EntryDate,
+            request.Amount,
+            request.Description ?? string.Empty);
+    }
 
 
     public async Task<SaveRentResultVm> SaveRentAsync(SaveRentRequestVm request)

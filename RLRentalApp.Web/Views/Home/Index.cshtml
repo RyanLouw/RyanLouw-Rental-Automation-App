@@ -275,6 +275,7 @@
                             <th>Description</th>
                             <th class="text-end">Amount</th>
                             <th class="text-end">Running Balance</th>
+                            <th></th>
                         </tr>
                         </thead>
                         <tbody id="statementTableBody"></tbody>
@@ -722,6 +723,107 @@
                 await loadProperty(selectedPropertyId, false);
             });
 
+            let statementEntries = [];
+            let editingEntryId = null;
+
+            const renderStatement = () => {
+                statementTableBody.innerHTML = statementEntries.map(entry => {
+                    if (editingEntryId === entry.statementEntryId) {
+                        return `
+                            <tr>
+                                <td><input class="form-control form-control-sm" type="date" data-edit="date" value="${new Date(entry.entryDate).toISOString().slice(0, 10)}" /></td>
+                                <td>${entry.entryType}</td>
+                                <td><input class="form-control form-control-sm" type="text" data-edit="description" value="${entry.description.replace(/"/g, '&quot;')}" /></td>
+                                <td><input class="form-control form-control-sm text-end" type="number" step="0.01" data-edit="amount" value="${entry.amount}" /></td>
+                                <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-success" data-action="save" data-id="${entry.statementEntryId}" type="button">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="cancel" data-id="${entry.statementEntryId}" type="button">Cancel</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+
+                    return `
+                        <tr>
+                            <td>${new Date(entry.entryDate).toLocaleDateString()}</td>
+                            <td>${entry.entryType}</td>
+                            <td>${entry.description}</td>
+                            <td class="text-end">${Number(entry.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td class="text-end">${entry.canEdit ? `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${entry.statementEntryId}" type="button">Edit</button>` : ''}</td>
+                        </tr>
+                    `;
+                }).join('');
+            };
+
+            statementTableBody?.addEventListener('click', async (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
+
+                const button = target.closest('button[data-action]');
+                if (!button) {
+                    return;
+                }
+
+                const action = button.getAttribute('data-action');
+                const id = Number(button.getAttribute('data-id'));
+                if (!id) {
+                    return;
+                }
+
+                if (action === 'edit') {
+                    editingEntryId = id;
+                    renderStatement();
+                    return;
+                }
+
+                if (action === 'cancel') {
+                    editingEntryId = null;
+                    renderStatement();
+                    return;
+                }
+
+                if (action === 'save') {
+                    const row = button.closest('tr');
+                    if (!row) {
+                        return;
+                    }
+
+                    const dateInput = row.querySelector('input[data-edit="date"]');
+                    const descInput = row.querySelector('input[data-edit="description"]');
+                    const amountInput = row.querySelector('input[data-edit="amount"]');
+                    if (!(dateInput instanceof HTMLInputElement) || !(descInput instanceof HTMLInputElement) || !(amountInput instanceof HTMLInputElement)) {
+                        return;
+                    }
+
+                    const body = {
+                        propertyId: Number(selectedPropertyId),
+                        statementEntryId: id,
+                        entryDate: dateInput.value,
+                        description: descInput.value,
+                        amount: Number(amountInput.value)
+                    };
+
+                    const response = await fetch('/Home/UpdateStatementEntry', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        statementSummary.textContent = payload.message || 'Could not update statement row.';
+                        return;
+                    }
+
+                    editingEntryId = null;
+                    await loadStatement();
+                }
+            });
+
             const loadStatement = async () => {
                 if (!selectedPropertyId) {
                     return;
@@ -736,17 +838,10 @@
                 }
 
                 const statement = await response.json();
-                statementSummary.textContent = `${statement.tenantName} | Month: ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
+                statementSummary.textContent = `${statement.tenantName} | Window: last 3 months ending ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
 
-                statementTableBody.innerHTML = statement.entries.map(entry => `
-                    <tr>
-                        <td>${new Date(entry.entryDate).toLocaleDateString()}</td>
-                        <td>${entry.entryType}</td>
-                        <td>${entry.description}</td>
-                        <td class="text-end">${Number(entry.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
-                        <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
-                    </tr>
-                `).join('');
+                statementEntries = statement.entries || [];
+                renderStatement();
             };
 
             statementButton?.addEventListener('click', loadStatement);
