@@ -16,7 +16,6 @@ var migrations = builder.AddProject<Projects.RLRentalApp_Migrations>("database-m
 // Web project
 builder.AddProject<Projects.RLRentalApp_Web>("web")
     .WithExplicitStart()
-    .WithReference(rentalDb)
-    .WaitFor(migrations);
+    .WithReference(rentalDb);
 
 await builder.Build().RunAsync();
