@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Http;
+using QuestPDF.Infrastructure;
+using QuestPDF.Helpers;
+using QuestPDF.Fluent;
 using RLRentalApp.Models;
 using RLRentalApp.Web.DataAccess;
 using System.Globalization;
@@ -16,6 +19,28 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     public PropertyDashboardManager(IPropertyDashboardDataAccess dataAccess)
     {
         _dataAccess = dataAccess;
+    }
+
+    private static string BuildFullAddress(PropertyOptionVm property)
+    {
+        return string.IsNullOrWhiteSpace(property.AddressLine2)
+            ? property.AddressLine1
+            : $"{property.AddressLine1}, {property.AddressLine2}";
+    }
+
+    private static class StatementPdfConstants
+    {
+        public const string CompanyLine1 = "MH & Sons";
+        public const string CompanyLine2 = "Investment";
+        public const string CompanyLine3 = "Properties";
+        public const string HeaderTitle = "Statement";
+        public const string OfficeAddressLine1 = "No 9 Waterberg straat";
+        public const string OfficeAddressLine2 = "Noordheuwel X6";
+        public const string OfficeAddressLine3 = "Krugersdorp";
+        public const string OfficeAddressLine4 = "10/4/1904";
+        public const string Phone = "084 588 4884";
+        public const string Fax = "086 507 2111";
+        public const string Email = "hrlouw@justice.gov.za";
     }
 
     public async Task<HomeIndexVm> GetDashboardAsync()
@@ -126,6 +151,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             LeaseId = activeLease.LeaseId,
             TenantId = activeLease.TenantId,
             PropertyName = property.Name,
+            PropertyAddress = BuildFullAddress(property),
             TenantName = activeLease.TenantName,
             OpeningOutstanding = statementWindowOpening,
             CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth,
@@ -133,6 +159,161 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Entries = statementEntries
         };
     }
+
+
+
+    public async Task<PropertyStatementPdfVm?> GeneratePropertyStatementPdfAsync(int propertyId, DateTime? statementMonth = null)
+    {
+        var statement = await GetPropertyStatementAsync(propertyId, statementMonth);
+        if (statement is null)
+        {
+            return null;
+        }
+
+        var generatedOn = DateTime.Now;
+        var dueMonth = new DateTime(statement.StatementMonth.Year, statement.StatementMonth.Month, 1).AddMonths(1);
+        var dueDate = new DateTime(dueMonth.Year, dueMonth.Month, 4);
+
+        var pdfBytes = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(28);
+                page.DefaultTextStyle(x => x.FontSize(10));
+
+                page.Content().Column(column =>
+                {
+                    column.Spacing(16);
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(left =>
+                        {
+                            left.Item().Text(StatementPdfConstants.CompanyLine1).SemiBold().FontSize(20);
+                            left.Item().Text(StatementPdfConstants.CompanyLine2).SemiBold().FontSize(20);
+                            left.Item().Text(StatementPdfConstants.CompanyLine3).SemiBold().FontSize(20);
+                        });
+
+                        row.ConstantItem(140).AlignCenter().Text("✦").FontSize(38).FontColor(Colors.Grey.Darken1);
+
+                        row.RelativeItem().AlignRight().Column(right =>
+                        {
+                            right.Item().Text(StatementPdfConstants.HeaderTitle)
+                                .Italic()
+                                .SemiBold()
+                                .FontSize(24)
+                                .FontColor(Colors.Grey.Darken1);
+                        });
+                    });
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(left =>
+                        {
+                            left.Item().Text(StatementPdfConstants.OfficeAddressLine1);
+                            left.Item().Text(StatementPdfConstants.OfficeAddressLine2);
+                            left.Item().Text(StatementPdfConstants.OfficeAddressLine3);
+                            left.Item().Text(StatementPdfConstants.OfficeAddressLine4);
+                        });
+
+                        row.RelativeItem().Column(right =>
+                        {
+                            right.Item().Text($"Phone: {StatementPdfConstants.Phone}").SemiBold();
+                            right.Item().Text($"Fax: {StatementPdfConstants.Fax}").SemiBold();
+                            right.Item().Text($"E-mail: {StatementPdfConstants.Email}").FontColor(Colors.Blue.Medium);
+                        });
+                    });
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Text($"Date: {generatedOn:MMMM d, yyyy}").SemiBold();
+                        row.RelativeItem().AlignRight().Column(right =>
+                        {
+                            right.Item().Text("Statement To:").SemiBold().FontColor(Colors.Grey.Darken1);
+                            right.Item().Text(statement.TenantName).SemiBold().FontSize(13);
+                            right.Item().Text(statement.PropertyName).FontSize(13);
+                            right.Item().Text(statement.PropertyAddress).FontSize(11).FontColor(Colors.Grey.Darken1);
+                        });
+                    });
+
+                    column.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
+                    column.Item().Text($"Current balance: {FormatMoney(statement.CurrentBalance)}").SemiBold();
+
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.ConstantColumn(85);
+                            columns.ConstantColumn(80);
+                            columns.RelativeColumn();
+                            columns.ConstantColumn(90);
+                            columns.ConstantColumn(100);
+                        });
+
+                        table.Header(header =>
+                        {
+                            static IContainer HeaderCell(IContainer container) => container
+                                .Background(Colors.Grey.Lighten3)
+                                .PaddingVertical(6)
+                                .PaddingHorizontal(8)
+                                .BorderBottom(1)
+                                .BorderColor(Colors.Grey.Lighten1);
+
+                            header.Cell().Element(HeaderCell).Text("Date").SemiBold();
+                            header.Cell().Element(HeaderCell).Text("Type").SemiBold();
+                            header.Cell().Element(HeaderCell).Text("Description").SemiBold();
+                            header.Cell().Element(HeaderCell).AlignRight().Text("Amount").SemiBold();
+                            header.Cell().Element(HeaderCell).AlignRight().Text("Balance").SemiBold();
+                        });
+
+                        foreach (var entry in statement.Entries)
+                        {
+                            static IContainer BodyCell(IContainer container) => container
+                                .PaddingVertical(5)
+                                .PaddingHorizontal(8)
+                                .BorderBottom(1)
+                                .BorderColor(Colors.Grey.Lighten3);
+
+                            table.Cell().Element(BodyCell).Text(entry.EntryDate.ToString("dd MMM yyyy"));
+                            table.Cell().Element(BodyCell).Text(entry.EntryType);
+                            table.Cell().Element(BodyCell).Text(entry.Description);
+                            table.Cell().Element(BodyCell).AlignRight().Text(FormatMoney(entry.Amount));
+                            table.Cell().Element(BodyCell).AlignRight().Text(FormatMoney(entry.RunningBalance));
+                        }
+                    });
+
+                    column.Item().PaddingTop(8).Text($"Amount to be paid by {dueDate:dd MMMM yyyy}: {FormatMoney(statement.CurrentBalance)}")
+                        .SemiBold()
+                        .FontSize(13);
+                });
+
+                page.Footer().AlignRight().Text(text =>
+                {
+                    text.Span("Page ");
+                    text.CurrentPageNumber();
+                    text.Span(" of ");
+                    text.TotalPages();
+                });
+            });
+        }).GeneratePdf();
+
+        return new PropertyStatementPdfVm
+        {
+            PdfBytes = pdfBytes,
+            FileName = BuildStatementPdfFileName(statement)
+        };
+    }
+
+    private static string FormatMoney(decimal value) => $"R {value:N2}";
+
+    private static string BuildStatementPdfFileName(PropertyStatementVm statement)
+    {
+        var sanitizedName = Regex.Replace(statement.PropertyName.ToLowerInvariant(), "[^a-z0-9-]", "-");
+        sanitizedName = Regex.Replace(sanitizedName, "-+", "-").Trim('-');
+        return $"tenant-statement-{sanitizedName}-{statement.StatementMonth:yyyy-MM}.pdf";
+    }
+
 
 
 

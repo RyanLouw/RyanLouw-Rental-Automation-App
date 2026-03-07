@@ -22,7 +22,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT id, name, COALESCE(address_line1, ''), is_active
+            SELECT id, name, COALESCE(address_line1, ''), COALESCE(address_line2, ''), is_active
             FROM property
             ORDER BY name;";
 
@@ -36,7 +36,8 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
                 AddressLine1 = reader.GetString(2),
-                IsActive = reader.GetBoolean(3)
+                AddressLine2 = reader.GetString(3),
+                IsActive = reader.GetBoolean(4)
             });
         }
 
@@ -50,7 +51,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT id, name, COALESCE(address_line1, ''), is_active
+            SELECT id, name, COALESCE(address_line1, ''), COALESCE(address_line2, ''), is_active
             FROM property
             WHERE id = @id
             LIMIT 1;";
@@ -72,7 +73,8 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             Id = reader.GetInt32(0),
             Name = reader.GetString(1),
             AddressLine1 = reader.GetString(2),
-            IsActive = reader.GetBoolean(3)
+            AddressLine2 = reader.GetString(3),
+            IsActive = reader.GetBoolean(4)
         };
     }
 
