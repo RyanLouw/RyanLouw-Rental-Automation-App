@@ -1,6 +1,7 @@
 using RLRentalApp.Models;
 using RLRentalApp.Web.DataAccess;
 using RLRentalApp.Web.Managers;
+using Xunit;
 
 namespace RLRentalApp.Web.Tests;
 
