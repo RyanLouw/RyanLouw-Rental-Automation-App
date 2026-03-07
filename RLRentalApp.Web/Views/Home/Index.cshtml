@@ -75,7 +75,58 @@
 </div>
 
 <div class="modal fade" id="didPayModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Did they pay?</h2><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Capture the payment amount, date, and reference for this property.</div></div></div>
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Did they pay?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload a bank statement PDF. We will pull entries where the description contains your search text.</p>
+                <div class="mb-3">
+                    <label for="paymentDescriptionContains" class="form-label">Description contains</label>
+                    <input class="form-control" id="paymentDescriptionContains" value="Heino Huur" />
+                    <div class="form-text">Examples: <code>Heino Huur</code> or <code>Betaling Van Heino Huur</code>.</div>
+                </div>
+                <div class="mb-3">
+                    <label for="paymentPdfFile" class="form-label">Statement PDF</label>
+                    <input class="form-control" type="file" id="paymentPdfFile" accept="application/pdf,.pdf" />
+                </div>
+                <button class="btn btn-primary" type="button" id="parsePaymentPdfBtn">Parse PDF</button>
+
+                <div id="paymentPdfError" class="alert alert-danger mt-3 d-none"></div>
+
+                <div id="paymentResults" class="mt-3 d-none">
+                    <h3 class="h6">Detected payments</h3>
+                    <p class="small text-muted mb-2">You can remove any row before saving. Duplicate same amount on the same day is automatically blocked.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th class="text-end">Amount</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="paymentNotesInput">Notes (optional)</label>
+                        <input type="text" class="form-control" id="paymentNotesInput" maxlength="400" />
+                    </div>
+                    <button class="btn btn-success" type="button" id="savePaymentsBtn">Save payments</button>
+                    <div id="savePaymentsMsg" class="alert mt-3 d-none"></div>
+
+                    <details>
+                        <summary>Raw text preview</summary>
+                        <pre id="paymentPdfRawText" class="small mt-2 mb-0"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="addServicesModal" tabindex="-1" aria-hidden="true">
@@ -166,7 +217,31 @@
 </div>
 
 <div class="modal fade" id="addRentModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Add rent</h2><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Capture or update the rent amount for the active lease.</div></div></div>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Add rent</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Save the rent amount and effective month for the active lease.</p>
+                <div class="mb-3">
+                    <label class="form-label" for="rentEffectiveMonthInput">Effective month</label>
+                    <input type="month" class="form-control" id="rentEffectiveMonthInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="rentAmountInput">Rent amount</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="rentAmountInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="rentNotesInput">Notes (optional)</label>
+                    <input type="text" class="form-control" id="rentNotesInput" maxlength="400" />
+                </div>
+                <button class="btn btn-warning" type="button" id="saveRentBtn">Save rent</button>
+                <div id="saveRentMsg" class="alert mt-3 d-none"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="moreInfoModal" tabindex="-1" aria-hidden="true">
@@ -181,6 +256,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="statementMonthInput">Statement month</label>
+                        <input type="month" class="form-control" id="statementMonthInput" />
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button class="btn btn-outline-primary" type="button" id="reloadStatementBtn">Reload</button>
+                    </div>
+                </div>
                 <div id="statementSummary" class="mb-3 text-muted"></div>
                 <div class="table-responsive">
                     <table class="table table-sm table-striped">
@@ -191,6 +275,7 @@
                             <th>Description</th>
                             <th class="text-end">Amount</th>
                             <th class="text-end">Running Balance</th>
+                            <th></th>
                         </tr>
                         </thead>
                         <tbody id="statementTableBody"></tbody>
@@ -214,6 +299,8 @@
             const statementButton = document.getElementById('viewStatementBtn');
             const statementSummary = document.getElementById('statementSummary');
             const statementTableBody = document.getElementById('statementTableBody');
+            const statementMonthInput = document.getElementById('statementMonthInput');
+            const reloadStatementBtn = document.getElementById('reloadStatementBtn');
             const switcherSection = document.getElementById('propertySwitcherSection');
             const switchPropertySelect = document.getElementById('propertySwitchSelect');
             const switchPropertyBtn = document.getElementById('switchPropertyBtn');
@@ -242,6 +329,21 @@
             const servicesNotesInput = document.getElementById('servicesNotesInput');
             const saveServicesBtn = document.getElementById('saveServicesBtn');
             const saveServicesMsg = document.getElementById('saveServicesMsg');
+            const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
+            const rentAmountInput = document.getElementById('rentAmountInput');
+            const rentNotesInput = document.getElementById('rentNotesInput');
+            const saveRentBtn = document.getElementById('saveRentBtn');
+            const saveRentMsg = document.getElementById('saveRentMsg');
+            const parsePaymentPdfBtn = document.getElementById('parsePaymentPdfBtn');
+            const paymentPdfFile = document.getElementById('paymentPdfFile');
+            const paymentPdfError = document.getElementById('paymentPdfError');
+            const paymentResults = document.getElementById('paymentResults');
+            const paymentTableBody = document.getElementById('paymentTableBody');
+            const paymentNotesInput = document.getElementById('paymentNotesInput');
+            const savePaymentsBtn = document.getElementById('savePaymentsBtn');
+            const savePaymentsMsg = document.getElementById('savePaymentsMsg');
+            const paymentPdfRawText = document.getElementById('paymentPdfRawText');
+            const paymentDescriptionContains = document.getElementById('paymentDescriptionContains');
 
             let selectedPropertyId = null;
 
@@ -255,6 +357,16 @@
             if (billingPeriodInput) {
                 const now = new Date();
                 billingPeriodInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+
+            if (statementMonthInput) {
+                const now = new Date();
+                statementMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+
+            if (rentEffectiveMonthInput) {
+                const now = new Date();
+                rentEffectiveMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             }
 
             propertySelect?.addEventListener('change', () => {
@@ -273,6 +385,11 @@
 
                 selectedPropertyId = propertyId;
                 const status = await response.json();
+
+                if (rentAmountInput && status.latestRent !== null && status.latestRent !== undefined) {
+                    rentAmountInput.value = status.latestRent;
+                }
+
                 selectedHeader.classList.remove('d-none');
                 selectedHeader.textContent = `Selected property: ${status.propertyName}`;
 
@@ -319,6 +436,57 @@
             const money = (value) => value !== null && value !== undefined
                 ? Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })
                 : '-';
+
+            saveRentBtn?.addEventListener('click', async () => {
+                saveRentMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                if (!rentEffectiveMonthInput?.value) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = 'Please choose an effective month.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const amount = rentAmountInput?.value ? Number(rentAmountInput.value) : 0;
+                if (!amount || amount <= 0) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = 'Please capture a rent amount greater than zero.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    effectiveFrom: `${rentEffectiveMonthInput.value}-01`,
+                    amount,
+                    notes: rentNotesInput?.value || ''
+                };
+
+                const response = await fetch('/Home/SaveRent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = payload.message || 'Could not save rent.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                saveRentMsg.className = 'alert alert-success mt-3';
+                saveRentMsg.textContent = payload.message;
+                saveRentMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
+            });
 
             parseServicePdfBtn?.addEventListener('click', async () => {
                 servicePdfError?.classList.add('d-none');
@@ -377,6 +545,137 @@
             });
 
 
+
+
+            let parsedPayments = [];
+
+            const renderPaymentRows = () => {
+                if (!paymentTableBody) {
+                    return;
+                }
+
+                paymentTableBody.innerHTML = parsedPayments.map((payment, index) => `
+                    <tr>
+                        <td>${new Date(payment.paidOn).toLocaleDateString()}</td>
+                        <td>${payment.description}</td>
+                        <td class="text-end">${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-index="${index}" type="button">Delete</button></td>
+                    </tr>
+                `).join('');
+            };
+
+            paymentTableBody?.addEventListener('click', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
+
+                const deleteBtn = target.closest('button[data-index]');
+                if (!deleteBtn) {
+                    return;
+                }
+
+                const index = Number(deleteBtn.getAttribute('data-index'));
+                if (Number.isNaN(index)) {
+                    return;
+                }
+
+                parsedPayments.splice(index, 1);
+                renderPaymentRows();
+            });
+
+            parsePaymentPdfBtn?.addEventListener('click', async () => {
+                paymentPdfError?.classList.add('d-none');
+                paymentResults?.classList.add('d-none');
+                savePaymentsMsg?.classList.add('d-none');
+
+                const file = paymentPdfFile?.files?.[0];
+                if (!file) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = 'Please select a PDF first.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('pdfFile', file);
+                formData.append('descriptionContains', paymentDescriptionContains?.value || '');
+
+                const response = await fetch('/Home/ParsePaymentPdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = payload.errorMessage || 'Could not parse this PDF.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                parsedPayments = payload.payments || [];
+                renderPaymentRows();
+                paymentPdfRawText.textContent = payload.rawTextPreview || '';
+                paymentResults?.classList.remove('d-none');
+            });
+
+            savePaymentsBtn?.addEventListener('click', async () => {
+                savePaymentsMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                if (!parsedPayments.length) {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = 'No payment rows to save.';
+                    savePaymentsMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    payments: parsedPayments,
+                    notes: paymentNotesInput?.value || ''
+                };
+
+                const response = await fetch('/Home/SavePayments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = payload.message || 'Could not save payments.';
+                    savePaymentsMsg.classList.remove('d-none');
+                    return;
+                }
+
+                savePaymentsMsg.className = 'alert alert-success mt-3';
+                const savedRows = (payload.savedPayments || []).map(x =>
+                    `${new Date(x.paidOn).toLocaleDateString()} ${Number(x.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`);
+                const savedRowsText = savedRows.length
+                    ? ` Saved rows: ${savedRows.join(', ')}.`
+                    : '';
+
+                if (payload.savedPayments?.length && statementMonthInput) {
+                    const firstSaved = new Date(payload.savedPayments[0].paidOn);
+                    statementMonthInput.value = `${firstSaved.getFullYear()}-${String(firstSaved.getMonth() + 1).padStart(2, '0')}`;
+                }
+
+                savePaymentsMsg.textContent = `${payload.message}${savedRowsText} Tip: open View statement and click Reload for the saved month.`;
+                savePaymentsMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
+            });
+
             saveServicesBtn?.addEventListener('click', async () => {
                 saveServicesMsg?.classList.add('d-none');
 
@@ -424,12 +723,114 @@
                 await loadProperty(selectedPropertyId, false);
             });
 
-            statementButton?.addEventListener('click', async () => {
+            let statementEntries = [];
+            let editingEntryId = null;
+
+            const renderStatement = () => {
+                statementTableBody.innerHTML = statementEntries.map(entry => {
+                    if (editingEntryId === entry.statementEntryId) {
+                        return `
+                            <tr>
+                                <td><input class="form-control form-control-sm" type="date" data-edit="date" value="${new Date(entry.entryDate).toISOString().slice(0, 10)}" /></td>
+                                <td>${entry.entryType}</td>
+                                <td><input class="form-control form-control-sm" type="text" data-edit="description" value="${entry.description.replace(/"/g, '&quot;')}" /></td>
+                                <td><input class="form-control form-control-sm text-end" type="number" step="0.01" data-edit="amount" value="${entry.amount}" /></td>
+                                <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-success" data-action="save" data-id="${entry.statementEntryId}" type="button">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="cancel" data-id="${entry.statementEntryId}" type="button">Cancel</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+
+                    return `
+                        <tr>
+                            <td>${new Date(entry.entryDate).toLocaleDateString()}</td>
+                            <td>${entry.entryType}</td>
+                            <td>${entry.description}</td>
+                            <td class="text-end">${Number(entry.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td class="text-end">${entry.canEdit ? `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${entry.statementEntryId}" type="button">Edit</button>` : ''}</td>
+                        </tr>
+                    `;
+                }).join('');
+            };
+
+            statementTableBody?.addEventListener('click', async (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
+
+                const button = target.closest('button[data-action]');
+                if (!button) {
+                    return;
+                }
+
+                const action = button.getAttribute('data-action');
+                const id = Number(button.getAttribute('data-id'));
+                if (!id) {
+                    return;
+                }
+
+                if (action === 'edit') {
+                    editingEntryId = id;
+                    renderStatement();
+                    return;
+                }
+
+                if (action === 'cancel') {
+                    editingEntryId = null;
+                    renderStatement();
+                    return;
+                }
+
+                if (action === 'save') {
+                    const row = button.closest('tr');
+                    if (!row) {
+                        return;
+                    }
+
+                    const dateInput = row.querySelector('input[data-edit="date"]');
+                    const descInput = row.querySelector('input[data-edit="description"]');
+                    const amountInput = row.querySelector('input[data-edit="amount"]');
+                    if (!(dateInput instanceof HTMLInputElement) || !(descInput instanceof HTMLInputElement) || !(amountInput instanceof HTMLInputElement)) {
+                        return;
+                    }
+
+                    const body = {
+                        propertyId: Number(selectedPropertyId),
+                        statementEntryId: id,
+                        entryDate: dateInput.value,
+                        description: descInput.value,
+                        amount: Number(amountInput.value)
+                    };
+
+                    const response = await fetch('/Home/UpdateStatementEntry', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        statementSummary.textContent = payload.message || 'Could not update statement row.';
+                        return;
+                    }
+
+                    editingEntryId = null;
+                    await loadStatement();
+                }
+            });
+
+            const loadStatement = async () => {
                 if (!selectedPropertyId) {
                     return;
                 }
 
-                const response = await fetch(`/Home/PropertyStatement?propertyId=${selectedPropertyId}`);
+                const monthQuery = statementMonthInput?.value ? `&month=${statementMonthInput.value}` : '';
+                const response = await fetch(`/Home/PropertyStatement?propertyId=${selectedPropertyId}${monthQuery}`);
                 if (!response.ok) {
                     statementSummary.textContent = 'Could not load statement.';
                     statementTableBody.innerHTML = '';
@@ -437,18 +838,14 @@
                 }
 
                 const statement = await response.json();
-                statementSummary.textContent = `${statement.tenantName} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
+                statementSummary.textContent = `${statement.tenantName} | Window: last 3 months ending ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
 
-                statementTableBody.innerHTML = statement.entries.map(entry => `
-                    <tr>
-                        <td>${new Date(entry.entryDate).toLocaleDateString()}</td>
-                        <td>${entry.entryType}</td>
-                        <td>${entry.description}</td>
-                        <td class="text-end">${Number(entry.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
-                        <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
-                    </tr>
-                `).join('');
-            });
+                statementEntries = statement.entries || [];
+                renderStatement();
+            };
+
+            statementButton?.addEventListener('click', loadStatement);
+            reloadStatementBtn?.addEventListener('click', loadStatement);
         })();
     </script>
 }

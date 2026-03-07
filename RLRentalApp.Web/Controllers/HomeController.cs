@@ -39,9 +39,15 @@ public class HomeController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> PropertyStatement(int propertyId)
+    public async Task<IActionResult> PropertyStatement(int propertyId, string? month)
     {
-        var statement = await _propertyDashboardManager.GetPropertyStatementAsync(propertyId);
+        DateTime? statementMonth = null;
+        if (!string.IsNullOrWhiteSpace(month) && DateTime.TryParse($"{month}-01", out var parsedMonth))
+        {
+            statementMonth = parsedMonth;
+        }
+
+        var statement = await _propertyDashboardManager.GetPropertyStatementAsync(propertyId, statementMonth);
 
         if (statement is null)
         {
@@ -70,6 +76,62 @@ public class HomeController : Controller
     public async Task<IActionResult> SaveServices([FromBody] SaveServicesRequestVm request)
     {
         var result = await _propertyDashboardManager.SaveServicesAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SaveRent([FromBody] SaveRentRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SaveRentAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> ParsePaymentPdf(IFormFile? pdfFile, string? descriptionContains)
+    {
+        var result = await _propertyDashboardManager.ParsePaymentPdfAsync(pdfFile, descriptionContains);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SavePayments([FromBody] SavePaymentsRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SavePaymentsAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateStatementEntry([FromBody] UpdateStatementEntryRequestVm request)
+    {
+        var result = await _propertyDashboardManager.UpdateStatementEntryAsync(request);
 
         if (!result.Success)
         {

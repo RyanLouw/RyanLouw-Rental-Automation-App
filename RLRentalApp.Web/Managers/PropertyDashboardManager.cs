@@ -4,6 +4,7 @@ using RLRentalApp.Web.DataAccess;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Linq;
 using UglyToad.PdfPig;
 
 namespace RLRentalApp.Web.Managers;
@@ -48,9 +49,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             };
         }
 
-        var latestRent = await _dataAccess.LoadLatestRentAsync(activeLease.LeaseId);
-        var serviceTotal = await _dataAccess.LoadCurrentMonthServiceTotalAsync(activeLease.LeaseId);
-        var paymentTotal = await _dataAccess.LoadCurrentMonthPaymentTotalAsync(activeLease.LeaseId);
+        var currentMonthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+        var latestRent = await _dataAccess.LoadLatestRentAsync(activeLease.LeaseId, DateTime.UtcNow.Date);
+        var snapshot = await _dataAccess.LoadStatementSnapshotAsync(activeLease.LeaseId, currentMonthStart);
         var openingOutstanding = await _dataAccess.LoadOpeningOutstandingAsync(activeLease.TenantId);
 
         return new PropertyStatusVm
@@ -66,13 +67,13 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             LeaseStartDate = activeLease.StartDate,
             LatestRent = latestRent,
             OpeningOutstanding = openingOutstanding,
-            CurrentMonthServiceTotal = serviceTotal,
-            CurrentMonthPaymentTotal = paymentTotal,
-            CurrentBalance = openingOutstanding + (latestRent ?? 0m) + serviceTotal - paymentTotal
+            CurrentMonthServiceTotal = snapshot.CurrentMonthServiceTotal,
+            CurrentMonthPaymentTotal = snapshot.CurrentMonthPaymentTotal,
+            CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth
         };
     }
 
-    public async Task<PropertyStatementVm?> GetPropertyStatementAsync(int propertyId)
+    public async Task<PropertyStatementVm?> GetPropertyStatementAsync(int propertyId, DateTime? statementMonth = null)
     {
         var property = await _dataAccess.LoadPropertyAsync(propertyId);
         var activeLease = await _dataAccess.LoadActiveLeaseAsync(propertyId);
@@ -83,36 +84,36 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var openingOutstanding = await _dataAccess.LoadOpeningOutstandingAsync(activeLease.TenantId);
-        var latestRent = await _dataAccess.LoadLatestRentAsync(activeLease.LeaseId);
-        var rawEntries = await _dataAccess.LoadCurrentMonthEntriesAsync(activeLease.LeaseId);
+        var monthStart = new DateTime((statementMonth ?? DateTime.UtcNow).Year, (statementMonth ?? DateTime.UtcNow).Month, 1);
+        var windowStart = monthStart.AddMonths(-2);
+        var statementWindowOpening = openingOutstanding + await _dataAccess.LoadStatementAmountBeforeDateAsync(activeLease.LeaseId, windowStart);
+        var snapshot = await _dataAccess.LoadStatementSnapshotAsync(activeLease.LeaseId, monthStart);
+        var rawEntries = new List<StatementEntryDataModel>();
+        for (var i = 0; i < 3; i++)
+        {
+            var windowMonth = windowStart.AddMonths(i);
+            var monthEntries = await _dataAccess.LoadMonthEntriesAsync(activeLease.LeaseId, windowMonth);
+            rawEntries.AddRange(monthEntries);
+        }
 
         var statementEntries = rawEntries
+            .OrderBy(x => x.EntryDate)
+            .ThenBy(x => x.EntryType)
             .Select(x => new PropertyStatementEntryVm
             {
+                StatementEntryId = x.StatementEntryId,
                 EntryDate = x.EntryDate,
                 EntryType = x.EntryType,
                 Description = x.Description,
-                Amount = x.Amount
+                Amount = x.Amount,
+                CanEdit = string.Equals(x.SourceTable, "payment", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(x.SourceTable, "service_charge", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(x.SourceTable, "rent_rate", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(x.SourceTable, "tenant_deposit", StringComparison.OrdinalIgnoreCase)
             })
             .ToList();
 
-        if (latestRent.HasValue)
-        {
-            statementEntries.Add(new PropertyStatementEntryVm
-            {
-                EntryDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
-                EntryType = "Rent",
-                Description = "Current month rent",
-                Amount = latestRent.Value
-            });
-        }
-
-        statementEntries = statementEntries
-            .OrderBy(x => x.EntryDate)
-            .ThenBy(x => x.EntryType)
-            .ToList();
-
-        var runningBalance = openingOutstanding;
+        var runningBalance = statementWindowOpening;
         foreach (var entry in statementEntries)
         {
             runningBalance += entry.Amount;
@@ -126,12 +127,72 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             TenantId = activeLease.TenantId,
             PropertyName = property.Name,
             TenantName = activeLease.TenantName,
-            OpeningOutstanding = openingOutstanding,
-            CurrentBalance = runningBalance,
+            OpeningOutstanding = statementWindowOpening,
+            CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth,
+            StatementMonth = monthStart,
             Entries = statementEntries
         };
     }
 
+
+
+
+    public async Task<UpdateStatementEntryResultVm> UpdateStatementEntryAsync(UpdateStatementEntryRequestVm request)
+    {
+        if (request.StatementEntryId <= 0)
+        {
+            return new UpdateStatementEntryResultVm { Success = false, Message = "Invalid statement row." };
+        }
+
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new UpdateStatementEntryResultVm { Success = false, Message = "No active lease found for selected property." };
+        }
+
+        return await _dataAccess.UpdateStatementEntryAsync(
+            activeLease.LeaseId,
+            request.StatementEntryId,
+            request.EntryDate,
+            request.Amount,
+            request.Description ?? string.Empty);
+    }
+
+
+    public async Task<SaveRentResultVm> SaveRentAsync(SaveRentRequestVm request)
+    {
+        if (request.Amount <= 0)
+        {
+            return new SaveRentResultVm
+            {
+                Success = false,
+                Message = "Rent amount must be greater than zero."
+            };
+        }
+
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new SaveRentResultVm
+            {
+                Success = false,
+                Message = "No active lease found for the selected property."
+            };
+        }
+
+        var effectiveFrom = new DateTime(request.EffectiveFrom.Year, request.EffectiveFrom.Month, 1);
+        var notes = string.IsNullOrWhiteSpace(request.Notes) ? "Captured from dashboard" : request.Notes;
+
+        var changed = await _dataAccess.UpsertRentRateAsync(activeLease.LeaseId, effectiveFrom, request.Amount, notes);
+
+        return new SaveRentResultVm
+        {
+            Success = changed > 0,
+            Message = changed > 0
+                ? $"Rent saved for {effectiveFrom:yyyy-MM}: {request.Amount:N2}."
+                : "No rent changes were saved."
+        };
+    }
 
     public async Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request)
     {
@@ -170,6 +231,116 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Message = inserted > 0 ? $"Saved {inserted} service charge(s)." : "No service charges were saved."
         };
     }
+
+
+
+    public async Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request)
+    {
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new SavePaymentsResultVm
+            {
+                Success = false,
+                Message = "No active lease found for the selected property."
+            };
+        }
+
+        var cleanedPayments = request.Payments
+            .Where(x => x.Amount > 0)
+            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount })
+            .Select(g => g.First())
+            .ToList();
+
+        if (cleanedPayments.Count == 0)
+        {
+            return new SavePaymentsResultVm
+            {
+                Success = false,
+                Message = "No valid payment items to save."
+            };
+        }
+
+        var toInsert = new List<PaymentInsertDataModel>();
+        var skippedDuplicates = 0;
+
+        foreach (var payment in cleanedPayments)
+        {
+            var exists = await _dataAccess.PaymentExistsAsync(activeLease.LeaseId, payment.PaidOn, payment.Amount);
+            if (exists)
+            {
+                skippedDuplicates++;
+                continue;
+            }
+
+            toInsert.Add(new PaymentInsertDataModel
+            {
+                PaidOn = payment.PaidOn.Date,
+                Amount = payment.Amount,
+                Reference = payment.Description,
+                Notes = string.IsNullOrWhiteSpace(request.Notes) ? "Captured from statement PDF" : request.Notes
+            });
+        }
+
+        var inserted = await _dataAccess.InsertPaymentsAsync(activeLease.LeaseId, toInsert);
+        var savedPayments = toInsert
+            .Select(x => new PaymentCandidateVm
+            {
+                PaidOn = x.PaidOn,
+                Amount = x.Amount,
+                Description = x.Reference
+            })
+            .ToList();
+
+        return new SavePaymentsResultVm
+        {
+            Success = inserted > 0,
+            AddedCount = inserted,
+            SkippedDuplicates = skippedDuplicates,
+            SavedPayments = savedPayments,
+            Message = inserted > 0
+                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s)."
+                : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."
+        };
+    }
+
+    public async Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Please choose a PDF file." };
+        }
+
+        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Only PDF files are supported." };
+        }
+
+        await using var stream = file.OpenReadStream();
+        var text = ExtractPdfText(stream);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Could not read text from the PDF." };
+        }
+
+        var filter = string.IsNullOrWhiteSpace(descriptionContains) ? "Betaling Van Heino Huur" : descriptionContains.Trim();
+
+        if (filter.Length < 3)
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Search text must be at least 3 characters." };
+        }
+
+        var payments = ParsePaymentRows(text, filter);
+
+        return new PaymentPdfParseResultVm
+        {
+            Success = true,
+            Payments = payments,
+            RawTextPreview = text.Length > 4000 ? text[..4000] : text
+        };
+    }
+
 
     public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file)
     {
@@ -395,6 +566,129 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         return result;
     }
+
+
+
+    private static List<PaymentCandidateVm> ParsePaymentRows(string text, string descriptionFilter)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        var statementYear = InferStatementYear(text);
+        var descriptionPattern = BuildLooseDescriptionPattern(descriptionFilter);
+        var descriptionMatches = Regex.Matches(text, descriptionPattern, RegexOptions.IgnoreCase);
+
+        var results = new List<PaymentCandidateVm>();
+
+        foreach (Match descriptionMatch in descriptionMatches)
+        {
+            var backStart = Math.Max(0, descriptionMatch.Index - 120);
+            var backWindow = text.Substring(backStart, descriptionMatch.Index - backStart);
+
+            var forwardStart = descriptionMatch.Index + descriptionMatch.Length;
+            var forwardWindowLength = Math.Min(140, Math.Max(0, text.Length - forwardStart));
+            var forwardWindow = forwardWindowLength > 0 ? text.Substring(forwardStart, forwardWindowLength) : string.Empty;
+
+            var dateMatches = Regex.Matches(backWindow, @"(?i)(?<!\d)(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)");
+            if (dateMatches.Count == 0)
+            {
+                continue;
+            }
+
+            var dateToken = dateMatches[^1].Value;
+            if (!TryParseStatementDate(dateToken, statementYear, out var paidOn))
+            {
+                continue;
+            }
+
+            var amountMatch = Regex.Match(forwardWindow, @"(-?\d{1,3}(?:,\d{3})*(?:\.\d{2})|-?\d+(?:\.\d{2}))\s*(?:Kt|CT|Dt|Cr|Dr)?");
+            if (!amountMatch.Success)
+            {
+                continue;
+            }
+
+            var amount = TryParseDecimal(amountMatch.Groups[1].Value);
+            if (!amount.HasValue || amount.Value <= 0)
+            {
+                continue;
+            }
+
+            results.Add(new PaymentCandidateVm
+            {
+                PaidOn = paidOn.Date,
+                Amount = amount.Value,
+                Description = descriptionFilter
+            });
+        }
+
+        return results
+            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount })
+            .Select(g => g.First())
+            .OrderBy(x => x.PaidOn)
+            .ThenBy(x => x.Amount)
+            .ToList();
+    }
+
+    private static string BuildLooseDescriptionPattern(string description)
+    {
+        var tokens = description
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Regex.Escape)
+            .ToList();
+
+        if (tokens.Count == 0)
+        {
+            return Regex.Escape(description);
+        }
+
+        return string.Join(@"\W*", tokens);
+    }
+
+
+    private static int InferStatementYear(string text)
+    {
+        var explicitYear = Regex.Match(text, @"(?is)Staatdatum\s*:\s*\d{1,2}\s+[A-Za-z]+\s+(20\d{2})");
+        if (explicitYear.Success && int.TryParse(explicitYear.Groups[1].Value, out var stateYear))
+        {
+            return stateYear;
+        }
+
+        var periodYear = Regex.Match(text, @"(?is)Staat\s*Periode\s*:\s*\d{1,2}\s+[A-Za-z]+\s+(20\d{2})\s+tot\s+\d{1,2}\s+[A-Za-z]+\s+(20\d{2})");
+        if (periodYear.Success)
+        {
+            var first = int.TryParse(periodYear.Groups[1].Value, out var y1) ? y1 : 0;
+            var second = int.TryParse(periodYear.Groups[2].Value, out var y2) ? y2 : 0;
+
+            if (first >= 2000 && first <= 2100)
+            {
+                return first;
+            }
+
+            if (second >= 2000 && second <= 2100)
+            {
+                return second;
+            }
+        }
+
+        var years = Regex.Matches(text, @"(?<!\d)(20\d{2})(?![\d,.])")
+            .Cast<Match>()
+            .Select(x => int.TryParse(x.Groups[1].Value, out var value) ? value : 0)
+            .Where(x => x >= 2000 && x <= 2100)
+            .ToList();
+
+        return years.Count > 0 ? years.Max() : DateTime.UtcNow.Year;
+    }
+
+    private static bool TryParseStatementDate(string dateToken, int year, out DateTime date)
+    {
+        var composed = $"{dateToken} {year}";
+
+        return DateTime.TryParseExact(composed, "d MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
+               || DateTime.TryParseExact(composed, "dd MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+    }
+
 
     private static string GetSection(string fullText, string startMarker, string endMarker)
     {

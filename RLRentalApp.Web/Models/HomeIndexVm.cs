@@ -40,16 +40,19 @@ public class PropertyStatementVm
     public string TenantName { get; set; } = string.Empty;
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentBalance { get; set; }
+    public DateTime StatementMonth { get; set; }
     public List<PropertyStatementEntryVm> Entries { get; set; } = [];
 }
 
 public class PropertyStatementEntryVm
 {
+    public long StatementEntryId { get; set; }
     public DateTime EntryDate { get; set; }
     public string EntryType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public decimal RunningBalance { get; set; }
+    public bool CanEdit { get; set; }
 }
 
 public class ServicePdfParseResultVm
@@ -109,4 +112,66 @@ public class SaveServicesResultVm
     public bool Success { get; set; }
     public string Message { get; set; } = string.Empty;
     public int AddedCount { get; set; }
+}
+
+public class PaymentPdfParseResultVm
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public string RawTextPreview { get; set; } = string.Empty;
+}
+
+public class PaymentCandidateVm
+{
+    public DateTime PaidOn { get; set; }
+    public decimal Amount { get; set; }
+    public string Description { get; set; } = string.Empty;
+}
+
+public class SavePaymentsRequestVm
+{
+    public int PropertyId { get; set; }
+    public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class SavePaymentsResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int AddedCount { get; set; }
+    public int SkippedDuplicates { get; set; }
+    public List<PaymentCandidateVm> SavedPayments { get; set; } = [];
+}
+
+
+public class SaveRentRequestVm
+{
+    public int PropertyId { get; set; }
+    public DateTime EffectiveFrom { get; set; }
+    public decimal Amount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class SaveRentResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+
+public class UpdateStatementEntryRequestVm
+{
+    public int PropertyId { get; set; }
+    public long StatementEntryId { get; set; }
+    public DateTime EntryDate { get; set; }
+    public decimal Amount { get; set; }
+    public string Description { get; set; } = string.Empty;
+}
+
+public class UpdateStatementEntryResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
