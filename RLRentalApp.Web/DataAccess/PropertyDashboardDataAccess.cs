@@ -132,7 +132,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return value is null or DBNull ? 0m : Convert.ToDecimal(value);
     }
 
-    public async Task<decimal?> LoadLatestRentAsync(int leaseId)
+    public async Task<decimal?> LoadLatestRentAsync(int leaseId, DateTime asOfDate)
     {
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
@@ -142,6 +142,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             SELECT amount
             FROM rent_rate
             WHERE lease_id = @leaseId
+              AND effective_from <= @asOfDate
             ORDER BY effective_from DESC
             LIMIT 1;";
 
@@ -149,7 +150,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         parameter.ParameterName = "@leaseId";
         parameter.Value = leaseId;
         cmd.Parameters.Add(parameter);
-
+        AddParameter(cmd, "@asOfDate", asOfDate.Date);
 
         var value = await cmd.ExecuteScalarAsync();
         return value is null or DBNull ? null : Convert.ToDecimal(value);

@@ -8,7 +8,7 @@ public interface IPropertyDashboardDataAccess
     Task<PropertyOptionVm?> LoadPropertyAsync(int propertyId);
     Task<ActiveLeaseDataModel?> LoadActiveLeaseAsync(int propertyId);
     Task<decimal> LoadOpeningOutstandingAsync(int tenantId);
-    Task<decimal?> LoadLatestRentAsync(int leaseId);
+    Task<decimal?> LoadLatestRentAsync(int leaseId, DateTime asOfDate);
     Task<decimal> LoadCurrentMonthServiceTotalAsync(int leaseId);
     Task<decimal> LoadCurrentMonthPaymentTotalAsync(int leaseId);
     Task<List<StatementEntryDataModel>> LoadMonthEntriesAsync(int leaseId, DateTime monthStart);
