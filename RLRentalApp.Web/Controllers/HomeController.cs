@@ -87,6 +87,20 @@ public class HomeController : Controller
 
 
     [HttpPost]
+    public async Task<IActionResult> SaveRent([FromBody] SaveRentRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SaveRentAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
     public async Task<IActionResult> ParsePaymentPdf(IFormFile? pdfFile, string? descriptionContains)
     {
         var result = await _propertyDashboardManager.ParsePaymentPdfAsync(pdfFile, descriptionContains);

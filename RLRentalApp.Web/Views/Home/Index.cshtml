@@ -217,7 +217,31 @@
 </div>
 
 <div class="modal fade" id="addRentModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Add rent</h2><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Capture or update the rent amount for the active lease.</div></div></div>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Add rent</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Save the rent amount and effective month for the active lease.</p>
+                <div class="mb-3">
+                    <label class="form-label" for="rentEffectiveMonthInput">Effective month</label>
+                    <input type="month" class="form-control" id="rentEffectiveMonthInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="rentAmountInput">Rent amount</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="rentAmountInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="rentNotesInput">Notes (optional)</label>
+                    <input type="text" class="form-control" id="rentNotesInput" maxlength="400" />
+                </div>
+                <button class="btn btn-warning" type="button" id="saveRentBtn">Save rent</button>
+                <div id="saveRentMsg" class="alert mt-3 d-none"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="moreInfoModal" tabindex="-1" aria-hidden="true">
@@ -304,6 +328,11 @@
             const servicesNotesInput = document.getElementById('servicesNotesInput');
             const saveServicesBtn = document.getElementById('saveServicesBtn');
             const saveServicesMsg = document.getElementById('saveServicesMsg');
+            const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
+            const rentAmountInput = document.getElementById('rentAmountInput');
+            const rentNotesInput = document.getElementById('rentNotesInput');
+            const saveRentBtn = document.getElementById('saveRentBtn');
+            const saveRentMsg = document.getElementById('saveRentMsg');
             const parsePaymentPdfBtn = document.getElementById('parsePaymentPdfBtn');
             const paymentPdfFile = document.getElementById('paymentPdfFile');
             const paymentPdfError = document.getElementById('paymentPdfError');
@@ -334,6 +363,11 @@
                 statementMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             }
 
+            if (rentEffectiveMonthInput) {
+                const now = new Date();
+                rentEffectiveMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+
             propertySelect?.addEventListener('change', () => {
                 confirmButton.disabled = !propertySelect.value;
             });
@@ -350,6 +384,11 @@
 
                 selectedPropertyId = propertyId;
                 const status = await response.json();
+
+                if (rentAmountInput && status.latestRent !== null && status.latestRent !== undefined) {
+                    rentAmountInput.value = status.latestRent;
+                }
+
                 selectedHeader.classList.remove('d-none');
                 selectedHeader.textContent = `Selected property: ${status.propertyName}`;
 
@@ -396,6 +435,57 @@
             const money = (value) => value !== null && value !== undefined
                 ? Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })
                 : '-';
+
+            saveRentBtn?.addEventListener('click', async () => {
+                saveRentMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                if (!rentEffectiveMonthInput?.value) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = 'Please choose an effective month.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const amount = rentAmountInput?.value ? Number(rentAmountInput.value) : 0;
+                if (!amount || amount <= 0) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = 'Please capture a rent amount greater than zero.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    effectiveFrom: `${rentEffectiveMonthInput.value}-01`,
+                    amount,
+                    notes: rentNotesInput?.value || ''
+                };
+
+                const response = await fetch('/Home/SaveRent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = payload.message || 'Could not save rent.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                saveRentMsg.className = 'alert alert-success mt-3';
+                saveRentMsg.textContent = payload.message;
+                saveRentMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
+            });
 
             parseServicePdfBtn?.addEventListener('click', async () => {
                 servicePdfError?.classList.add('d-none');

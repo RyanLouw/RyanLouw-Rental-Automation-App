@@ -242,6 +242,45 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
     }
 
 
+
+
+    public async Task<int> UpsertRentRateAsync(int leaseId, DateTime effectiveFrom, decimal amount, string notes)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        await using var updateCmd = connection.CreateCommand();
+        updateCmd.CommandText = @"
+            UPDATE rent_rate
+            SET amount = @amount,
+                notes = @notes
+            WHERE lease_id = @leaseId
+              AND effective_from = @effectiveFrom;";
+
+        AddParameter(updateCmd, "@leaseId", leaseId);
+        AddParameter(updateCmd, "@effectiveFrom", effectiveFrom.Date);
+        AddParameter(updateCmd, "@amount", amount);
+        AddParameter(updateCmd, "@notes", notes);
+
+        var updated = await updateCmd.ExecuteNonQueryAsync();
+        if (updated > 0)
+        {
+            return updated;
+        }
+
+        await using var insertCmd = connection.CreateCommand();
+        insertCmd.CommandText = @"
+            INSERT INTO rent_rate (lease_id, effective_from, amount, notes)
+            VALUES (@leaseId, @effectiveFrom, @amount, @notes);";
+
+        AddParameter(insertCmd, "@leaseId", leaseId);
+        AddParameter(insertCmd, "@effectiveFrom", effectiveFrom.Date);
+        AddParameter(insertCmd, "@amount", amount);
+        AddParameter(insertCmd, "@notes", notes);
+
+        return await insertCmd.ExecuteNonQueryAsync();
+    }
+
     public async Task<int> InsertServiceChargesAsync(int leaseId, List<ServiceChargeInsertDataModel> charges)
     {
         if (charges.Count == 0)

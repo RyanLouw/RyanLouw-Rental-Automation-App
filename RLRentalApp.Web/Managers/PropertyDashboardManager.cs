@@ -136,6 +136,43 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
+
+
+    public async Task<SaveRentResultVm> SaveRentAsync(SaveRentRequestVm request)
+    {
+        if (request.Amount <= 0)
+        {
+            return new SaveRentResultVm
+            {
+                Success = false,
+                Message = "Rent amount must be greater than zero."
+            };
+        }
+
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new SaveRentResultVm
+            {
+                Success = false,
+                Message = "No active lease found for the selected property."
+            };
+        }
+
+        var effectiveFrom = new DateTime(request.EffectiveFrom.Year, request.EffectiveFrom.Month, 1);
+        var notes = string.IsNullOrWhiteSpace(request.Notes) ? "Captured from dashboard" : request.Notes;
+
+        var changed = await _dataAccess.UpsertRentRateAsync(activeLease.LeaseId, effectiveFrom, request.Amount, notes);
+
+        return new SaveRentResultVm
+        {
+            Success = changed > 0,
+            Message = changed > 0
+                ? $"Rent saved for {effectiveFrom:yyyy-MM}: {request.Amount:N2}."
+                : "No rent changes were saved."
+        };
+    }
+
     public async Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request)
     {
         var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
