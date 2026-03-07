@@ -49,9 +49,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             };
         }
 
+        var currentMonthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
         var latestRent = await _dataAccess.LoadLatestRentAsync(activeLease.LeaseId, DateTime.UtcNow.Date);
-        var serviceTotal = await _dataAccess.LoadCurrentMonthServiceTotalAsync(activeLease.LeaseId);
-        var paymentTotal = await _dataAccess.LoadCurrentMonthPaymentTotalAsync(activeLease.LeaseId);
+        var snapshot = await _dataAccess.LoadStatementSnapshotAsync(activeLease.LeaseId, currentMonthStart);
         var openingOutstanding = await _dataAccess.LoadOpeningOutstandingAsync(activeLease.TenantId);
 
         return new PropertyStatusVm
@@ -67,9 +67,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             LeaseStartDate = activeLease.StartDate,
             LatestRent = latestRent,
             OpeningOutstanding = openingOutstanding,
-            CurrentMonthServiceTotal = serviceTotal,
-            CurrentMonthPaymentTotal = paymentTotal,
-            CurrentBalance = openingOutstanding + (latestRent ?? 0m) + serviceTotal - paymentTotal
+            CurrentMonthServiceTotal = snapshot.CurrentMonthServiceTotal,
+            CurrentMonthPaymentTotal = snapshot.CurrentMonthPaymentTotal,
+            CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth
         };
     }
 
@@ -85,10 +85,13 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         var openingOutstanding = await _dataAccess.LoadOpeningOutstandingAsync(activeLease.TenantId);
         var monthStart = new DateTime((statementMonth ?? DateTime.UtcNow).Year, (statementMonth ?? DateTime.UtcNow).Month, 1);
+        var windowStart = monthStart.AddMonths(-2);
+        var statementWindowOpening = openingOutstanding + await _dataAccess.LoadStatementAmountBeforeDateAsync(activeLease.LeaseId, windowStart);
+        var snapshot = await _dataAccess.LoadStatementSnapshotAsync(activeLease.LeaseId, monthStart);
         var rawEntries = new List<StatementEntryDataModel>();
-        for (var i = 2; i >= 0; i--)
+        for (var i = 0; i < 3; i++)
         {
-            var windowMonth = monthStart.AddMonths(-i);
+            var windowMonth = windowStart.AddMonths(i);
             var monthEntries = await _dataAccess.LoadMonthEntriesAsync(activeLease.LeaseId, windowMonth);
             rawEntries.AddRange(monthEntries);
         }
@@ -110,7 +113,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             })
             .ToList();
 
-        var runningBalance = openingOutstanding;
+        var runningBalance = statementWindowOpening;
         foreach (var entry in statementEntries)
         {
             runningBalance += entry.Amount;
@@ -124,8 +127,8 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             TenantId = activeLease.TenantId,
             PropertyName = property.Name,
             TenantName = activeLease.TenantName,
-            OpeningOutstanding = openingOutstanding,
-            CurrentBalance = runningBalance,
+            OpeningOutstanding = statementWindowOpening,
+            CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth,
             StatementMonth = monthStart,
             Entries = statementEntries
         };

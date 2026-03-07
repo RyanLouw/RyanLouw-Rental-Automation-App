@@ -26,6 +26,13 @@ public sealed class ServiceChargeInsertDataModel
     public string Notes { get; set; } = string.Empty;
 }
 
+public sealed class StatementSnapshotDataModel
+{
+    public decimal AmountThroughMonth { get; set; }
+    public decimal CurrentMonthServiceTotal { get; set; }
+    public decimal CurrentMonthPaymentTotal { get; set; }
+}
+
 
 public sealed class PaymentInsertDataModel
 {

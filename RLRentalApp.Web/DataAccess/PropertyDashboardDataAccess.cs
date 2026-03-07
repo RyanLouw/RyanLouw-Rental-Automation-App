@@ -156,28 +156,42 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return value is null or DBNull ? null : Convert.ToDecimal(value);
     }
 
-    public async Task<decimal> LoadCurrentMonthServiceTotalAsync(int leaseId)
+    public async Task<StatementSnapshotDataModel> LoadStatementSnapshotAsync(int leaseId, DateTime monthStart)
     {
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
+        var normalizedMonthStart = new DateTime(monthStart.Year, monthStart.Month, 1);
+        var nextMonthStart = normalizedMonthStart.AddMonths(1);
+
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT COALESCE(SUM(amount), 0)
-            FROM service_charge
-            WHERE lease_id = @leaseId
-              AND date_trunc('month', billing_period) = date_trunc('month', CURRENT_DATE);";
+            SELECT
+                COALESCE(SUM(CASE WHEN entry_date < @nextMonthStart THEN amount ELSE 0 END), 0) AS amount_through_month,
+                COALESCE(SUM(CASE WHEN entry_date >= @monthStart AND entry_date < @nextMonthStart AND entry_type = 'Service' THEN amount ELSE 0 END), 0) AS service_total,
+                COALESCE(SUM(CASE WHEN entry_date >= @monthStart AND entry_date < @nextMonthStart AND entry_type = 'Payment' THEN ABS(amount) ELSE 0 END), 0) AS payment_total
+            FROM statement_sdt
+            WHERE lease_id = @leaseId;";
 
-        var parameter = cmd.CreateParameter();
-        parameter.ParameterName = "@leaseId";
-        parameter.Value = leaseId;
-        cmd.Parameters.Add(parameter);
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@monthStart", normalizedMonthStart.Date);
+        AddParameter(cmd, "@nextMonthStart", nextMonthStart.Date);
 
-        var value = await cmd.ExecuteScalarAsync();
-        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return new StatementSnapshotDataModel();
+        }
+
+        return new StatementSnapshotDataModel
+        {
+            AmountThroughMonth = reader.IsDBNull(0) ? 0m : reader.GetDecimal(0),
+            CurrentMonthServiceTotal = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1),
+            CurrentMonthPaymentTotal = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2)
+        };
     }
 
-    public async Task<decimal> LoadCurrentMonthPaymentTotalAsync(int leaseId)
+    public async Task<decimal> LoadStatementAmountBeforeDateAsync(int leaseId, DateTime beforeDateExclusive)
     {
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
@@ -185,14 +199,12 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
             SELECT COALESCE(SUM(amount), 0)
-            FROM payment
+            FROM statement_sdt
             WHERE lease_id = @leaseId
-              AND date_trunc('month', paid_on) = date_trunc('month', CURRENT_DATE);";
+              AND entry_date < @beforeDateExclusive;";
 
-        var parameter = cmd.CreateParameter();
-        parameter.ParameterName = "@leaseId";
-        parameter.Value = leaseId;
-        cmd.Parameters.Add(parameter);
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@beforeDateExclusive", beforeDateExclusive.Date);
 
         var value = await cmd.ExecuteScalarAsync();
         return value is null or DBNull ? 0m : Convert.ToDecimal(value);
