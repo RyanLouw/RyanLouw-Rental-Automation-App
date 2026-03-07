@@ -205,19 +205,11 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT billing_period, 'Service' AS entry_type, 'Service charge' AS description, amount
-            FROM service_charge
+            SELECT entry_date, entry_type, description, amount
+            FROM statement_sdt
             WHERE lease_id = @leaseId
-              AND date_trunc('month', billing_period) = date_trunc('month', @monthStart)
-
-            UNION ALL
-
-            SELECT paid_on, 'Payment' AS entry_type, COALESCE(reference, 'Payment received') AS description, -amount
-            FROM payment
-            WHERE lease_id = @leaseId
-              AND date_trunc('month', paid_on) = date_trunc('month', @monthStart)
-
-            ORDER BY 1, 2;";
+              AND date_trunc('month', entry_date) = date_trunc('month', @monthStart)
+            ORDER BY entry_date, entry_type;";
 
         var parameter = cmd.CreateParameter();
         parameter.ParameterName = "@leaseId";
@@ -250,36 +242,66 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
-        await using var updateCmd = connection.CreateCommand();
-        updateCmd.CommandText = @"
-            UPDATE rent_rate
-            SET amount = @amount,
-                notes = @notes
-            WHERE lease_id = @leaseId
-              AND effective_from = @effectiveFrom;";
+        long? rentRateId = null;
 
-        AddParameter(updateCmd, "@leaseId", leaseId);
-        AddParameter(updateCmd, "@effectiveFrom", effectiveFrom.Date);
-        AddParameter(updateCmd, "@amount", amount);
-        AddParameter(updateCmd, "@notes", notes);
-
-        var updated = await updateCmd.ExecuteNonQueryAsync();
-        if (updated > 0)
+        await using (var updateCmd = connection.CreateCommand())
         {
-            return updated;
+            updateCmd.CommandText = @"
+                UPDATE rent_rate
+                SET amount = @amount,
+                    notes = @notes
+                WHERE lease_id = @leaseId
+                  AND effective_from = @effectiveFrom
+                RETURNING id;";
+
+            AddParameter(updateCmd, "@leaseId", leaseId);
+            AddParameter(updateCmd, "@effectiveFrom", effectiveFrom.Date);
+            AddParameter(updateCmd, "@amount", amount);
+            AddParameter(updateCmd, "@notes", notes);
+
+            var updatedId = await updateCmd.ExecuteScalarAsync();
+            if (updatedId is not null and not DBNull)
+            {
+                rentRateId = Convert.ToInt64(updatedId);
+            }
         }
 
-        await using var insertCmd = connection.CreateCommand();
-        insertCmd.CommandText = @"
-            INSERT INTO rent_rate (lease_id, effective_from, amount, notes)
-            VALUES (@leaseId, @effectiveFrom, @amount, @notes);";
+        if (!rentRateId.HasValue)
+        {
+            await using var insertCmd = connection.CreateCommand();
+            insertCmd.CommandText = @"
+                INSERT INTO rent_rate (lease_id, effective_from, amount, notes)
+                VALUES (@leaseId, @effectiveFrom, @amount, @notes)
+                RETURNING id;";
 
-        AddParameter(insertCmd, "@leaseId", leaseId);
-        AddParameter(insertCmd, "@effectiveFrom", effectiveFrom.Date);
-        AddParameter(insertCmd, "@amount", amount);
-        AddParameter(insertCmd, "@notes", notes);
+            AddParameter(insertCmd, "@leaseId", leaseId);
+            AddParameter(insertCmd, "@effectiveFrom", effectiveFrom.Date);
+            AddParameter(insertCmd, "@amount", amount);
+            AddParameter(insertCmd, "@notes", notes);
 
-        return await insertCmd.ExecuteNonQueryAsync();
+            var insertedId = await insertCmd.ExecuteScalarAsync();
+            if (insertedId is not null and not DBNull)
+            {
+                rentRateId = Convert.ToInt64(insertedId);
+            }
+        }
+
+        if (!rentRateId.HasValue)
+        {
+            return 0;
+        }
+
+        await UpsertStatementSdtEntryAsync(
+            connection,
+            leaseId,
+            effectiveFrom.Date,
+            "Rent",
+            "Rent for statement month",
+            amount,
+            "rent_rate",
+            rentRateId.Value);
+
+        return 1;
     }
 
     public async Task<int> InsertServiceChargesAsync(int leaseId, List<ServiceChargeInsertDataModel> charges)
@@ -302,7 +324,8 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
                 SELECT @leaseId, st.id, @billingPeriod, @amount, @notes
                 FROM service_type st
                 WHERE LOWER(st.name) = LOWER(@serviceTypeName)
-                LIMIT 1;";
+                LIMIT 1
+                RETURNING id;";
 
             AddParameter(cmd, "@leaseId", leaseId);
             AddParameter(cmd, "@billingPeriod", charge.BillingPeriod.Date);
@@ -310,7 +333,22 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             AddParameter(cmd, "@notes", charge.Notes);
             AddParameter(cmd, "@serviceTypeName", charge.ServiceTypeName);
 
-            inserted += await cmd.ExecuteNonQueryAsync();
+            var insertedId = await cmd.ExecuteScalarAsync();
+            if (insertedId is null || insertedId is DBNull)
+            {
+                continue;
+            }
+
+            inserted += 1;
+            await UpsertStatementSdtEntryAsync(
+                connection,
+                leaseId,
+                charge.BillingPeriod.Date,
+                "Service",
+                $"{charge.ServiceTypeName} charge",
+                charge.Amount,
+                "service_charge",
+                Convert.ToInt64(insertedId));
         }
 
         return inserted;
@@ -355,7 +393,8 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = @"
                 INSERT INTO payment (lease_id, paid_on, amount, reference, notes)
-                VALUES (@leaseId, @paidOn, @amount, @reference, @notes);";
+                VALUES (@leaseId, @paidOn, @amount, @reference, @notes)
+                RETURNING id;";
 
             AddParameter(cmd, "@leaseId", leaseId);
             AddParameter(cmd, "@paidOn", payment.PaidOn.Date);
@@ -363,10 +402,60 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             AddParameter(cmd, "@reference", payment.Reference);
             AddParameter(cmd, "@notes", payment.Notes);
 
-            inserted += await cmd.ExecuteNonQueryAsync();
+            var insertedId = await cmd.ExecuteScalarAsync();
+            if (insertedId is null || insertedId is DBNull)
+            {
+                continue;
+            }
+
+            inserted += 1;
+            await UpsertStatementSdtEntryAsync(
+                connection,
+                leaseId,
+                payment.PaidOn.Date,
+                "Payment",
+                string.IsNullOrWhiteSpace(payment.Reference) ? "Payment received" : payment.Reference,
+                -payment.Amount,
+                "payment",
+                Convert.ToInt64(insertedId));
         }
 
         return inserted;
+    }
+
+    private static async Task UpsertStatementSdtEntryAsync(
+        DbConnection connection,
+        int leaseId,
+        DateTime entryDate,
+        string entryType,
+        string description,
+        decimal amount,
+        string sourceTable,
+        long sourceId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO statement_sdt (property_id, tenant_id, lease_id, entry_date, entry_type, description, amount, source_table, source_id)
+            SELECT l.property_id, l.tenant_id, l.id, @entryDate, @entryType, @description, @amount, @sourceTable, @sourceId
+            FROM lease l
+            WHERE l.id = @leaseId
+            ON CONFLICT (source_table, source_id)
+            DO UPDATE SET
+                entry_date = EXCLUDED.entry_date,
+                entry_type = EXCLUDED.entry_type,
+                description = EXCLUDED.description,
+                amount = EXCLUDED.amount,
+                updated_at = NOW();";
+
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@entryDate", entryDate.Date);
+        AddParameter(cmd, "@entryType", entryType);
+        AddParameter(cmd, "@description", description);
+        AddParameter(cmd, "@amount", amount);
+        AddParameter(cmd, "@sourceTable", sourceTable);
+        AddParameter(cmd, "@sourceId", sourceId);
+
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static void AddParameter(DbCommand cmd, string name, object? value)
