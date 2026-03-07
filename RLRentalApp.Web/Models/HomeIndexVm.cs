@@ -10,6 +10,7 @@ public class PropertyOptionVm
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string AddressLine1 { get; set; } = string.Empty;
+    public string AddressLine2 { get; set; } = string.Empty;
     public bool IsActive { get; set; }
 }
 
@@ -37,6 +38,7 @@ public class PropertyStatementVm
     public int LeaseId { get; set; }
     public int TenantId { get; set; }
     public string PropertyName { get; set; } = string.Empty;
+    public string PropertyAddress { get; set; } = string.Empty;
     public string TenantName { get; set; } = string.Empty;
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentBalance { get; set; }
@@ -53,6 +55,13 @@ public class PropertyStatementEntryVm
     public decimal Amount { get; set; }
     public decimal RunningBalance { get; set; }
     public bool CanEdit { get; set; }
+}
+
+
+public class PropertyStatementPdfVm
+{
+    public byte[] PdfBytes { get; set; } = [];
+    public string FileName { get; set; } = string.Empty;
 }
 
 public class ServicePdfParseResultVm

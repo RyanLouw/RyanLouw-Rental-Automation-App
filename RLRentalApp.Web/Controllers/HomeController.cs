@@ -57,6 +57,24 @@ public class HomeController : Controller
         return Json(statement);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> PropertyStatementPdf(int propertyId, string? month)
+    {
+        DateTime? statementMonth = null;
+        if (!string.IsNullOrWhiteSpace(month) && DateTime.TryParse($"{month}-01", out var parsedMonth))
+        {
+            statementMonth = parsedMonth;
+        }
+
+        var statementPdf = await _propertyDashboardManager.GeneratePropertyStatementPdfAsync(propertyId, statementMonth);
+        if (statementPdf is null)
+        {
+            return NotFound();
+        }
+
+        return File(statementPdf.PdfBytes, "application/pdf", statementPdf.FileName);
+    }
+
 
     [HttpPost]
     public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile)

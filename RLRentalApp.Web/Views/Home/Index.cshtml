@@ -264,6 +264,9 @@
                     <div class="col-md-3 align-self-end">
                         <button class="btn btn-outline-primary" type="button" id="reloadStatementBtn">Reload</button>
                     </div>
+                    <div class="col-md-5 align-self-end text-md-end">
+                        <button class="btn btn-primary" type="button" id="downloadStatementPdfBtn">Download professional PDF</button>
+                    </div>
                 </div>
                 <div id="statementSummary" class="mb-3 text-muted"></div>
                 <div class="table-responsive">
@@ -301,6 +304,7 @@
             const statementTableBody = document.getElementById('statementTableBody');
             const statementMonthInput = document.getElementById('statementMonthInput');
             const reloadStatementBtn = document.getElementById('reloadStatementBtn');
+            const downloadStatementPdfBtn = document.getElementById('downloadStatementPdfBtn');
             const switcherSection = document.getElementById('propertySwitcherSection');
             const switchPropertySelect = document.getElementById('propertySwitchSelect');
             const switchPropertyBtn = document.getElementById('switchPropertyBtn');
@@ -846,6 +850,15 @@
 
             statementButton?.addEventListener('click', loadStatement);
             reloadStatementBtn?.addEventListener('click', loadStatement);
+            downloadStatementPdfBtn?.addEventListener('click', () => {
+                if (!selectedPropertyId) {
+                    statementSummary.textContent = 'Please choose a property first.';
+                    return;
+                }
+
+                const monthQuery = statementMonthInput?.value ? `&month=${statementMonthInput.value}` : '';
+                window.open(`/Home/PropertyStatementPdf?propertyId=${selectedPropertyId}${monthQuery}`, '_blank');
+            });
         })();
     </script>
 }
