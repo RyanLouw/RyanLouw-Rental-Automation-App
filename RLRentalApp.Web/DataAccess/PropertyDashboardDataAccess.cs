@@ -150,7 +150,6 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         parameter.Value = leaseId;
         cmd.Parameters.Add(parameter);
 
-        AddParameter(cmd, "@monthStart", monthStart.Date);
 
         var value = await cmd.ExecuteScalarAsync();
         return value is null or DBNull ? null : Convert.ToDecimal(value);
@@ -166,7 +165,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             SELECT COALESCE(SUM(amount), 0)
             FROM service_charge
             WHERE lease_id = @leaseId
-              AND date_trunc('month', billing_period) = date_trunc('month', @monthStart);";
+              AND date_trunc('month', billing_period) = date_trunc('month', CURRENT_DATE);";
 
         var parameter = cmd.CreateParameter();
         parameter.ParameterName = "@leaseId";
@@ -187,7 +186,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             SELECT COALESCE(SUM(amount), 0)
             FROM payment
             WHERE lease_id = @leaseId
-              AND date_trunc('month', paid_on) = date_trunc('month', @monthStart);";
+              AND date_trunc('month', paid_on) = date_trunc('month', CURRENT_DATE);";
 
         var parameter = cmd.CreateParameter();
         parameter.ParameterName = "@leaseId";
