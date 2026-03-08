@@ -6,6 +6,7 @@ using QuestPDF.Infrastructure;
 using RLRentalApp.Web.Data;
 using RLRentalApp.Web.DataAccess;
 using RLRentalApp.Web.Managers;
+using RLRentalApp.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,8 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("rentaldb")));
 
 builder.Services.AddScoped<IPropertyDashboardDataAccess, PropertyDashboardDataAccess>();
+builder.Services.Configure<GmailSmtpOptions>(builder.Configuration.GetSection(GmailSmtpOptions.SectionName));
+builder.Services.AddScoped<IEmailService, GmailEmailService>();
 builder.Services.AddScoped<IPropertyDashboardManager, PropertyDashboardManager>();
 
 // Identity services

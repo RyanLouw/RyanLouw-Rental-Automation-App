@@ -24,12 +24,26 @@ public class PropertyStatusVm
     public int? LeaseId { get; set; }
     public int? TenantId { get; set; }
     public string? TenantName { get; set; }
+    public string? TenantEmail { get; set; }
     public DateTime? LeaseStartDate { get; set; }
     public decimal? LatestRent { get; set; }
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentMonthServiceTotal { get; set; }
     public decimal CurrentMonthPaymentTotal { get; set; }
     public decimal CurrentBalance { get; set; }
+}
+
+public class SendTenantEmailRequestVm
+{
+    public int PropertyId { get; set; }
+    public DateTime? StatementMonth { get; set; }
+}
+
+public class SendTenantEmailResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string RecipientEmail { get; set; } = string.Empty;
 }
 
 public class PropertyStatementVm

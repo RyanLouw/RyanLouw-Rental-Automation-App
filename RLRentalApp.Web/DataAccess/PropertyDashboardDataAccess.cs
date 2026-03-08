@@ -85,7 +85,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT l.id, l.tenant_id, t.full_name, l.start_date
+            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), l.start_date
             FROM lease l
             INNER JOIN tenant t ON t.id = l.tenant_id
             WHERE l.property_id = @propertyId AND l.end_date IS NULL
@@ -109,7 +109,8 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             LeaseId = reader.GetInt32(0),
             TenantId = reader.GetInt32(1),
             TenantName = reader.GetString(2),
-            StartDate = reader.GetDateTime(3)
+            TenantEmail = reader.GetString(3),
+            StartDate = reader.GetDateTime(4)
         };
     }
 
