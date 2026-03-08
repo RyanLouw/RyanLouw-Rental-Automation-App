@@ -1,6 +1,4 @@
 ﻿using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using RLRentalApp.Web.Data;
 namespace RLRentalApp.Web.Data;
 
 public static class IdentitySeeder
