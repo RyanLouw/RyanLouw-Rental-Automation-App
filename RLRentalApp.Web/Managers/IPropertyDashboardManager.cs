@@ -15,4 +15,5 @@ public interface IPropertyDashboardManager
     Task<SaveRentResultVm> SaveRentAsync(SaveRentRequestVm request);
     Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains);
     Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request);
+    Task<SendTenantEmailResultVm> SendTenantEmailAsync(SendTenantEmailRequestVm request);
 }

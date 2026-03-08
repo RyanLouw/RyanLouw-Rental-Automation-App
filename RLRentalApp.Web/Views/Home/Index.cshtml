@@ -38,6 +38,7 @@
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#didPayModal">Did they pay?</button>
             <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addServicesModal">Add services</button>
             <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addRentModal">Add rent</button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sendEmailModal">Send email</button>
             <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#moreInfoModal">Any more info</button>
             <button class="btn btn-dark" id="viewStatementBtn" data-bs-toggle="modal" data-bs-target="#statementModal">View statement</button>
         </div>
@@ -244,6 +245,51 @@
     </div>
 </div>
 
+<div class="modal fade" id="sendEmailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Preview statement email</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="sendTenantEmailMsg" class="alert mt-3 d-none"></div>
+
+                <dl class="row mb-3 small">
+                    <dt class="col-sm-2">To</dt>
+                    <dd class="col-sm-10" id="previewEmailTo">-</dd>
+                    <dt class="col-sm-2">Subject</dt>
+                    <dd class="col-sm-10" id="previewEmailSubject">-</dd>
+                </dl>
+
+                <div class="mb-3">
+                    <label class="form-label">Email body</label>
+                    <div class="border rounded p-2 bg-light" id="previewEmailBody">-</div>
+                </div>
+
+                <h3 class="h6">Attached PDF preview</h3>
+                <div id="previewStatementSummary" class="mb-3 text-muted small">-</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th class="text-end">Amount</th>
+                                <th class="text-end">Running Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewStatementTableBody"></tbody>
+                    </table>
+                </div>
+
+                <button class="btn btn-primary" type="button" id="sendTenantEmailBtn">Send statement email</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="moreInfoModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Any more info</h2><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Store additional notes or special events for this property.</div></div></div>
 </div>
@@ -348,6 +394,14 @@
             const savePaymentsMsg = document.getElementById('savePaymentsMsg');
             const paymentPdfRawText = document.getElementById('paymentPdfRawText');
             const paymentDescriptionContains = document.getElementById('paymentDescriptionContains');
+            const sendEmailModal = document.getElementById('sendEmailModal');
+            const previewEmailTo = document.getElementById('previewEmailTo');
+            const previewEmailSubject = document.getElementById('previewEmailSubject');
+            const previewEmailBody = document.getElementById('previewEmailBody');
+            const previewStatementSummary = document.getElementById('previewStatementSummary');
+            const previewStatementTableBody = document.getElementById('previewStatementTableBody');
+            const sendTenantEmailBtn = document.getElementById('sendTenantEmailBtn');
+            const sendTenantEmailMsg = document.getElementById('sendTenantEmailMsg');
 
             let selectedPropertyId = null;
 
@@ -406,6 +460,7 @@
                     ['Property Active', status.isPropertyActive ? 'Yes' : 'No'],
                     ['Has Active Lease', status.hasActiveLease ? 'Yes' : 'No'],
                     ['Tenant', status.tenantName || 'N/A'],
+                    ['Tenant Email', status.tenantEmail || 'N/A'],
                     ['Opening Outstanding', Number(status.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })],
                     ['Lease Start', status.leaseStartDate ? new Date(status.leaseStartDate).toLocaleDateString() : 'N/A'],
                     ['Latest Rent', status.latestRent !== null ? Number(status.latestRent).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : 'N/A'],
@@ -416,6 +471,7 @@
 
                 statusDetails.innerHTML = values.map(([key, value]) =>
                     `<dt class="col-sm-4">${key}</dt><dd class="col-sm-8">${value}</dd>`).join('');
+
 
                 switcherSection?.classList.remove('d-none');
                 statusCard.classList.remove('d-none');
@@ -725,6 +781,89 @@
                 saveServicesMsg.classList.remove('d-none');
 
                 await loadProperty(selectedPropertyId, false);
+            });
+
+            const buildPreviewSubject = statement => `Statement - ${statement.propertyAddress} - ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}`;
+            const buildPreviewBody = statement => `Please see attached statement for ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}.`;
+
+            const renderPreviewStatementTable = entries => {
+                previewStatementTableBody.innerHTML = (entries || []).map(entry => `
+                    <tr>
+                        <td>${new Date(entry.entryDate).toLocaleDateString()}</td>
+                        <td>${entry.entryType}</td>
+                        <td>${entry.description}</td>
+                        <td class="text-end">${Number(entry.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                    </tr>
+                `).join('');
+            };
+
+            const loadEmailPreview = async () => {
+                sendTenantEmailMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                const monthQuery = statementMonthInput?.value ? `&month=${statementMonthInput.value}` : '';
+
+                const [statusResponse, statementResponse] = await Promise.all([
+                    fetch(`/Home/PropertyStatus?propertyId=${selectedPropertyId}`),
+                    fetch(`/Home/PropertyStatement?propertyId=${selectedPropertyId}${monthQuery}`)
+                ]);
+
+                if (!statusResponse.ok || !statementResponse.ok) {
+                    sendTenantEmailMsg.className = 'alert alert-danger mt-3';
+                    sendTenantEmailMsg.textContent = 'Could not load statement email preview.';
+                    sendTenantEmailMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const status = await statusResponse.json();
+                const statement = await statementResponse.json();
+
+                const subject = buildPreviewSubject(statement);
+                const body = buildPreviewBody(statement);
+
+                previewEmailTo.textContent = status.tenantEmail || 'No tenant email saved';
+                previewEmailSubject.textContent = subject;
+                previewEmailBody.textContent = body;
+                previewStatementSummary.textContent = `${statement.tenantName} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
+                renderPreviewStatementTable(statement.entries || []);
+            };
+
+            sendEmailModal?.addEventListener('show.bs.modal', loadEmailPreview);
+
+            sendTenantEmailBtn?.addEventListener('click', async () => {
+                sendTenantEmailMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    statementMonth: statementMonthInput?.value ? `${statementMonthInput.value}-01` : null
+                };
+
+                const response = await fetch('/Home/SendTenantEmail', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    sendTenantEmailMsg.className = 'alert alert-danger mt-3';
+                    sendTenantEmailMsg.textContent = payload.message || 'Could not send email.';
+                    sendTenantEmailMsg.classList.remove('d-none');
+                    return;
+                }
+
+                sendTenantEmailMsg.className = 'alert alert-success mt-3';
+                sendTenantEmailMsg.textContent = payload.message || 'Statement email sent.';
+                sendTenantEmailMsg.classList.remove('d-none');
             });
 
             let statementEntries = [];
