@@ -20,6 +20,8 @@ public class GmailEmailService : IEmailService
         using var client = new SmtpClient(_options.Host, _options.Port)
         {
             EnableSsl = _options.EnableSsl,
+            DeliveryMethod = SmtpDeliveryMethod.Network,
+            UseDefaultCredentials = false,
             Credentials = new NetworkCredential(_options.Username, _options.AppPassword)
         };
 
@@ -33,7 +35,18 @@ public class GmailEmailService : IEmailService
 
         message.To.Add(toEmail);
 
-        await client.SendMailAsync(message);
+        try
+        {
+            await client.SendMailAsync(message);
+        }
+        catch (SmtpException ex) when (IsGmailAuthenticationFailure(ex))
+        {
+            throw new InvalidOperationException(
+                "Gmail SMTP authentication failed (5.7.0). " +
+                "Use a Google App Password (not your normal password), ensure 2-Step Verification is enabled, " +
+                "and keep GmailSmtp:FromEmail the same as GmailSmtp:Username unless Send As is configured in Gmail.",
+                ex);
+        }
     }
 
     private void ValidateOptions()
@@ -46,5 +59,13 @@ public class GmailEmailService : IEmailService
         {
             throw new InvalidOperationException("Gmail SMTP settings are missing. Update GmailSmtp configuration in appsettings.");
         }
+    }
+
+    private static bool IsGmailAuthenticationFailure(SmtpException ex)
+    {
+        var message = ex.Message ?? string.Empty;
+        return message.Contains("5.7.0", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("Authentication Required", StringComparison.OrdinalIgnoreCase)
+               || message.Contains("client was not authenticated", StringComparison.OrdinalIgnoreCase);
     }
 }

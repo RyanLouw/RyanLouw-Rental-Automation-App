@@ -48,3 +48,21 @@ Example environment variables:
 - `GmailSmtp__AppPassword=xxxxxxxxxxxxxxxx`
 - `GmailSmtp__FromEmail=yourgmail@gmail.com`
 - `GmailSmtp__FromDisplayName=MH & Sons Properties`
+
+
+### Troubleshooting `5.7.0 Authentication Required`
+
+If you see:
+
+- `The SMTP server requires a secure connection or the client was not authenticated.`
+- `5.7.0 Authentication Required`
+
+Check these in order:
+
+1. `AppPassword` must be a Google **App Password** (16 chars), not your Gmail login password.
+2. **2-Step Verification** must be ON for that Google account.
+3. `Username` should be the same mailbox you generated the App Password for.
+4. `FromEmail` should match `Username` unless you configured **Send mail as** in Gmail settings.
+5. If this is a Google Workspace account, SMTP auth may be blocked by admin policy.
+
+Also note: when pasting the app password, remove spaces shown in Google's UI.
