@@ -64,6 +64,22 @@ public sealed class AutomationController : ControllerBase
         return Ok(result);
     }
 
+
+    [HttpPost("process-pdf")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ProcessPdfAndSaveResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProcessPdfAndSaveResponseDto), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ProcessPdfAndSave([FromForm] IFormFile? pdfFile, [FromForm] ProcessPdfAndSaveRequestDto request)
+    {
+        var result = await _automationService.ProcessPdfAndSaveAsync(pdfFile, request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
     [HttpPost("rent")]
     [ProducesResponseType(typeof(AutomationCommandResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

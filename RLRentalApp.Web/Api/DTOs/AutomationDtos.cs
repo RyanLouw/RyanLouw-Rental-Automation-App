@@ -130,3 +130,38 @@ public sealed class AutomationCommandResponseDto
     public string Message { get; init; } = string.Empty;
     public object? Data { get; init; }
 }
+
+
+public enum AutomationPdfDocumentTypeDto
+{
+    Services = 1,
+    Payments = 2
+}
+
+public sealed class ProcessPdfAndSaveRequestDto
+{
+    [Range(1, int.MaxValue)]
+    public int PropertyId { get; init; }
+
+    [Required]
+    public AutomationPdfDocumentTypeDto DocumentType { get; init; }
+
+    public DateTime? BillingPeriod { get; init; }
+
+    [StringLength(150)]
+    public string? DescriptionContains { get; init; }
+
+    [StringLength(500)]
+    public string? Notes { get; init; }
+}
+
+public sealed class ProcessPdfAndSaveResponseDto
+{
+    public bool Success { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public string Stage { get; init; } = string.Empty;
+    public string DocumentType { get; init; } = string.Empty;
+    public object? ParsedData { get; init; }
+    public object? SavedData { get; init; }
+    public List<string> Errors { get; init; } = [];
+}

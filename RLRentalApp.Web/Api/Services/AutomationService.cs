@@ -89,6 +89,194 @@ public sealed class AutomationService : IAutomationService
         };
     }
 
+
+    public async Task<ProcessPdfAndSaveResponseDto> ProcessPdfAndSaveAsync(IFormFile? file, ProcessPdfAndSaveRequestDto request)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return new ProcessPdfAndSaveResponseDto
+            {
+                Success = false,
+                Stage = "validation",
+                DocumentType = request.DocumentType.ToString(),
+                Message = "A non-empty PDF file is required.",
+                Errors = ["pdfFile is required."]
+            };
+        }
+
+        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ProcessPdfAndSaveResponseDto
+            {
+                Success = false,
+                Stage = "validation",
+                DocumentType = request.DocumentType.ToString(),
+                Message = "Invalid file type. Only PDF files are supported.",
+                Errors = ["Uploaded file extension must be .pdf."]
+            };
+        }
+
+        if (request.DocumentType == AutomationPdfDocumentTypeDto.Services)
+        {
+            if (!request.BillingPeriod.HasValue)
+            {
+                return new ProcessPdfAndSaveResponseDto
+                {
+                    Success = false,
+                    Stage = "validation",
+                    DocumentType = request.DocumentType.ToString(),
+                    Message = "BillingPeriod is required for service PDFs.",
+                    Errors = ["billingPeriod is required when documentType is Services."]
+                };
+            }
+
+            var parsed = await ParseServicePdfAsync(file);
+            if (!parsed.Success)
+            {
+                return new ProcessPdfAndSaveResponseDto
+                {
+                    Success = false,
+                    Stage = "parse",
+                    DocumentType = request.DocumentType.ToString(),
+                    Message = parsed.ErrorMessage ?? "Failed to parse services PDF.",
+                    ParsedData = parsed,
+                    Errors = [parsed.ErrorMessage ?? "Parse failed."]
+                };
+            }
+
+            var serviceItems = new List<ServiceChargeItemDto>();
+            if (parsed.ElectricityLeviedAmount is > 0)
+            {
+                serviceItems.Add(new ServiceChargeItemDto { ServiceTypeName = "electricity", Amount = parsed.ElectricityLeviedAmount.Value, BillingPeriod = request.BillingPeriod.Value, Notes = request.Notes });
+            }
+
+            if (parsed.WaterLeviedAmount is > 0)
+            {
+                serviceItems.Add(new ServiceChargeItemDto { ServiceTypeName = "water", Amount = parsed.WaterLeviedAmount.Value, BillingPeriod = request.BillingPeriod.Value, Notes = request.Notes });
+            }
+
+            if (parsed.SewerageAmountInclVat is > 0)
+            {
+                serviceItems.Add(new ServiceChargeItemDto { ServiceTypeName = "sewerage", Amount = parsed.SewerageAmountInclVat.Value, BillingPeriod = request.BillingPeriod.Value, Notes = request.Notes });
+            }
+
+            if (parsed.RefuseAmountInclVat is > 0)
+            {
+                serviceItems.Add(new ServiceChargeItemDto { ServiceTypeName = "refuse", Amount = parsed.RefuseAmountInclVat.Value, BillingPeriod = request.BillingPeriod.Value, Notes = request.Notes });
+            }
+
+            if (serviceItems.Count == 0)
+            {
+                return new ProcessPdfAndSaveResponseDto
+                {
+                    Success = false,
+                    Stage = "validation",
+                    DocumentType = request.DocumentType.ToString(),
+                    Message = "No positive service amounts were found in the PDF to save.",
+                    ParsedData = parsed,
+                    Errors = ["Parsed service amounts are empty or zero."]
+                };
+            }
+
+            var saveResult = await SaveServicesAsync(new SaveServicesRequestDto
+            {
+                PropertyId = request.PropertyId,
+                Services = serviceItems
+            });
+
+            if (!saveResult.Success)
+            {
+                return new ProcessPdfAndSaveResponseDto
+                {
+                    Success = false,
+                    Stage = "save",
+                    DocumentType = request.DocumentType.ToString(),
+                    Message = saveResult.Message,
+                    ParsedData = parsed,
+                    SavedData = saveResult.Data,
+                    Errors = [saveResult.Message]
+                };
+            }
+
+            return new ProcessPdfAndSaveResponseDto
+            {
+                Success = true,
+                Stage = "completed",
+                DocumentType = request.DocumentType.ToString(),
+                Message = "Service PDF parsed and saved successfully.",
+                ParsedData = parsed,
+                SavedData = saveResult.Data
+            };
+        }
+
+        var parsedPayment = await ParsePaymentPdfAsync(file, new ParsePaymentPdfRequestDto
+        {
+            DescriptionContains = request.DescriptionContains
+        });
+
+        if (!parsedPayment.Success)
+        {
+            return new ProcessPdfAndSaveResponseDto
+            {
+                Success = false,
+                Stage = "parse",
+                DocumentType = request.DocumentType.ToString(),
+                Message = parsedPayment.ErrorMessage ?? "Failed to parse payments PDF.",
+                ParsedData = parsedPayment,
+                Errors = [parsedPayment.ErrorMessage ?? "Parse failed."]
+            };
+        }
+
+        if (parsedPayment.Payments.Count == 0)
+        {
+            return new ProcessPdfAndSaveResponseDto
+            {
+                Success = false,
+                Stage = "validation",
+                DocumentType = request.DocumentType.ToString(),
+                Message = "No payment rows were found in the PDF to save.",
+                ParsedData = parsedPayment,
+                Errors = ["Parsed payments list is empty."]
+            };
+        }
+
+        var savePayments = await SavePaymentsAsync(new SavePaymentsRequestDto
+        {
+            PropertyId = request.PropertyId,
+            Payments = parsedPayment.Payments.Select(x => new PaymentItemDto
+            {
+                PaidOn = x.PaidOn,
+                Amount = x.Amount,
+                Reference = x.Description,
+                Notes = request.Notes
+            }).ToList()
+        });
+
+        if (!savePayments.Success)
+        {
+            return new ProcessPdfAndSaveResponseDto
+            {
+                Success = false,
+                Stage = "save",
+                DocumentType = request.DocumentType.ToString(),
+                Message = savePayments.Message,
+                ParsedData = parsedPayment,
+                SavedData = savePayments.Data,
+                Errors = [savePayments.Message]
+            };
+        }
+
+        return new ProcessPdfAndSaveResponseDto
+        {
+            Success = true,
+            Stage = "completed",
+            DocumentType = request.DocumentType.ToString(),
+            Message = "Payment PDF parsed and saved successfully.",
+            ParsedData = parsedPayment,
+            SavedData = savePayments.Data
+        };
+    }
+
     public async Task<AutomationCommandResponseDto> SaveRentAsync(SaveRentRequestDto request)
     {
         var result = await _propertyDashboardManager.SaveRentAsync(new SaveRentRequestVm
