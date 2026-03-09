@@ -75,3 +75,51 @@ Also note: when pasting the app password, remove spaces shown in Google's UI.
 - Body text: `Please see attached statement for <Month Year>.`
 - The tenant receives the generated statement PDF as an attachment.
 - Before sending, the dashboard shows an email preview modal with the statement table and totals.
+
+
+## Safer secret storage (recommended)
+
+Use one of these two approaches so passwords are never committed:
+
+### Option 1 (best for local dev): .NET User Secrets
+
+From the `RLRentalApp.Web` folder run:
+
+```bash
+dotnet user-secrets init
+dotnet user-secrets set "GmailSmtp:Host" "smtp.gmail.com"
+dotnet user-secrets set "GmailSmtp:Port" "587"
+dotnet user-secrets set "GmailSmtp:EnableSsl" "true"
+dotnet user-secrets set "GmailSmtp:Username" "yourgmail@gmail.com"
+dotnet user-secrets set "GmailSmtp:AppPassword" "your-16-char-app-password"
+dotnet user-secrets set "GmailSmtp:FromEmail" "yourgmail@gmail.com"
+dotnet user-secrets set "GmailSmtp:FromDisplayName" "RLRentalApp"
+```
+
+### Option 2: local file override (gitignored)
+
+This project also loads `appsettings.Local.json` automatically.
+Create `RLRentalApp.Web/appsettings.Local.json` with your private values (do not commit it):
+
+```json
+{
+  "GmailSmtp": {
+    "Host": "smtp.gmail.com",
+    "Port": 587,
+    "EnableSsl": true,
+    "Username": "yourgmail@gmail.com",
+    "AppPassword": "your-16-char-app-password",
+    "FromEmail": "yourgmail@gmail.com",
+    "FromDisplayName": "RLRentalApp"
+  }
+}
+```
+
+For production, use environment variables or a managed secret store (Azure Key Vault / AWS Secrets Manager / etc.).
+
+### Will this change `appsettings` or the demo?
+
+- The app still reads `appsettings.json` and `appsettings.Development.json` exactly as before.
+- `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
+- Demo/default behavior is unchanged unless you add local secrets or environment variables.
+
