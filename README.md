@@ -123,3 +123,33 @@ For production, use environment variables or a managed secret store (Azure Key V
 - `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
 - Demo/default behavior is unchanged unless you add local secrets or environment variables.
 
+
+## Testing the automation API in Postman
+
+If Postman returns an HTML login page instead of JSON, the request is unauthenticated and was redirected to `/Account/Login`.
+
+### Quick setup
+
+1. Start the web app and use your local URL (example: `https://localhost:7241`).
+2. Use endpoint: `POST {{baseUrl}}/api/automation/process-pdf`
+3. In Postman choose **Body -> form-data**:
+   - `pdfFile` (File)
+   - `PropertyId` (Text, e.g. `1`)
+   - `DocumentType` (Text: `1` = Services, `2` = Payments)
+   - `BillingPeriod` (Text, required for services, e.g. `2026-03-01`)
+   - `DescriptionContains` (Text, optional for payments)
+4. Authenticate:
+   - either add valid auth cookie for this app, or
+   - send `Authorization: Bearer <token>` if your environment supports bearer auth.
+
+### Expected responses
+
+- `200 OK`: parse + save succeeded.
+- `400 Bad Request`: validation/parse/save failed with detailed error payload.
+- `401 Unauthorized`: not logged in / auth missing.
+- `403 Forbidden`: logged in but insufficient permission.
+
+### Important Postman setting
+
+Disable automatic redirects while troubleshooting (`Settings -> General -> Automatically follow redirects = Off`).
+That lets you see `401`/`403` clearly instead of receiving rendered login HTML.
