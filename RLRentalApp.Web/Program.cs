@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Authorization;
@@ -35,7 +36,12 @@ builder.Services.AddScoped<IPropertyDashboardManager, PropertyDashboardManager>(
 builder.Services.AddScoped<IAutomationService, AutomationService>();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.DocInclusionPredicate((_, apiDescription) =>
+        apiDescription.RelativePath is not null
+        && apiDescription.RelativePath.StartsWith("api/", StringComparison.OrdinalIgnoreCase));
+});
 
 // Identity services
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>

@@ -163,3 +163,8 @@ Swagger has been enabled for local development so you can test API endpoints fro
 - In Swagger UI, expand `Automation` endpoints and test requests directly.
 
 Note: automation endpoints are authorized, so if a call is not authenticated you should now see `401/403` for API routes instead of being redirected to HTML login content.
+
+### Swagger JSON 500 fix
+
+If `/swagger/v1/swagger.json` previously returned `500`, that was caused by Swagger trying to include non-API MVC actions.
+The Swagger configuration now includes only routes under `api/*`, so the automation endpoints load correctly in Swagger UI.
