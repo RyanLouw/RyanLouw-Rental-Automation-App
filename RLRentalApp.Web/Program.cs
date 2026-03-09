@@ -34,6 +34,9 @@ builder.Services.AddScoped<IEmailService, GmailEmailService>();
 builder.Services.AddScoped<IPropertyDashboardManager, PropertyDashboardManager>();
 builder.Services.AddScoped<IAutomationService, AutomationService>();
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 // Identity services
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
 {
@@ -77,6 +80,12 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 using (var scope = app.Services.CreateScope())
 {

@@ -153,3 +153,13 @@ If Postman returns an HTML login page instead of JSON, the request is unauthenti
 
 Disable automatic redirects while troubleshooting (`Settings -> General -> Automatically follow redirects = Off`).
 That lets you see `401`/`403` clearly instead of receiving rendered login HTML.
+
+## Swagger UI for the automation API
+
+Swagger has been enabled for local development so you can test API endpoints from a browser UI.
+
+- Run the web app in Development.
+- Open: `https://localhost:7241/swagger` (replace port with your local launch port).
+- In Swagger UI, expand `Automation` endpoints and test requests directly.
+
+Note: automation endpoints are authorized, so if a call is not authenticated you should now see `401/403` for API routes instead of being redirected to HTML login content.
