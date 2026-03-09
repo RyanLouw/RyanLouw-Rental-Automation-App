@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
 using RLRentalApp.Web.Data;
+using RLRentalApp.Web.Api.Services;
 using RLRentalApp.Web.DataAccess;
 using RLRentalApp.Web.Managers;
 using RLRentalApp.Web.Services;
@@ -31,6 +32,7 @@ builder.Services.AddScoped<IPropertyDashboardDataAccess, PropertyDashboardDataAc
 builder.Services.Configure<GmailSmtpOptions>(builder.Configuration.GetSection(GmailSmtpOptions.SectionName));
 builder.Services.AddScoped<IEmailService, GmailEmailService>();
 builder.Services.AddScoped<IPropertyDashboardManager, PropertyDashboardManager>();
+builder.Services.AddScoped<IAutomationService, AutomationService>();
 
 // Identity services
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
@@ -67,6 +69,8 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapControllers();
 
 app.MapControllerRoute(
     name: "default",
