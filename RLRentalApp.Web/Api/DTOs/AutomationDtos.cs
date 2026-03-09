@@ -88,6 +88,42 @@ public sealed class PaymentItemDto
     public string? Notes { get; init; }
 }
 
+public sealed class ParsePaymentPdfRequestDto
+{
+    [StringLength(150)]
+    public string? DescriptionContains { get; init; }
+}
+
+public sealed class ServicePdfParseResponseDto
+{
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string RawTextPreview { get; init; } = string.Empty;
+    public decimal? ElectricityOldReading { get; init; }
+    public decimal? ElectricityNewReading { get; init; }
+    public decimal? ElectricityLeviedAmount { get; init; }
+    public decimal? WaterOldReading { get; init; }
+    public decimal? WaterNewReading { get; init; }
+    public decimal? WaterLeviedAmount { get; init; }
+    public decimal? SewerageAmountInclVat { get; init; }
+    public decimal? RefuseAmountInclVat { get; init; }
+}
+
+public sealed class PaymentPdfParseResponseDto
+{
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string RawTextPreview { get; init; } = string.Empty;
+    public List<PaymentCandidateResponseDto> Payments { get; init; } = [];
+}
+
+public sealed class PaymentCandidateResponseDto
+{
+    public DateTime PaidOn { get; init; }
+    public decimal Amount { get; init; }
+    public string Description { get; init; } = string.Empty;
+}
+
 public sealed class AutomationCommandResponseDto
 {
     public bool Success { get; init; }

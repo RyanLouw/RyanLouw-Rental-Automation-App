@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using RLRentalApp.Models;
 using RLRentalApp.Web.Api.DTOs;
 using RLRentalApp.Web.Managers;
@@ -46,6 +47,45 @@ public sealed class AutomationService : IAutomationService
             CurrentMonthServiceTotal = status.CurrentMonthServiceTotal,
             CurrentMonthPaymentTotal = status.CurrentMonthPaymentTotal,
             CurrentBalance = status.CurrentBalance
+        };
+    }
+
+
+    public async Task<ServicePdfParseResponseDto> ParseServicePdfAsync(IFormFile? file)
+    {
+        var result = await _propertyDashboardManager.ParseServicePdfAsync(file);
+
+        return new ServicePdfParseResponseDto
+        {
+            Success = result.Success,
+            ErrorMessage = result.ErrorMessage,
+            RawTextPreview = result.RawTextPreview,
+            ElectricityOldReading = result.Electricity.OldReading,
+            ElectricityNewReading = result.Electricity.NewReading,
+            ElectricityLeviedAmount = result.Electricity.LeviedAmount,
+            WaterOldReading = result.Water.OldReading,
+            WaterNewReading = result.Water.NewReading,
+            WaterLeviedAmount = result.Water.LeviedAmount,
+            SewerageAmountInclVat = result.Sewerage.AmountInclVat,
+            RefuseAmountInclVat = result.Refuse.AmountInclVat
+        };
+    }
+
+    public async Task<PaymentPdfParseResponseDto> ParsePaymentPdfAsync(IFormFile? file, ParsePaymentPdfRequestDto request)
+    {
+        var result = await _propertyDashboardManager.ParsePaymentPdfAsync(file, request.DescriptionContains);
+
+        return new PaymentPdfParseResponseDto
+        {
+            Success = result.Success,
+            ErrorMessage = result.ErrorMessage,
+            RawTextPreview = result.RawTextPreview,
+            Payments = result.Payments.Select(x => new PaymentCandidateResponseDto
+            {
+                PaidOn = x.PaidOn,
+                Amount = x.Amount,
+                Description = x.Description
+            }).ToList()
         };
     }
 

@@ -33,6 +33,37 @@ public sealed class AutomationController : ControllerBase
         return Ok(status);
     }
 
+
+    [HttpPost("parse/services-pdf")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ServicePdfParseResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ParseServicesPdf([FromForm] IFormFile? pdfFile)
+    {
+        var result = await _automationService.ParseServicePdfAsync(pdfFile);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("parse/payments-pdf")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(PaymentPdfParseResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ParsePaymentsPdf([FromForm] IFormFile? pdfFile, [FromForm] ParsePaymentPdfRequestDto request)
+    {
+        var result = await _automationService.ParsePaymentPdfAsync(pdfFile, request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
     [HttpPost("rent")]
     [ProducesResponseType(typeof(AutomationCommandResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
