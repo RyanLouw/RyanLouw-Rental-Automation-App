@@ -6,7 +6,7 @@ using RLRentalApp.Web.Api.Services;
 namespace RLRentalApp.Web.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[AllowAnonymous]
 [Route("api/automation")]
 public sealed class AutomationController : ControllerBase
 {

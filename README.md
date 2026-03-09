@@ -168,3 +168,9 @@ Note: automation endpoints are authorized, so if a call is not authenticated you
 
 If `/swagger/v1/swagger.json` previously returned `500`, that was caused by Swagger trying to include non-API MVC actions.
 The Swagger configuration now includes only routes under `api/*`, so the automation endpoints load correctly in Swagger UI.
+
+
+### Temporary local testing mode (no API login)
+
+Automation API endpoints are currently marked with `[AllowAnonymous]` so you can test without logging in.
+When you are done testing, switch the controller back to `[Authorize]` before production use.
