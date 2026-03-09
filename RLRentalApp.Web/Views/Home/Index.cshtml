@@ -1,8 +1,1003 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@model RLRentalApp.Models.HomeIndexVm
+
+@{
+    ViewData["Title"] = "Property Dashboard";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="container py-4 property-dashboard">
+    <h1 class="mb-3">Property Dashboard</h1>
+    <p class="text-muted mb-4">Choose a property to track payment status, services, rent, and extra notes.</p>
+
+    <div id="selectedPropertyHeader" class="alert alert-primary d-none"></div>
+
+    <section id="propertySwitcherSection" class="card shadow-sm mb-3 d-none">
+        <div class="card-body d-flex flex-wrap align-items-end gap-2">
+            <div>
+                <label for="propertySwitchSelect" class="form-label mb-1">Switch property</label>
+                <select class="form-select" id="propertySwitchSelect">
+                    @foreach (var property in Model.Properties)
+                    {
+                        <option value="@property.Id">@property.Name (@property.AddressLine1)</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-outline-primary" type="button" id="switchPropertyBtn">Load property</button>
+        </div>
+    </section>
+
+    <section id="propertyStatusCard" class="card shadow-sm mb-4 d-none">
+        <div class="card-body">
+            <h2 class="h4 mb-3">Current Status</h2>
+            <dl class="row mb-0" id="statusDetails"></dl>
+        </div>
+    </section>
+
+    <section id="propertyActionSection" class="d-none">
+        <h2 class="h5">Next Steps</h2>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#didPayModal">Did they pay?</button>
+            <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addServicesModal">Add services</button>
+            <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addRentModal">Add rent</button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sendEmailModal">Send email</button>
+            <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#moreInfoModal">Any more info</button>
+            <button class="btn btn-dark" id="viewStatementBtn" data-bs-toggle="modal" data-bs-target="#statementModal">View statement</button>
+        </div>
+    </section>
 </div>
+
+<div class="modal fade" id="propertyPickerModal" tabindex="-1" aria-labelledby="propertyPickerLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="propertyPickerLabel">Which property are you busy with now?</h2>
+            </div>
+            <div class="modal-body">
+                @if (!Model.Properties.Any())
+                {
+                    <p class="mb-0">No properties were found in the database yet.</p>
+                }
+                else
+                {
+                    <label class="form-label" for="propertySelect">Property</label>
+                    <select class="form-select" id="propertySelect">
+                        <option value="">-- Select a property --</option>
+                        @foreach (var property in Model.Properties)
+                        {
+                            <option value="@property.Id">@property.Name (@property.AddressLine1)</option>
+                        }
+                    </select>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="confirmPropertyBtn" disabled>Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="didPayModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Did they pay?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload a bank statement PDF. We will pull entries where the description contains your search text.</p>
+                <div class="mb-3">
+                    <label for="paymentDescriptionContains" class="form-label">Description contains</label>
+                    <input class="form-control" id="paymentDescriptionContains" value="Heino Huur" />
+                    <div class="form-text">Examples: <code>Heino Huur</code> or <code>Betaling Van Heino Huur</code>.</div>
+                </div>
+                <div class="mb-3">
+                    <label for="paymentPdfFile" class="form-label">Statement PDF</label>
+                    <input class="form-control" type="file" id="paymentPdfFile" accept="application/pdf,.pdf" />
+                </div>
+                <button class="btn btn-primary" type="button" id="parsePaymentPdfBtn">Parse PDF</button>
+
+                <div id="paymentPdfError" class="alert alert-danger mt-3 d-none"></div>
+
+                <div id="paymentResults" class="mt-3 d-none">
+                    <h3 class="h6">Detected payments</h3>
+                    <p class="small text-muted mb-2">You can remove any row before saving. Duplicate same amount on the same day is automatically blocked.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th class="text-end">Amount</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="paymentNotesInput">Notes (optional)</label>
+                        <input type="text" class="form-control" id="paymentNotesInput" maxlength="400" />
+                    </div>
+                    <button class="btn btn-success" type="button" id="savePaymentsBtn">Save payments</button>
+                    <div id="savePaymentsMsg" class="alert mt-3 d-none"></div>
+
+                    <details>
+                        <summary>Raw text preview</summary>
+                        <pre id="paymentPdfRawText" class="small mt-2 mb-0"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addServicesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Add services</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload the property services PDF and we will extract key values for Electricity, Water, Sewerage, and Refuse.</p>
+                <div class="mb-3">
+                    <label for="servicePdfFile" class="form-label">Services PDF</label>
+                    <input class="form-control" type="file" id="servicePdfFile" accept="application/pdf,.pdf" />
+                </div>
+                <button class="btn btn-primary" type="button" id="parseServicePdfBtn">Parse PDF</button>
+
+                <hr />
+                <h3 class="h6">Manual capture / edit</h3>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="billingPeriodInput">Billing month</label>
+                        <input type="month" class="form-control" id="billingPeriodInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityAmountInput">Electricity amount</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="waterAmountInput">Water amount</label>
+                        <input type="number" step="0.01" class="form-control" id="waterAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="sewerageAmountInput">Sewerage amount</label>
+                        <input type="number" step="0.01" class="form-control" id="sewerageAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="refuseAmountInput">Refuse amount</label>
+                        <input type="number" step="0.01" class="form-control" id="refuseAmountInput" />
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label" for="servicesNotesInput">Notes</label>
+                        <input type="text" class="form-control" id="servicesNotesInput" placeholder="Captured manually or from PDF" />
+                    </div>
+                </div>
+                <button class="btn btn-success mt-3" type="button" id="saveServicesBtn">Add services to statement</button>
+                <div id="saveServicesMsg" class="alert mt-3 d-none"></div>
+
+                <div id="servicePdfError" class="alert alert-danger mt-3 d-none"></div>
+
+                <div id="servicePdfResults" class="mt-3 d-none">
+                    <h3 class="h6">Electricity</h3>
+                    <ul class="mb-3">
+                        <li>Old reading: <strong id="electricityOldReading">-</strong></li>
+                        <li>New reading: <strong id="electricityNewReading">-</strong></li>
+                        <li>Levied amount: <strong id="electricityLeviedAmount">-</strong></li>
+                    </ul>
+
+                    <h3 class="h6">Water</h3>
+                    <ul class="mb-3">
+                        <li>Old reading: <strong id="waterOldReading">-</strong></li>
+                        <li>New reading: <strong id="waterNewReading">-</strong></li>
+                        <li>Levied amount: <strong id="waterLeviedAmount">-</strong></li>
+                    </ul>
+
+                    <h3 class="h6">Sewerage</h3>
+                    <ul class="mb-3">
+                        <li>Date: <strong id="sewerageDate">-</strong></li>
+                        <li>Code: <strong id="sewerageCode">-</strong></li>
+                        <li>Amount incl VAT: <strong id="sewerageAmount">-</strong></li>
+                    </ul>
+
+                    <h3 class="h6">Refuse</h3>
+                    <ul class="mb-3">
+                        <li>Date: <strong id="refuseDate">-</strong></li>
+                        <li>Code: <strong id="refuseCode">-</strong></li>
+                        <li>Amount incl VAT: <strong id="refuseAmount">-</strong></li>
+                    </ul>
+
+                    <details>
+                        <summary>Raw text preview</summary>
+                        <pre id="servicePdfRawText" class="small mt-2 mb-0"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addRentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Add rent</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Save the rent amount and effective month for the active lease.</p>
+                <div class="mb-3">
+                    <label class="form-label" for="rentEffectiveMonthInput">Effective month</label>
+                    <input type="month" class="form-control" id="rentEffectiveMonthInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="rentAmountInput">Rent amount</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="rentAmountInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="rentNotesInput">Notes (optional)</label>
+                    <input type="text" class="form-control" id="rentNotesInput" maxlength="400" />
+                </div>
+                <button class="btn btn-warning" type="button" id="saveRentBtn">Save rent</button>
+                <div id="saveRentMsg" class="alert mt-3 d-none"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sendEmailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Preview statement email</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="sendTenantEmailMsg" class="alert mt-3 d-none"></div>
+
+                <dl class="row mb-3 small">
+                    <dt class="col-sm-2">To</dt>
+                    <dd class="col-sm-10" id="previewEmailTo">-</dd>
+                    <dt class="col-sm-2">Subject</dt>
+                    <dd class="col-sm-10" id="previewEmailSubject">-</dd>
+                </dl>
+
+                <div class="mb-3">
+                    <label class="form-label">Email body</label>
+                    <div class="border rounded p-2 bg-light" id="previewEmailBody">-</div>
+                </div>
+
+                <h3 class="h6">Attached PDF preview</h3>
+                <div id="previewStatementSummary" class="mb-3 text-muted small">-</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th class="text-end">Amount</th>
+                                <th class="text-end">Running Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewStatementTableBody"></tbody>
+                    </table>
+                </div>
+
+                <button class="btn btn-primary" type="button" id="sendTenantEmailBtn">Send statement email</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="moreInfoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5">Any more info</h2><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Store additional notes or special events for this property.</div></div></div>
+</div>
+
+<div class="modal fade" id="statementModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Tenant Statement</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="statementMonthInput">Statement month</label>
+                        <input type="month" class="form-control" id="statementMonthInput" />
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button class="btn btn-outline-primary" type="button" id="reloadStatementBtn">Reload</button>
+                    </div>
+                    <div class="col-md-5 align-self-end text-md-end">
+                        <button class="btn btn-primary" type="button" id="downloadStatementPdfBtn">Download professional PDF</button>
+                    </div>
+                </div>
+                <div id="statementSummary" class="mb-3 text-muted"></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-end">Running Balance</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody id="statementTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const propertySelect = document.getElementById('propertySelect');
+            const confirmButton = document.getElementById('confirmPropertyBtn');
+            const selectedHeader = document.getElementById('selectedPropertyHeader');
+            const statusCard = document.getElementById('propertyStatusCard');
+            const statusDetails = document.getElementById('statusDetails');
+            const actionSection = document.getElementById('propertyActionSection');
+            const pickerElement = document.getElementById('propertyPickerModal');
+            const statementButton = document.getElementById('viewStatementBtn');
+            const statementSummary = document.getElementById('statementSummary');
+            const statementTableBody = document.getElementById('statementTableBody');
+            const statementMonthInput = document.getElementById('statementMonthInput');
+            const reloadStatementBtn = document.getElementById('reloadStatementBtn');
+            const downloadStatementPdfBtn = document.getElementById('downloadStatementPdfBtn');
+            const switcherSection = document.getElementById('propertySwitcherSection');
+            const switchPropertySelect = document.getElementById('propertySwitchSelect');
+            const switchPropertyBtn = document.getElementById('switchPropertyBtn');
+            const parseServicePdfBtn = document.getElementById('parseServicePdfBtn');
+            const servicePdfFile = document.getElementById('servicePdfFile');
+            const servicePdfError = document.getElementById('servicePdfError');
+            const servicePdfResults = document.getElementById('servicePdfResults');
+            const electricityOldReading = document.getElementById('electricityOldReading');
+            const electricityNewReading = document.getElementById('electricityNewReading');
+            const electricityLeviedAmount = document.getElementById('electricityLeviedAmount');
+            const waterOldReading = document.getElementById('waterOldReading');
+            const waterNewReading = document.getElementById('waterNewReading');
+            const waterLeviedAmount = document.getElementById('waterLeviedAmount');
+            const sewerageDate = document.getElementById('sewerageDate');
+            const sewerageCode = document.getElementById('sewerageCode');
+            const sewerageAmount = document.getElementById('sewerageAmount');
+            const refuseDate = document.getElementById('refuseDate');
+            const refuseCode = document.getElementById('refuseCode');
+            const refuseAmount = document.getElementById('refuseAmount');
+            const servicePdfRawText = document.getElementById('servicePdfRawText');
+            const billingPeriodInput = document.getElementById('billingPeriodInput');
+            const electricityAmountInput = document.getElementById('electricityAmountInput');
+            const waterAmountInput = document.getElementById('waterAmountInput');
+            const sewerageAmountInput = document.getElementById('sewerageAmountInput');
+            const refuseAmountInput = document.getElementById('refuseAmountInput');
+            const servicesNotesInput = document.getElementById('servicesNotesInput');
+            const saveServicesBtn = document.getElementById('saveServicesBtn');
+            const saveServicesMsg = document.getElementById('saveServicesMsg');
+            const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
+            const rentAmountInput = document.getElementById('rentAmountInput');
+            const rentNotesInput = document.getElementById('rentNotesInput');
+            const saveRentBtn = document.getElementById('saveRentBtn');
+            const saveRentMsg = document.getElementById('saveRentMsg');
+            const parsePaymentPdfBtn = document.getElementById('parsePaymentPdfBtn');
+            const paymentPdfFile = document.getElementById('paymentPdfFile');
+            const paymentPdfError = document.getElementById('paymentPdfError');
+            const paymentResults = document.getElementById('paymentResults');
+            const paymentTableBody = document.getElementById('paymentTableBody');
+            const paymentNotesInput = document.getElementById('paymentNotesInput');
+            const savePaymentsBtn = document.getElementById('savePaymentsBtn');
+            const savePaymentsMsg = document.getElementById('savePaymentsMsg');
+            const paymentPdfRawText = document.getElementById('paymentPdfRawText');
+            const paymentDescriptionContains = document.getElementById('paymentDescriptionContains');
+            const sendEmailModal = document.getElementById('sendEmailModal');
+            const previewEmailTo = document.getElementById('previewEmailTo');
+            const previewEmailSubject = document.getElementById('previewEmailSubject');
+            const previewEmailBody = document.getElementById('previewEmailBody');
+            const previewStatementSummary = document.getElementById('previewStatementSummary');
+            const previewStatementTableBody = document.getElementById('previewStatementTableBody');
+            const sendTenantEmailBtn = document.getElementById('sendTenantEmailBtn');
+            const sendTenantEmailMsg = document.getElementById('sendTenantEmailMsg');
+
+            let selectedPropertyId = null;
+
+            if (!pickerElement) {
+                return;
+            }
+
+            const pickerModal = new bootstrap.Modal(pickerElement);
+            pickerModal.show();
+
+            if (billingPeriodInput) {
+                const now = new Date();
+                billingPeriodInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+
+            if (statementMonthInput) {
+                const now = new Date();
+                statementMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+
+            if (rentEffectiveMonthInput) {
+                const now = new Date();
+                rentEffectiveMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+
+            propertySelect?.addEventListener('change', () => {
+                confirmButton.disabled = !propertySelect.value;
+            });
+
+            const loadProperty = async (propertyId, hidePicker = false) => {
+                if (!propertyId) {
+                    return;
+                }
+
+                const response = await fetch(`/Home/PropertyStatus?propertyId=${propertyId}`);
+                if (!response.ok) {
+                    return;
+                }
+
+                selectedPropertyId = propertyId;
+                const status = await response.json();
+
+                if (rentAmountInput && status.latestRent !== null && status.latestRent !== undefined) {
+                    rentAmountInput.value = status.latestRent;
+                }
+
+                selectedHeader.classList.remove('d-none');
+                selectedHeader.textContent = `Selected property: ${status.propertyName}`;
+
+                if (switchPropertySelect) {
+                    switchPropertySelect.value = propertyId;
+                }
+
+                const values = [
+                    ['Address', status.propertyAddress || 'N/A'],
+                    ['Property Active', status.isPropertyActive ? 'Yes' : 'No'],
+                    ['Has Active Lease', status.hasActiveLease ? 'Yes' : 'No'],
+                    ['Tenant', status.tenantName || 'N/A'],
+                    ['Tenant Email', status.tenantEmail || 'N/A'],
+                    ['Opening Outstanding', Number(status.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })],
+                    ['Lease Start', status.leaseStartDate ? new Date(status.leaseStartDate).toLocaleDateString() : 'N/A'],
+                    ['Latest Rent', status.latestRent !== null ? Number(status.latestRent).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : 'N/A'],
+                    ['Current Month Services', Number(status.currentMonthServiceTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })],
+                    ['Current Month Payments', Number(status.currentMonthPaymentTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })],
+                    ['Current Balance', Number(status.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })]
+                ];
+
+                statusDetails.innerHTML = values.map(([key, value]) =>
+                    `<dt class="col-sm-4">${key}</dt><dd class="col-sm-8">${value}</dd>`).join('');
+
+
+                switcherSection?.classList.remove('d-none');
+                statusCard.classList.remove('d-none');
+                actionSection.classList.remove('d-none');
+
+                if (hidePicker) {
+                    pickerModal.hide();
+                }
+            };
+
+            confirmButton?.addEventListener('click', async () => {
+                const propertyId = propertySelect?.value;
+                await loadProperty(propertyId, true);
+            });
+
+            switchPropertyBtn?.addEventListener('click', async () => {
+                const propertyId = switchPropertySelect?.value;
+                await loadProperty(propertyId, false);
+            });
+
+
+            const money = (value) => value !== null && value !== undefined
+                ? Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })
+                : '-';
+
+            saveRentBtn?.addEventListener('click', async () => {
+                saveRentMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                if (!rentEffectiveMonthInput?.value) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = 'Please choose an effective month.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const amount = rentAmountInput?.value ? Number(rentAmountInput.value) : 0;
+                if (!amount || amount <= 0) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = 'Please capture a rent amount greater than zero.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    effectiveFrom: `${rentEffectiveMonthInput.value}-01`,
+                    amount,
+                    notes: rentNotesInput?.value || ''
+                };
+
+                const response = await fetch('/Home/SaveRent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    saveRentMsg.className = 'alert alert-danger mt-3';
+                    saveRentMsg.textContent = payload.message || 'Could not save rent.';
+                    saveRentMsg.classList.remove('d-none');
+                    return;
+                }
+
+                saveRentMsg.className = 'alert alert-success mt-3';
+                saveRentMsg.textContent = payload.message;
+                saveRentMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
+            });
+
+            parseServicePdfBtn?.addEventListener('click', async () => {
+                servicePdfError?.classList.add('d-none');
+                servicePdfResults?.classList.add('d-none');
+
+                const file = servicePdfFile?.files?.[0];
+                if (!file) {
+                    if (servicePdfError) {
+                        servicePdfError.textContent = 'Please select a PDF first.';
+                        servicePdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('pdfFile', file);
+
+                const response = await fetch('/Home/ParseServicePdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    if (servicePdfError) {
+                        servicePdfError.textContent = payload.errorMessage || 'Could not parse this PDF.';
+                        servicePdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                electricityOldReading.textContent = payload.electricity.oldReading ?? '-';
+                electricityNewReading.textContent = payload.electricity.newReading ?? '-';
+                electricityLeviedAmount.textContent = money(payload.electricity.leviedAmount);
+
+                waterOldReading.textContent = payload.water.oldReading ?? '-';
+                waterNewReading.textContent = payload.water.newReading ?? '-';
+                waterLeviedAmount.textContent = money(payload.water.leviedAmount);
+
+                sewerageDate.textContent = payload.sewerage.date || '-';
+                sewerageCode.textContent = payload.sewerage.code || '-';
+                sewerageAmount.textContent = money(payload.sewerage.amountInclVat);
+
+                refuseDate.textContent = payload.refuse.date || '-';
+                refuseCode.textContent = payload.refuse.code || '-';
+                refuseAmount.textContent = money(payload.refuse.amountInclVat);
+
+                servicePdfRawText.textContent = payload.rawTextPreview || '';
+
+                electricityAmountInput.value = payload.electricity.leviedAmount ?? '';
+                waterAmountInput.value = payload.water.leviedAmount ?? '';
+                sewerageAmountInput.value = payload.sewerage.amountInclVat ?? '';
+                refuseAmountInput.value = payload.refuse.amountInclVat ?? '';
+                servicePdfResults?.classList.remove('d-none');
+            });
+
+
+
+
+            let parsedPayments = [];
+
+            const renderPaymentRows = () => {
+                if (!paymentTableBody) {
+                    return;
+                }
+
+                paymentTableBody.innerHTML = parsedPayments.map((payment, index) => `
+                    <tr>
+                        <td>${new Date(payment.paidOn).toLocaleDateString()}</td>
+                        <td>${payment.description}</td>
+                        <td class="text-end">${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-index="${index}" type="button">Delete</button></td>
+                    </tr>
+                `).join('');
+            };
+
+            paymentTableBody?.addEventListener('click', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
+
+                const deleteBtn = target.closest('button[data-index]');
+                if (!deleteBtn) {
+                    return;
+                }
+
+                const index = Number(deleteBtn.getAttribute('data-index'));
+                if (Number.isNaN(index)) {
+                    return;
+                }
+
+                parsedPayments.splice(index, 1);
+                renderPaymentRows();
+            });
+
+            parsePaymentPdfBtn?.addEventListener('click', async () => {
+                paymentPdfError?.classList.add('d-none');
+                paymentResults?.classList.add('d-none');
+                savePaymentsMsg?.classList.add('d-none');
+
+                const file = paymentPdfFile?.files?.[0];
+                if (!file) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = 'Please select a PDF first.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('pdfFile', file);
+                formData.append('descriptionContains', paymentDescriptionContains?.value || '');
+
+                const response = await fetch('/Home/ParsePaymentPdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = payload.errorMessage || 'Could not parse this PDF.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                parsedPayments = payload.payments || [];
+                renderPaymentRows();
+                paymentPdfRawText.textContent = payload.rawTextPreview || '';
+                paymentResults?.classList.remove('d-none');
+            });
+
+            savePaymentsBtn?.addEventListener('click', async () => {
+                savePaymentsMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                if (!parsedPayments.length) {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = 'No payment rows to save.';
+                    savePaymentsMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    payments: parsedPayments,
+                    notes: paymentNotesInput?.value || ''
+                };
+
+                const response = await fetch('/Home/SavePayments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = payload.message || 'Could not save payments.';
+                    savePaymentsMsg.classList.remove('d-none');
+                    return;
+                }
+
+                savePaymentsMsg.className = 'alert alert-success mt-3';
+                const savedRows = (payload.savedPayments || []).map(x =>
+                    `${new Date(x.paidOn).toLocaleDateString()} ${Number(x.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`);
+                const savedRowsText = savedRows.length
+                    ? ` Saved rows: ${savedRows.join(', ')}.`
+                    : '';
+
+                if (payload.savedPayments?.length && statementMonthInput) {
+                    const firstSaved = new Date(payload.savedPayments[0].paidOn);
+                    statementMonthInput.value = `${firstSaved.getFullYear()}-${String(firstSaved.getMonth() + 1).padStart(2, '0')}`;
+                }
+
+                savePaymentsMsg.textContent = `${payload.message}${savedRowsText} Tip: open View statement and click Reload for the saved month.`;
+                savePaymentsMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
+            });
+
+            saveServicesBtn?.addEventListener('click', async () => {
+                saveServicesMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                const billingPeriodValue = billingPeriodInput?.value;
+                if (!billingPeriodValue) {
+                    saveServicesMsg.className = 'alert alert-danger mt-3';
+                    saveServicesMsg.textContent = 'Please choose a billing month.';
+                    saveServicesMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    billingPeriod: `${billingPeriodValue}-01`,
+                    electricityAmount: electricityAmountInput.value ? Number(electricityAmountInput.value) : null,
+                    waterAmount: waterAmountInput.value ? Number(waterAmountInput.value) : null,
+                    sewerageAmount: sewerageAmountInput.value ? Number(sewerageAmountInput.value) : null,
+                    refuseAmount: refuseAmountInput.value ? Number(refuseAmountInput.value) : null,
+                    notes: servicesNotesInput.value || ''
+                };
+
+                const response = await fetch('/Home/SaveServices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    saveServicesMsg.className = 'alert alert-danger mt-3';
+                    saveServicesMsg.textContent = payload.message || 'Could not save services.';
+                    saveServicesMsg.classList.remove('d-none');
+                    return;
+                }
+
+                saveServicesMsg.className = 'alert alert-success mt-3';
+                saveServicesMsg.textContent = payload.message;
+                saveServicesMsg.classList.remove('d-none');
+
+                await loadProperty(selectedPropertyId, false);
+            });
+
+            const buildPreviewSubject = statement => `Statement - ${statement.propertyAddress} - ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}`;
+            const buildPreviewBody = statement => `Please see attached statement for ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}.`;
+
+            const renderPreviewStatementTable = entries => {
+                previewStatementTableBody.innerHTML = (entries || []).map(entry => `
+                    <tr>
+                        <td>${new Date(entry.entryDate).toLocaleDateString()}</td>
+                        <td>${entry.entryType}</td>
+                        <td>${entry.description}</td>
+                        <td class="text-end">${Number(entry.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                    </tr>
+                `).join('');
+            };
+
+            const loadEmailPreview = async () => {
+                sendTenantEmailMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                const monthQuery = statementMonthInput?.value ? `&month=${statementMonthInput.value}` : '';
+
+                const [statusResponse, statementResponse] = await Promise.all([
+                    fetch(`/Home/PropertyStatus?propertyId=${selectedPropertyId}`),
+                    fetch(`/Home/PropertyStatement?propertyId=${selectedPropertyId}${monthQuery}`)
+                ]);
+
+                if (!statusResponse.ok || !statementResponse.ok) {
+                    sendTenantEmailMsg.className = 'alert alert-danger mt-3';
+                    sendTenantEmailMsg.textContent = 'Could not load statement email preview.';
+                    sendTenantEmailMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const status = await statusResponse.json();
+                const statement = await statementResponse.json();
+
+                const subject = buildPreviewSubject(statement);
+                const body = buildPreviewBody(statement);
+
+                previewEmailTo.textContent = status.tenantEmail || 'No tenant email saved';
+                previewEmailSubject.textContent = subject;
+                previewEmailBody.textContent = body;
+                previewStatementSummary.textContent = `${statement.tenantName} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
+                renderPreviewStatementTable(statement.entries || []);
+            };
+
+            sendEmailModal?.addEventListener('show.bs.modal', loadEmailPreview);
+
+            sendTenantEmailBtn?.addEventListener('click', async () => {
+                sendTenantEmailMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    statementMonth: statementMonthInput?.value ? `${statementMonthInput.value}-01` : null
+                };
+
+                const response = await fetch('/Home/SendTenantEmail', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    sendTenantEmailMsg.className = 'alert alert-danger mt-3';
+                    sendTenantEmailMsg.textContent = payload.message || 'Could not send email.';
+                    sendTenantEmailMsg.classList.remove('d-none');
+                    return;
+                }
+
+                sendTenantEmailMsg.className = 'alert alert-success mt-3';
+                sendTenantEmailMsg.textContent = payload.message || 'Statement email sent.';
+                sendTenantEmailMsg.classList.remove('d-none');
+            });
+
+            let statementEntries = [];
+            let editingEntryId = null;
+
+            const renderStatement = () => {
+                statementTableBody.innerHTML = statementEntries.map(entry => {
+                    if (editingEntryId === entry.statementEntryId) {
+                        return `
+                            <tr>
+                                <td><input class="form-control form-control-sm" type="date" data-edit="date" value="${new Date(entry.entryDate).toISOString().slice(0, 10)}" /></td>
+                                <td>${entry.entryType}</td>
+                                <td><input class="form-control form-control-sm" type="text" data-edit="description" value="${entry.description.replace(/"/g, '&quot;')}" /></td>
+                                <td><input class="form-control form-control-sm text-end" type="number" step="0.01" data-edit="amount" value="${entry.amount}" /></td>
+                                <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-success" data-action="save" data-id="${entry.statementEntryId}" type="button">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="cancel" data-id="${entry.statementEntryId}" type="button">Cancel</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+
+                    return `
+                        <tr>
+                            <td>${new Date(entry.entryDate).toLocaleDateString()}</td>
+                            <td>${entry.entryType}</td>
+                            <td>${entry.description}</td>
+                            <td class="text-end">${Number(entry.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td class="text-end">${Number(entry.runningBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td class="text-end">${entry.canEdit ? `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${entry.statementEntryId}" type="button">Edit</button>` : ''}</td>
+                        </tr>
+                    `;
+                }).join('');
+            };
+
+            statementTableBody?.addEventListener('click', async (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
+
+                const button = target.closest('button[data-action]');
+                if (!button) {
+                    return;
+                }
+
+                const action = button.getAttribute('data-action');
+                const id = Number(button.getAttribute('data-id'));
+                if (!id) {
+                    return;
+                }
+
+                if (action === 'edit') {
+                    editingEntryId = id;
+                    renderStatement();
+                    return;
+                }
+
+                if (action === 'cancel') {
+                    editingEntryId = null;
+                    renderStatement();
+                    return;
+                }
+
+                if (action === 'save') {
+                    const row = button.closest('tr');
+                    if (!row) {
+                        return;
+                    }
+
+                    const dateInput = row.querySelector('input[data-edit="date"]');
+                    const descInput = row.querySelector('input[data-edit="description"]');
+                    const amountInput = row.querySelector('input[data-edit="amount"]');
+                    if (!(dateInput instanceof HTMLInputElement) || !(descInput instanceof HTMLInputElement) || !(amountInput instanceof HTMLInputElement)) {
+                        return;
+                    }
+
+                    const body = {
+                        propertyId: Number(selectedPropertyId),
+                        statementEntryId: id,
+                        entryDate: dateInput.value,
+                        description: descInput.value,
+                        amount: Number(amountInput.value)
+                    };
+
+                    const response = await fetch('/Home/UpdateStatementEntry', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        statementSummary.textContent = payload.message || 'Could not update statement row.';
+                        return;
+                    }
+
+                    editingEntryId = null;
+                    await loadStatement();
+                }
+            });
+
+            const loadStatement = async () => {
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                const monthQuery = statementMonthInput?.value ? `&month=${statementMonthInput.value}` : '';
+                const response = await fetch(`/Home/PropertyStatement?propertyId=${selectedPropertyId}${monthQuery}`);
+                if (!response.ok) {
+                    statementSummary.textContent = 'Could not load statement.';
+                    statementTableBody.innerHTML = '';
+                    return;
+                }
+
+                const statement = await response.json();
+                statementSummary.textContent = `${statement.tenantName} | Window: last 3 months ending ${new Date(statement.statementMonth).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })} | Opening: ${Number(statement.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })} | Current: ${Number(statement.currentBalance).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`;
+
+                statementEntries = statement.entries || [];
+                renderStatement();
+            };
+
+            statementButton?.addEventListener('click', loadStatement);
+            reloadStatementBtn?.addEventListener('click', loadStatement);
+            downloadStatementPdfBtn?.addEventListener('click', () => {
+                if (!selectedPropertyId) {
+                    statementSummary.textContent = 'Please choose a property first.';
+                    return;
+                }
+
+                const monthQuery = statementMonthInput?.value ? `&month=${statementMonthInput.value}` : '';
+                window.open(`/Home/PropertyStatementPdf?propertyId=${selectedPropertyId}${monthQuery}`, '_blank');
+            });
+        })();
+    </script>
+}

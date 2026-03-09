@@ -20,3 +20,6 @@ html {
 body {
   margin-bottom: 60px;
 }
+.property-dashboard .card {
+  border-radius: 0.75rem;
+}

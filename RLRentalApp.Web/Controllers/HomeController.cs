@@ -1,32 +1,186 @@
-using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RLRentalApp.Models;
+using RLRentalApp.Web.Managers;
+using System.Diagnostics;
 
-namespace RLRentalApp.Controllers
+namespace RLRentalApp.Controllers;
+
+[Authorize]
+public class HomeController : Controller
 {
-    public class HomeController : Controller
+    private readonly ILogger<HomeController> _logger;
+    private readonly IPropertyDashboardManager _propertyDashboardManager;
+
+    public HomeController(ILogger<HomeController> logger, IPropertyDashboardManager propertyDashboardManager)
     {
-        private readonly ILogger<HomeController> _logger;
+        _logger = logger;
+        _propertyDashboardManager = propertyDashboardManager;
+    }
 
-        public HomeController(ILogger<HomeController> logger)
+    public async Task<IActionResult> Index()
+    {
+        var vm = await _propertyDashboardManager.GetDashboardAsync();
+        return View(vm);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> PropertyStatus(int propertyId)
+    {
+        var status = await _propertyDashboardManager.GetPropertyStatusAsync(propertyId);
+
+        if (status is null)
         {
-            _logger = logger;
+            return NotFound();
         }
 
-        public IActionResult Index()
+        return Json(status);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> PropertyStatement(int propertyId, string? month)
+    {
+        DateTime? statementMonth = null;
+        if (!string.IsNullOrWhiteSpace(month) && DateTime.TryParse($"{month}-01", out var parsedMonth))
         {
-            return View();
+            statementMonth = parsedMonth;
         }
 
-        public IActionResult Privacy()
+        var statement = await _propertyDashboardManager.GetPropertyStatementAsync(propertyId, statementMonth);
+
+        if (statement is null)
         {
-            return View();
+            return NotFound();
         }
 
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
+        return Json(statement);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> PropertyStatementPdf(int propertyId, string? month)
+    {
+        DateTime? statementMonth = null;
+        if (!string.IsNullOrWhiteSpace(month) && DateTime.TryParse($"{month}-01", out var parsedMonth))
         {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+            statementMonth = parsedMonth;
         }
+
+        var statementPdf = await _propertyDashboardManager.GeneratePropertyStatementPdfAsync(propertyId, statementMonth);
+        if (statementPdf is null)
+        {
+            return NotFound();
+        }
+
+        return File(statementPdf.PdfBytes, "application/pdf", statementPdf.FileName);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile)
+    {
+        var result = await _propertyDashboardManager.ParseServicePdfAsync(pdfFile);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SaveServices([FromBody] SaveServicesRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SaveServicesAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SaveRent([FromBody] SaveRentRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SaveRentAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> ParsePaymentPdf(IFormFile? pdfFile, string? descriptionContains)
+    {
+        var result = await _propertyDashboardManager.ParsePaymentPdfAsync(pdfFile, descriptionContains);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SavePayments([FromBody] SavePaymentsRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SavePaymentsAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SendTenantEmail([FromBody] SendTenantEmailRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SendTenantEmailAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateStatementEntry([FromBody] UpdateStatementEntryRequestVm request)
+    {
+        var result = await _propertyDashboardManager.UpdateStatementEntryAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+    public IActionResult Privacy()
+    {
+        return View();
+    }
+
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    public IActionResult Error()
+    {
+        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
 }
