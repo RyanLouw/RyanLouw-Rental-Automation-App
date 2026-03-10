@@ -123,3 +123,108 @@ For production, use environment variables or a managed secret store (Azure Key V
 - `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
 - Demo/default behavior is unchanged unless you add local secrets or environment variables.
 
+
+## Testing the automation API in Postman
+
+If Postman returns an HTML login page instead of JSON, the request is unauthenticated and was redirected to `/Account/Login`.
+
+### Quick setup
+
+1. Start the web app and use your local URL (example: `https://localhost:7241`).
+2. Use endpoint: `POST {{baseUrl}}/api/automation/process-pdf`
+3. In Postman choose **Body -> form-data**:
+   - `pdfFile` (File)
+   - `PropertyId` (Text, e.g. `1`)
+   - `DocumentType` (Text: `1` = Services, `2` = Payments)
+   - `BillingPeriod` (Text, required for services, e.g. `2026-03-01`)
+   - `DescriptionContains` (Text, optional for payments)
+4. Authenticate:
+   - either add valid auth cookie for this app, or
+   - send `Authorization: Bearer <token>` if your environment supports bearer auth.
+
+### Expected responses
+
+- `200 OK`: parse + save succeeded.
+- `400 Bad Request`: validation/parse/save failed with detailed error payload.
+- `401 Unauthorized`: not logged in / auth missing.
+- `403 Forbidden`: logged in but insufficient permission.
+
+### Important Postman setting
+
+Disable automatic redirects while troubleshooting (`Settings -> General -> Automatically follow redirects = Off`).
+That lets you see `401`/`403` clearly instead of receiving rendered login HTML.
+
+## Swagger UI for the automation API
+
+Swagger has been enabled for local development so you can test API endpoints from a browser UI.
+
+- Run the web app in Development.
+- Open: `https://localhost:7241/swagger` (replace port with your local launch port).
+- In Swagger UI, expand `Automation` endpoints and test requests directly.
+
+Note: automation endpoints are authorized, so if a call is not authenticated you should now see `401/403` for API routes instead of being redirected to HTML login content.
+
+### Swagger JSON 500 fix
+
+If `/swagger/v1/swagger.json` previously returned `500`, that was caused by Swagger trying to include non-API MVC actions.
+The Swagger configuration now includes only routes under `api/*`, so the automation endpoints load correctly in Swagger UI.
+
+
+### Temporary local testing mode (no API login)
+
+Automation API endpoints are currently marked with `[AllowAnonymous]` so you can test without logging in.
+When you are done testing, switch the controller back to `[Authorize]` before production use.
+
+
+### Send statement email via automation API
+
+You can now trigger statement emails via API:
+
+- `POST /api/automation/emails/send`
+- JSON body:
+  - `propertyId` (required)
+  - `statementMonth` (optional, e.g. `2026-03-01`)
+
+Returns success/failure and the recipient email used.
+
+
+## Deploying to Fly.io or Render
+
+This repo now includes deployment starter files:
+
+- `Dockerfile`
+- `.dockerignore`
+- `.env.example`
+- `fly.toml`
+- `render.yaml`
+
+### 1) Configure environment variables
+
+Copy `.env.example` and set real values. In Fly/Render, add these in the platform dashboard (do not commit secrets):
+
+- `ConnectionStrings__rentaldb`
+- `GmailSmtp__Username`
+- `GmailSmtp__AppPassword`
+- `GmailSmtp__FromEmail`
+- plus other `GmailSmtp__*` values as needed.
+
+### 2) Deploy on Render
+
+- Create a **Web Service** from this repo.
+- Use Docker runtime (or `render.yaml` blueprint deploy).
+- Ensure `ConnectionStrings__rentaldb` points to your hosted Postgres.
+
+### 3) Deploy on Fly.io
+
+- Create app and secrets, then deploy:
+
+```bash
+flyctl launch --no-deploy
+flyctl secrets set ConnectionStrings__rentaldb="<postgres-connection-string>"
+flyctl secrets set GmailSmtp__Username="<gmail>" GmailSmtp__AppPassword="<app-password>" GmailSmtp__FromEmail="<gmail>"
+flyctl deploy
+```
+
+### 4) Production hardening note
+
+If you are still in temporary test mode with `[AllowAnonymous]` on automation APIs, switch back to `[Authorize]` before public deployment.
