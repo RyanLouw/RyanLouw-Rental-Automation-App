@@ -344,6 +344,22 @@ public sealed class AutomationService : IAutomationService
         };
     }
 
+    public async Task<SendTenantEmailResponseDto> SendTenantEmailAsync(SendTenantEmailRequestDto request)
+    {
+        var result = await _propertyDashboardManager.SendTenantEmailAsync(new SendTenantEmailRequestVm
+        {
+            PropertyId = request.PropertyId,
+            StatementMonth = request.StatementMonth
+        });
+
+        return new SendTenantEmailResponseDto
+        {
+            Success = result.Success,
+            Message = result.Message,
+            RecipientEmail = result.RecipientEmail
+        };
+    }
+
     public async Task<AutomationCommandResponseDto> SavePaymentsAsync(SavePaymentsRequestDto request)
     {
         var result = await _propertyDashboardManager.SavePaymentsAsync(new SavePaymentsRequestVm

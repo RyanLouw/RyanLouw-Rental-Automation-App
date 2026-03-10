@@ -124,6 +124,22 @@ public sealed class PaymentCandidateResponseDto
     public string Description { get; init; } = string.Empty;
 }
 
+
+public sealed class SendTenantEmailRequestDto
+{
+    [Range(1, int.MaxValue)]
+    public int PropertyId { get; init; }
+
+    public DateTime? StatementMonth { get; init; }
+}
+
+public sealed class SendTenantEmailResponseDto
+{
+    public bool Success { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public string RecipientEmail { get; init; } = string.Empty;
+}
+
 public sealed class AutomationCommandResponseDto
 {
     public bool Success { get; init; }

@@ -174,3 +174,15 @@ The Swagger configuration now includes only routes under `api/*`, so the automat
 
 Automation API endpoints are currently marked with `[AllowAnonymous]` so you can test without logging in.
 When you are done testing, switch the controller back to `[Authorize]` before production use.
+
+
+### Send statement email via automation API
+
+You can now trigger statement emails via API:
+
+- `POST /api/automation/emails/send`
+- JSON body:
+  - `propertyId` (required)
+  - `statementMonth` (optional, e.g. `2026-03-01`)
+
+Returns success/failure and the recipient email used.

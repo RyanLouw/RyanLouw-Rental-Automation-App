@@ -11,5 +11,6 @@ public interface IAutomationService
     Task<AutomationCommandResponseDto> SaveRentAsync(SaveRentRequestDto request);
     Task<AutomationCommandResponseDto> SaveServicesAsync(SaveServicesRequestDto request);
     Task<AutomationCommandResponseDto> SavePaymentsAsync(SavePaymentsRequestDto request);
+    Task<SendTenantEmailResponseDto> SendTenantEmailAsync(SendTenantEmailRequestDto request);
     Task<ProcessPdfAndSaveResponseDto> ProcessPdfAndSaveAsync(IFormFile? file, ProcessPdfAndSaveRequestDto request);
 }

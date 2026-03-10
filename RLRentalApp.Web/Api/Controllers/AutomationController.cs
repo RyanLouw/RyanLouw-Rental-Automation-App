@@ -96,6 +96,30 @@ public sealed class AutomationController : ControllerBase
         return await ExecuteCommandAsync(() => _automationService.SaveServicesAsync(request));
     }
 
+    [HttpPost("emails/send")]
+    [ProducesResponseType(typeof(SendTenantEmailResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SendTenantEmailResponseDto), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SendTenantEmail([FromBody] SendTenantEmailRequestDto request)
+    {
+        try
+        {
+            var result = await _automationService.SendTenantEmailAsync(request);
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected automation API error while sending tenant email.");
+            return Problem(
+                detail: "An unexpected error occurred while sending tenant email.",
+                statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
     [HttpPost("payments")]
     [ProducesResponseType(typeof(AutomationCommandResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
