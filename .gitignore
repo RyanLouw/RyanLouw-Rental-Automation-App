@@ -56,3 +56,8 @@ nunit-*.xml
 
 # Local app secrets
 **/appsettings.Local.json
+
+# Environment files
+.env
+.env.*
+!.env.example

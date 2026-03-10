@@ -186,3 +186,45 @@ You can now trigger statement emails via API:
   - `statementMonth` (optional, e.g. `2026-03-01`)
 
 Returns success/failure and the recipient email used.
+
+
+## Deploying to Fly.io or Render
+
+This repo now includes deployment starter files:
+
+- `Dockerfile`
+- `.dockerignore`
+- `.env.example`
+- `fly.toml`
+- `render.yaml`
+
+### 1) Configure environment variables
+
+Copy `.env.example` and set real values. In Fly/Render, add these in the platform dashboard (do not commit secrets):
+
+- `ConnectionStrings__rentaldb`
+- `GmailSmtp__Username`
+- `GmailSmtp__AppPassword`
+- `GmailSmtp__FromEmail`
+- plus other `GmailSmtp__*` values as needed.
+
+### 2) Deploy on Render
+
+- Create a **Web Service** from this repo.
+- Use Docker runtime (or `render.yaml` blueprint deploy).
+- Ensure `ConnectionStrings__rentaldb` points to your hosted Postgres.
+
+### 3) Deploy on Fly.io
+
+- Create app and secrets, then deploy:
+
+```bash
+flyctl launch --no-deploy
+flyctl secrets set ConnectionStrings__rentaldb="<postgres-connection-string>"
+flyctl secrets set GmailSmtp__Username="<gmail>" GmailSmtp__AppPassword="<app-password>" GmailSmtp__FromEmail="<gmail>"
+flyctl deploy
+```
+
+### 4) Production hardening note
+
+If you are still in temporary test mode with `[AllowAnonymous]` on automation APIs, switch back to `[Authorize]` before public deployment.
