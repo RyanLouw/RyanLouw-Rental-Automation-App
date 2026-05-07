@@ -194,17 +194,26 @@ public class AdminController : Controller
 
     private static async Task<int> InsertTenantAsync(DbConnection connection, DbTransaction tx, string fullName, string email, string phone, string paymentReference, decimal openingOutstanding, decimal depositHeld, string notes)
     {
+        var hasPaymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection, tx);
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText = @"
-            INSERT INTO tenant (full_name, email, phone, payment_reference, notes, is_active, current_amount_outstanding, deposit_held)
-            VALUES (@fullName, @email, @phone, @paymentReference, @notes, TRUE, @openingOutstanding, @depositHeld)
-            RETURNING id;";
+        cmd.CommandText = hasPaymentReferenceColumn
+            ? @"
+                INSERT INTO tenant (full_name, email, phone, payment_reference, notes, is_active, current_amount_outstanding, deposit_held)
+                VALUES (@fullName, @email, @phone, @paymentReference, @notes, TRUE, @openingOutstanding, @depositHeld)
+                RETURNING id;"
+            : @"
+                INSERT INTO tenant (full_name, email, phone, notes, is_active, current_amount_outstanding, deposit_held)
+                VALUES (@fullName, @email, @phone, @notes, TRUE, @openingOutstanding, @depositHeld)
+                RETURNING id;";
 
         AddParameter(cmd, "@fullName", fullName.Trim());
         AddParameter(cmd, "@email", email.Trim());
         AddParameter(cmd, "@phone", phone.Trim());
-        AddParameter(cmd, "@paymentReference", paymentReference.Trim());
+        if (hasPaymentReferenceColumn)
+        {
+            AddParameter(cmd, "@paymentReference", paymentReference.Trim());
+        }
         AddParameter(cmd, "@notes", notes);
         AddParameter(cmd, "@openingOutstanding", openingOutstanding);
         AddParameter(cmd, "@depositHeld", depositHeld);
@@ -291,6 +300,24 @@ public class AdminController : Controller
         AddParameter(cmd, "@sourceId", sourceId);
 
         await cmd.ExecuteNonQueryAsync();
+    }
+
+
+    private static async Task<bool> HasTenantPaymentReferenceColumnAsync(DbConnection connection, DbTransaction tx)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'tenant'
+                  AND column_name = 'payment_reference'
+            );";
+
+        var value = await cmd.ExecuteScalarAsync();
+        return value is bool exists && exists;
     }
 
     private static void AddParameter(DbCommand cmd, string name, object? value)

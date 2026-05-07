@@ -83,9 +83,10 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
+        var paymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection);
         await using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), COALESCE(t.payment_reference, ''), l.start_date
+        cmd.CommandText = $@"
+            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference, l.start_date
             FROM lease l
             INNER JOIN tenant t ON t.id = l.tenant_id
             WHERE l.property_id = @propertyId AND l.end_date IS NULL
@@ -121,9 +122,10 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
+        var paymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection);
         await using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            SELECT p.id, p.name, l.id, l.tenant_id, t.full_name, COALESCE(t.payment_reference, ''), rr.amount
+        cmd.CommandText = $@"
+            SELECT p.id, p.name, l.id, l.tenant_id, t.full_name, {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference, rr.amount
             FROM lease l
             INNER JOIN property p ON p.id = l.property_id
             INNER JOIN tenant t ON t.id = l.tenant_id
@@ -650,6 +652,23 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         AddParameter(cmd, "@sourceId", sourceId);
 
         await cmd.ExecuteNonQueryAsync();
+    }
+
+
+    private static async Task<bool> HasTenantPaymentReferenceColumnAsync(DbConnection connection)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'tenant'
+                  AND column_name = 'payment_reference'
+            );";
+
+        var value = await cmd.ExecuteScalarAsync();
+        return value is bool exists && exists;
     }
 
     private static void AddParameter(DbCommand cmd, string name, object? value)
