@@ -5,8 +5,8 @@ var postgres = builder.AddPostgres("rentalapp-postgres")
     .WithLifetime(ContainerLifetime.Persistent)
     .WithDataVolume("rentalapp-postgres");
 
-var liveDb = postgres.AddDatabase("rentaldb_live");
-var demoDb = postgres.AddDatabase("rentaldb_demo");
+var liveDb = postgres.AddDatabase("rentaldb-live", "rentaldb_live");
+var demoDb = postgres.AddDatabase("rentaldb-demo", "rentaldb_demo");
 
 // Migration project (runs first). In Demo mode it migrates live + demo,
 // resets demo from live, then applies demo-only seed migrations.

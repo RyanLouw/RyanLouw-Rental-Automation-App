@@ -82,7 +82,7 @@ static string GetRentalConnectionString(IConfiguration configuration)
 
     if (string.IsNullOrWhiteSpace(connectionStringName))
     {
-        connectionStringName = mode.Equals("Live", StringComparison.OrdinalIgnoreCase) ? "rentaldb_live" : "rentaldb_demo";
+        connectionStringName = mode.Equals("Live", StringComparison.OrdinalIgnoreCase) ? "rentaldb-live" : "rentaldb-demo";
     }
 
     var connectionString = configuration.GetConnectionString(connectionStringName);

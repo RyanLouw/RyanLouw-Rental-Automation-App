@@ -88,7 +88,7 @@ public static class Program
         var connectionStringName = section["ConnectionStringName"];
         if (string.IsNullOrWhiteSpace(connectionStringName))
         {
-            connectionStringName = mode.Equals("Live", StringComparison.OrdinalIgnoreCase) ? "rentaldb_live" : "rentaldb_demo";
+            connectionStringName = mode.Equals("Live", StringComparison.OrdinalIgnoreCase) ? "rentaldb-live" : "rentaldb-demo";
         }
 
         if (string.IsNullOrWhiteSpace(config.GetConnectionString(connectionStringName)) && !string.IsNullOrWhiteSpace(config.GetConnectionString("rentaldb")))
@@ -129,7 +129,7 @@ public static class Program
         {
             throw new InvalidOperationException(
                 $"Connection string '{connectionStringName}' not found. " +
-                "In Aspire, this must match the database resource name (for example 'rentaldb_demo' or 'rentaldb_live').");
+                "In Aspire, this must match the database resource name (for example 'rentaldb-demo' or 'rentaldb-live').");
         }
 
         builder.Services
