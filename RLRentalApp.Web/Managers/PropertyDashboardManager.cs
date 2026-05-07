@@ -908,7 +908,8 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             var reference = renter.PaymentReference?.Trim() ?? string.Empty;
             var payments = reference.Length >= 3 ? ParsePaymentRows(text, reference) : new List<PaymentCandidateVm>();
             var paidTotal = payments.Sum(x => x.Amount);
-            var expectedAmount = renter.LatestRent;
+            var expectedAmount = renter.ExpectedMonthlyTotal;
+            var rentAmount = renter.LatestRent;
             var warning = string.Empty;
 
             if (string.IsNullOrWhiteSpace(reference))
@@ -919,9 +920,13 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             {
                 warning = "No payment found in the bank PDF for this renter.";
             }
+            else if (rentAmount.HasValue && paidTotal < rentAmount.Value)
+            {
+                warning = $"Paid {FormatMoney(paidTotal)}, which is less than rent {FormatMoney(rentAmount.Value)}.";
+            }
             else if (expectedAmount.HasValue && paidTotal < expectedAmount.Value)
             {
-                warning = $"Paid {FormatMoney(paidTotal)}, expected {FormatMoney(expectedAmount.Value)}.";
+                warning = $"Paid rent but not all services: paid {FormatMoney(paidTotal)}, expected rent plus services {FormatMoney(expectedAmount.Value)}.";
             }
 
             matches.Add(new RenterPaymentMatchVm

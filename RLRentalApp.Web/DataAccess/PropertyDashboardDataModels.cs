@@ -54,4 +54,6 @@ public sealed class ActiveLeasePaymentMatchDataModel
     public string TenantName { get; set; } = string.Empty;
     public string PaymentReference { get; set; } = string.Empty;
     public decimal? LatestRent { get; set; }
+    public decimal CurrentMonthServiceTotal { get; set; }
+    public decimal? ExpectedMonthlyTotal => LatestRent.HasValue ? LatestRent.Value + CurrentMonthServiceTotal : null;
 }

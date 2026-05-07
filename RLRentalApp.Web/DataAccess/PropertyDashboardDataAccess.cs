@@ -125,7 +125,14 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         var paymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection);
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = $@"
-            SELECT p.id, p.name, l.id, l.tenant_id, t.full_name, {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference, rr.amount
+            SELECT p.id,
+                   p.name,
+                   l.id,
+                   l.tenant_id,
+                   t.full_name,
+                   {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference,
+                   rr.amount,
+                   COALESCE(svc.current_month_services, 0) AS current_month_services
             FROM lease l
             INNER JOIN property p ON p.id = l.property_id
             INNER JOIN tenant t ON t.id = l.tenant_id
@@ -137,6 +144,12 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
                 ORDER BY effective_from DESC
                 LIMIT 1
             ) rr ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT SUM(amount) AS current_month_services
+                FROM service_charge
+                WHERE lease_id = l.id
+                  AND billing_period = date_trunc('month', @asOfDate)::date
+            ) svc ON TRUE
             WHERE l.end_date IS NULL
               AND p.is_active = TRUE
             ORDER BY p.name;";
@@ -156,7 +169,8 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
                 TenantId = reader.GetInt32(3),
                 TenantName = reader.GetString(4),
                 PaymentReference = reader.GetString(5),
-                LatestRent = reader.IsDBNull(6) ? null : reader.GetDecimal(6)
+                LatestRent = reader.IsDBNull(6) ? null : reader.GetDecimal(6),
+                CurrentMonthServiceTotal = reader.IsDBNull(7) ? 0m : reader.GetDecimal(7)
             });
         }
 
