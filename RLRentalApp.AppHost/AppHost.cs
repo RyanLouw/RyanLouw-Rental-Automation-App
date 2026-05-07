@@ -19,11 +19,11 @@ var migrations = builder.AddProject<Projects.RLRentalApp_Migrations>("database-m
     .WaitFor(demoDb);
 
 // Web project. Switch DatabaseMode to Live when you want the app to use live data.
+// The migration project is a one-shot resource, so the web app waits for it to complete successfully.
 builder.AddProject<Projects.RLRentalApp_Web>("web")
-    .WithExplicitStart()
     .WithEnvironment("DatabaseMode", "Demo")
     .WithReference(liveDb)
     .WithReference(demoDb)
-    .WaitFor(migrations);
+    .WaitForCompletion(migrations);
 
 await builder.Build().RunAsync();
