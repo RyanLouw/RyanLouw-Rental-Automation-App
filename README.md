@@ -119,31 +119,6 @@ For production, use environment variables or a managed secret store (Azure Key V
 
 ### Will this change `appsettings` or the demo?
 
-- The app still reads `appsettings.json`, `appsettings.Development.json`, and optional `appsettings.Local.json`.
+- The app still reads `appsettings.json` and `appsettings.Development.json` exactly as before.
 - `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
-- The default database mode is now `Demo`, so development work targets the demo database unless you set `DatabaseMode=Live`.
-
-
-## Demo vs live database mode
-
-The app now supports separate demo and live database profiles.
-
-- `DatabaseMode=Demo` makes the web app use `ConnectionStrings:rentaldb-demo`.
-- `DatabaseMode=Live` makes the web app use `ConnectionStrings:rentaldb-live`.
-- In the Aspire AppHost, both databases are created in the same Postgres container and the default mode is Demo.
-- The migration runner defaults to Demo mode. In Demo mode it migrates live, migrates demo, truncates/copies matching tables from live into demo, then runs the idempotent demo seed scripts directly. The seeds are not FluentMigrator versioned, so they can run after live schema version 7 without tripping over the older demo seed script number (`0003.sql`).
-- Live mode runs only live/rental migrations and skips demo seed scripts.
-
-Example local override:
-
-```json
-{
-  "DatabaseMode": "Demo",
-  "ConnectionStrings": {
-    "rentaldb-live": "Host=localhost;Database=rlrental_live;Username=postgres;Password=...",
-    "rentaldb-demo": "Host=localhost;Database=rlrental_demo;Username=postgres;Password=..."
-  }
-}
-```
-
-Use environment variable `DatabaseMode=Live` when you intentionally want the web app or migration runner to target live data.
+- Demo/default behavior is unchanged unless you add local secrets or environment variables.
