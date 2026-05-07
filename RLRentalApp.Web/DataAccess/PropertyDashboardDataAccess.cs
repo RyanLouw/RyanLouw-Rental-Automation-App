@@ -85,7 +85,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), l.start_date
+            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), COALESCE(t.payment_reference, ''), l.start_date
             FROM lease l
             INNER JOIN tenant t ON t.id = l.tenant_id
             WHERE l.property_id = @propertyId AND l.end_date IS NULL
@@ -110,8 +110,55 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             TenantId = reader.GetInt32(1),
             TenantName = reader.GetString(2),
             TenantEmail = reader.GetString(3),
-            StartDate = reader.GetDateTime(4)
+            PaymentReference = reader.GetString(4),
+            StartDate = reader.GetDateTime(5)
         };
+    }
+
+
+    public async Task<List<ActiveLeasePaymentMatchDataModel>> LoadActiveLeasesForPaymentMatchingAsync(DateTime asOfDate)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT p.id, p.name, l.id, l.tenant_id, t.full_name, COALESCE(t.payment_reference, ''), rr.amount
+            FROM lease l
+            INNER JOIN property p ON p.id = l.property_id
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN LATERAL (
+                SELECT amount
+                FROM rent_rate
+                WHERE lease_id = l.id
+                  AND effective_from <= @asOfDate
+                ORDER BY effective_from DESC
+                LIMIT 1
+            ) rr ON TRUE
+            WHERE l.end_date IS NULL
+              AND p.is_active = TRUE
+            ORDER BY p.name;";
+
+        AddParameter(cmd, "@asOfDate", asOfDate.Date);
+
+        var result = new List<ActiveLeasePaymentMatchDataModel>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            result.Add(new ActiveLeasePaymentMatchDataModel
+            {
+                PropertyId = reader.GetInt32(0),
+                PropertyName = reader.GetString(1),
+                LeaseId = reader.GetInt32(2),
+                TenantId = reader.GetInt32(3),
+                TenantName = reader.GetString(4),
+                PaymentReference = reader.GetString(5),
+                LatestRent = reader.IsDBNull(6) ? null : reader.GetDecimal(6)
+            });
+        }
+
+        return result;
     }
 
     public async Task<decimal> LoadOpeningOutstandingAsync(int tenantId)

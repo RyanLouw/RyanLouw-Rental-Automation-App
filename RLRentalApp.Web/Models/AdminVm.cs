@@ -26,6 +26,7 @@ public class OnboardExistingPropertyRequestVm
     public string TenantFullName { get; set; } = string.Empty;
     public string TenantEmail { get; set; } = string.Empty;
     public string TenantPhone { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
     public DateTime LeaseStartDate { get; set; }
 
     public decimal OpeningOutstanding { get; set; }
@@ -39,6 +40,7 @@ public class AddTenantToPropertyRequestVm
     public string TenantFullName { get; set; } = string.Empty;
     public string TenantEmail { get; set; } = string.Empty;
     public string TenantPhone { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
     public DateTime LeaseStartDate { get; set; }
     public decimal OpeningOutstanding { get; set; }
     public decimal DepositRequired { get; set; }

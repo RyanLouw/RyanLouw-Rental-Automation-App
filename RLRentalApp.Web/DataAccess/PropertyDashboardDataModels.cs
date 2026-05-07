@@ -6,6 +6,7 @@ public sealed class ActiveLeaseDataModel
     public int TenantId { get; set; }
     public string TenantName { get; set; } = string.Empty;
     public string TenantEmail { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
     public DateTime StartDate { get; set; }
 }
 
@@ -41,4 +42,16 @@ public sealed class PaymentInsertDataModel
     public decimal Amount { get; set; }
     public string Reference { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+}
+
+
+public sealed class ActiveLeasePaymentMatchDataModel
+{
+    public int PropertyId { get; set; }
+    public string PropertyName { get; set; } = string.Empty;
+    public int LeaseId { get; set; }
+    public int TenantId { get; set; }
+    public string TenantName { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
+    public decimal? LatestRent { get; set; }
 }

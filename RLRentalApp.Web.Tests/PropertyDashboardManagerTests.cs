@@ -175,6 +175,7 @@ public class PropertyDashboardManagerTests
         public Task<List<PropertyOptionVm>> LoadPropertiesAsync() => Task.FromResult(new List<PropertyOptionVm>());
         public Task<PropertyOptionVm?> LoadPropertyAsync(int propertyId) => Task.FromResult(Property);
         public Task<ActiveLeaseDataModel?> LoadActiveLeaseAsync(int propertyId) => Task.FromResult(ActiveLease);
+        public Task<List<ActiveLeasePaymentMatchDataModel>> LoadActiveLeasesForPaymentMatchingAsync(DateTime asOfDate) => Task.FromResult(new List<ActiveLeasePaymentMatchDataModel>());
         public Task<decimal> LoadOpeningOutstandingAsync(int tenantId) => Task.FromResult(OpeningOutstanding);
         public Task<decimal?> LoadLatestRentAsync(int leaseId, DateTime asOfDate) => Task.FromResult(LatestRent);
         public Task<StatementSnapshotDataModel> LoadStatementSnapshotAsync(int leaseId, DateTime monthStart) => Task.FromResult(Snapshot);

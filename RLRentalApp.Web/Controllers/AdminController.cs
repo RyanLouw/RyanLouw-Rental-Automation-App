@@ -81,7 +81,7 @@ public class AdminController : Controller
         try
         {
             var propertyId = await InsertPropertyAsync(connection, tx, request.PropertyName, request.PropertyAddressLine1, request.PropertyAddressLine2, request.PropertyNotes, true);
-            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.OpeningOutstanding, 0m, "Onboarded as existing property takeover");
+            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.PaymentReference, request.OpeningOutstanding, 0m, "Onboarded as existing property takeover");
             var leaseId = await InsertLeaseAsync(connection, tx, propertyId, tenantId, request.LeaseStartDate, "Onboarded from admin");
             var rentRateId = await InsertRentRateAsync(connection, tx, leaseId, request.LeaseStartDate, request.InitialRent, "Initial rent on takeover");
             await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rent for statement month", request.InitialRent, "rent_rate", rentRateId);
@@ -124,7 +124,7 @@ public class AdminController : Controller
         try
         {
             await CloseActiveLeaseAsync(connection, tx, request.PropertyId, request.LeaseStartDate);
-            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.OpeningOutstanding, 0m, "Added as new tenant to existing property");
+            var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.PaymentReference, request.OpeningOutstanding, 0m, "Added as new tenant to existing property");
             var leaseId = await InsertLeaseAsync(connection, tx, request.PropertyId, tenantId, request.LeaseStartDate, "Tenant change from admin");
             var rentRateId = await InsertRentRateAsync(connection, tx, leaseId, request.LeaseStartDate, request.InitialRent, "Initial rent for new tenant");
             await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rent for statement month", request.InitialRent, "rent_rate", rentRateId);
@@ -192,18 +192,19 @@ public class AdminController : Controller
         return Convert.ToInt32(id);
     }
 
-    private static async Task<int> InsertTenantAsync(DbConnection connection, DbTransaction tx, string fullName, string email, string phone, decimal openingOutstanding, decimal depositHeld, string notes)
+    private static async Task<int> InsertTenantAsync(DbConnection connection, DbTransaction tx, string fullName, string email, string phone, string paymentReference, decimal openingOutstanding, decimal depositHeld, string notes)
     {
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
-            INSERT INTO tenant (full_name, email, phone, notes, is_active, current_amount_outstanding, deposit_held)
-            VALUES (@fullName, @email, @phone, @notes, TRUE, @openingOutstanding, @depositHeld)
+            INSERT INTO tenant (full_name, email, phone, payment_reference, notes, is_active, current_amount_outstanding, deposit_held)
+            VALUES (@fullName, @email, @phone, @paymentReference, @notes, TRUE, @openingOutstanding, @depositHeld)
             RETURNING id;";
 
         AddParameter(cmd, "@fullName", fullName.Trim());
         AddParameter(cmd, "@email", email.Trim());
         AddParameter(cmd, "@phone", phone.Trim());
+        AddParameter(cmd, "@paymentReference", paymentReference.Trim());
         AddParameter(cmd, "@notes", notes);
         AddParameter(cmd, "@openingOutstanding", openingOutstanding);
         AddParameter(cmd, "@depositHeld", depositHeld);
