@@ -7,6 +7,6 @@ ON tenant(payment_reference);
 -- Backfill seeded/default tenants so the all-renter bank PDF matching has
 -- a reference value immediately after this migration is applied.
 UPDATE tenant
-SET payment_reference = 'Alex Smith'
-WHERE full_name = 'Demo Tenant - Alex Smith'
+SET payment_reference = 'Heino Huur'
+WHERE full_name IN ('Default Tenant', 'Demo Tenant - Alex Smith')
   AND COALESCE(payment_reference, '') = '';
