@@ -165,6 +165,16 @@ public static class Program
             throw new InvalidOperationException("Both source and target connection strings are required to reset the demo database.");
         }
 
+        var sourceBuilder = new NpgsqlConnectionStringBuilder(sourceConnectionString);
+        var targetBuilder = new NpgsqlConnectionStringBuilder(targetConnectionString);
+        if (string.Equals(sourceBuilder.Host, targetBuilder.Host, StringComparison.OrdinalIgnoreCase)
+            && sourceBuilder.Port == targetBuilder.Port
+            && string.Equals(sourceBuilder.Database, targetBuilder.Database, StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("Skipping demo reset because source '{Source}' and target '{Target}' resolve to the same database.", sourceConnectionStringName, targetConnectionStringName);
+            return;
+        }
+
         Log.Warning("Resetting demo database '{Target}' from live/source database '{Source}'. Demo data will be truncated first.", targetConnectionStringName, sourceConnectionStringName);
 
         using var source = new NpgsqlConnection(sourceConnectionString);
@@ -185,7 +195,7 @@ public static class Program
             truncate.ExecuteNonQuery();
         }
 
-        foreach (var table in tables)
+        foreach (var table in SortTablesForCopy(target, tables))
         {
             var columns = LoadCommonColumns(source, target, table);
             if (columns.Count == 0)
@@ -198,6 +208,71 @@ public static class Program
         }
 
         Log.Information("Finished resetting demo database '{Target}' from '{Source}'.", targetConnectionStringName, sourceConnectionStringName);
+    }
+
+
+    private static List<string> SortTablesForCopy(NpgsqlConnection target, List<string> tables)
+    {
+        var remaining = tables.ToHashSet(StringComparer.Ordinal);
+        var dependencies = LoadTableDependencies(target, remaining);
+        var ordered = new List<string>();
+
+        while (remaining.Count > 0)
+        {
+            var ready = remaining
+                .Where(table => dependencies[table].All(dependency => !remaining.Contains(dependency)))
+                .OrderBy(table => table, StringComparer.Ordinal)
+                .ToList();
+
+            if (ready.Count == 0)
+            {
+                // Circular foreign keys are not expected in this schema, but keep the
+                // reset deterministic rather than looping forever if one is added later.
+                ready = remaining.OrderBy(table => table, StringComparer.Ordinal).Take(1).ToList();
+            }
+
+            foreach (var table in ready)
+            {
+                ordered.Add(table);
+                remaining.Remove(table);
+            }
+        }
+
+        return ordered;
+    }
+
+    private static Dictionary<string, HashSet<string>> LoadTableDependencies(NpgsqlConnection connection, HashSet<string> tables)
+    {
+        var dependencies = tables.ToDictionary(
+            table => table,
+            _ => new HashSet<string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT child.relname AS child_table,
+                   parent.relname AS parent_table
+            FROM pg_constraint c
+            JOIN pg_class child ON child.oid = c.conrelid
+            JOIN pg_namespace child_ns ON child_ns.oid = child.relnamespace
+            JOIN pg_class parent ON parent.oid = c.confrelid
+            JOIN pg_namespace parent_ns ON parent_ns.oid = parent.relnamespace
+            WHERE c.contype = 'f'
+              AND child_ns.nspname = 'public'
+              AND parent_ns.nspname = 'public';";
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var child = reader.GetString(0);
+            var parent = reader.GetString(1);
+            if (dependencies.TryGetValue(child, out var childDependencies) && tables.Contains(parent))
+            {
+                childDependencies.Add(parent);
+            }
+        }
+
+        return dependencies;
     }
 
     private static List<string> LoadCommonTables(NpgsqlConnection source, NpgsqlConnection target)
