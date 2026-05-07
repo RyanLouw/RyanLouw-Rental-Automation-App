@@ -131,8 +131,8 @@ The app now supports separate demo and live database profiles.
 - `DatabaseMode=Demo` makes the web app use `ConnectionStrings:rentaldb-demo`.
 - `DatabaseMode=Live` makes the web app use `ConnectionStrings:rentaldb-live`.
 - In the Aspire AppHost, both databases are created in the same Postgres container and the default mode is Demo.
-- The migration runner defaults to Demo mode. In Demo mode it migrates live, migrates demo, truncates/copies matching tables from live into demo, then applies demo-only seed migrations.
-- Live mode runs only live/rental migrations and skips demo seed migrations.
+- The migration runner defaults to Demo mode. In Demo mode it migrates live, migrates demo, truncates/copies matching tables from live into demo, then runs the idempotent demo seed scripts directly. The seeds are not FluentMigrator versioned, so they can run after live schema version 7 without tripping over the older demo seed script number (`0003.sql`).
+- Live mode runs only live/rental migrations and skips demo seed scripts.
 
 Example local override:
 

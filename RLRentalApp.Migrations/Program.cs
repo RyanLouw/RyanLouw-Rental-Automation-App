@@ -42,7 +42,7 @@ public static class Program
                 RunMigrations(configSettings, profile.CloneFromConnectionStringName, TagNames.Rental);
                 RunMigrations(configSettings, profile.ConnectionStringName, TagNames.Rental);
                 ResetDatabaseFromSource(configSettings, profile.CloneFromConnectionStringName, profile.ConnectionStringName);
-                RunMigrations(configSettings, profile.ConnectionStringName, TagNames.Demo);
+                SeedDemoData(configSettings, profile.ConnectionStringName);
             }
             else
             {
@@ -50,7 +50,7 @@ public static class Program
 
                 if (profile.Name.Equals("Demo", StringComparison.OrdinalIgnoreCase))
                 {
-                    RunMigrations(configSettings, profile.ConnectionStringName, TagNames.Demo);
+                    SeedDemoData(configSettings, profile.ConnectionStringName);
                 }
             }
 
@@ -78,6 +78,44 @@ public static class Program
         MigrateUp(scope.ServiceProvider);
 
         Log.Information("Finished migrations for {ConnectionStringName} ({Tag})", connectionStringName, tag);
+    }
+
+
+    private static void SeedDemoData(IConfigurationRoot configSettings, string connectionStringName)
+    {
+        Log.Information("Seeding demo data for ConnectionStringName: {ConnectionStringName}", connectionStringName);
+
+        ExecuteSqlScript(configSettings, connectionStringName, @"Migrations\Scripts\0003.sql");
+        ExecuteSqlScript(configSettings, connectionStringName, @"Migrations\Scripts\0008.sql");
+
+        Log.Information("Finished seeding demo data for {ConnectionStringName}", connectionStringName);
+    }
+
+    private static void ExecuteSqlScript(IConfiguration configSettings, string connectionStringName, string relativeScriptPath)
+    {
+        var connectionString = configSettings.GetConnectionString(connectionStringName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException($"Connection string '{connectionStringName}' not found while running demo seed script '{relativeScriptPath}'.");
+        }
+
+        var scriptPath = Path.Combine(AppContext.BaseDirectory, relativeScriptPath);
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException($"Demo seed script '{relativeScriptPath}' was not found.", scriptPath);
+        }
+
+        using var connection = new NpgsqlConnection(connectionString);
+        connection.Open();
+
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = File.ReadAllText(scriptPath);
+        command.ExecuteNonQuery();
+        transaction.Commit();
+
+        Log.Information("Executed demo seed script {ScriptPath}", relativeScriptPath);
     }
 
     private static DatabaseProfile ResolveDatabaseProfile(IConfiguration config)
