@@ -5,18 +5,25 @@ var postgres = builder.AddPostgres("rentalapp-postgres")
     .WithLifetime(ContainerLifetime.Persistent)
     .WithDataVolume("rentalapp-postgres");
 
-var rentalDb = postgres.AddDatabase("rentaldb");
+var liveDb = postgres.AddDatabase("rentaldb_live");
+var demoDb = postgres.AddDatabase("rentaldb_demo");
 
-// Migration project (runs first)
+// Migration project (runs first). In Demo mode it migrates live + demo,
+// resets demo from live, then applies demo-only seed migrations.
 var migrations = builder.AddProject<Projects.RLRentalApp_Migrations>("database-migrations")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
-    .WithReference(rentalDb)
-    .WaitFor(rentalDb);
+    .WithEnvironment("DatabaseMode", "Demo")
+    .WithReference(liveDb)
+    .WithReference(demoDb)
+    .WaitFor(liveDb)
+    .WaitFor(demoDb);
 
-// Web project
+// Web project. Switch DatabaseMode to Live when you want the app to use live data.
 builder.AddProject<Projects.RLRentalApp_Web>("web")
     .WithExplicitStart()
-    .WithReference(rentalDb)
+    .WithEnvironment("DatabaseMode", "Demo")
+    .WithReference(liveDb)
+    .WithReference(demoDb)
     .WaitFor(migrations);
 
 await builder.Build().RunAsync();

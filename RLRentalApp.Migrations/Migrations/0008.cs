@@ -2,7 +2,7 @@ using FluentMigrator;
 
 namespace Database.Migrations;
 
-[Tags(TagNames.Rental)]
+[Tags(TagNames.Demo)]
 [Migration(0008)]
 public class _0008_SeedPaymentMatchingDemoProperties : Migration
 {

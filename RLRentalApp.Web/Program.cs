@@ -25,7 +25,7 @@ builder.Services.AddControllersWithViews(options =>
 
 // Identity DB (Postgres)
 builder.Services.AddDbContext<AuthDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("rentaldb")));
+    options.UseNpgsql(GetRentalConnectionString(builder.Configuration)));
 
 builder.Services.AddScoped<IPropertyDashboardDataAccess, PropertyDashboardDataAccess>();
 builder.Services.Configure<GmailSmtpOptions>(builder.Configuration.GetSection(GmailSmtpOptions.SectionName));
@@ -73,3 +73,25 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}");
 
 app.Run();
+
+
+static string GetRentalConnectionString(IConfiguration configuration)
+{
+    var mode = configuration["DatabaseMode"] ?? configuration["Database:Mode"] ?? "Demo";
+    var connectionStringName = configuration[$"DatabaseProfiles:{mode}:ConnectionStringName"];
+
+    if (string.IsNullOrWhiteSpace(connectionStringName))
+    {
+        connectionStringName = mode.Equals("Live", StringComparison.OrdinalIgnoreCase) ? "rentaldb_live" : "rentaldb_demo";
+    }
+
+    var connectionString = configuration.GetConnectionString(connectionStringName);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        connectionString = configuration.GetConnectionString("rentaldb");
+    }
+
+    return string.IsNullOrWhiteSpace(connectionString)
+        ? throw new InvalidOperationException($"No rental database connection string found for mode '{mode}'.")
+        : connectionString;
+}

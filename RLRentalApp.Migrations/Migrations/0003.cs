@@ -2,7 +2,7 @@
 
 namespace Database.Migrations;
 
-[Tags(TagNames.Rental)]
+[Tags(TagNames.Demo)]
 [Migration(0003)]
 public class _0003_SeedDummyData : Migration
 {
