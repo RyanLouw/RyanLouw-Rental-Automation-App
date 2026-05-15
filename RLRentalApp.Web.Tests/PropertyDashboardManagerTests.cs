@@ -43,7 +43,7 @@ public class PropertyDashboardManagerTests
         var dataAccess = new FakePropertyDashboardDataAccess
         {
             Property = new PropertyOptionVm { Id = 8, Name = "Flat", AddressLine1 = "45 Oak", IsActive = true },
-            ActiveLease = new ActiveLeaseDataModel { LeaseId = 12, TenantId = 16, TenantName = "Alice", StartDate = new DateTime(2023, 6, 1) },
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 12, TenantId = 16, TenantName = "Alice", PaymentReference = "ALICE-UNIT-8", StartDate = new DateTime(2023, 6, 1) },
             OpeningOutstanding = 1000m,
             AmountBeforeDate = 400m,
             Snapshot = new StatementSnapshotDataModel { AmountThroughMonth = 900m }
@@ -71,6 +71,7 @@ public class PropertyDashboardManagerTests
         Assert.NotNull(statement);
         Assert.Equal(1400m, statement!.OpeningOutstanding);
         Assert.Equal(1900m, statement.CurrentBalance);
+        Assert.Equal("ALICE-UNIT-8", statement.PaymentReference);
 
         Assert.Equal(new DateTime(2025, 1, 1), dataAccess.RequestedStatementMonths[0]);
         Assert.Equal(new DateTime(2025, 2, 1), dataAccess.RequestedStatementMonths[1]);

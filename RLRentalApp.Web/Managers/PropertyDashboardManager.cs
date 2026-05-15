@@ -37,6 +37,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         public const string CompanyLine2 = "Investment";
         public const string CompanyLine3 = "Properties";
         public const string HeaderTitle = "Statement";
+        public const string LogoRelativePath = "wwwroot/images/statement-logo.png";
         public const string OfficeAddressLine1 = "No 9 Waterberg straat";
         public const string OfficeAddressLine2 = "Noordheuwel X6";
         public const string OfficeAddressLine3 = "Krugersdorp";
@@ -158,6 +159,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             PropertyName = property.Name,
             PropertyAddress = BuildFullAddress(property),
             TenantName = activeLease.TenantName,
+            PaymentReference = activeLease.PaymentReference,
             OpeningOutstanding = statementWindowOpening,
             CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth,
             StatementMonth = monthStart,
@@ -191,39 +193,61 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 {
                     column.Spacing(16);
 
-                    column.Item().Row(row =>
+                    column.Item().BorderBottom(2).BorderColor(Colors.Blue.Darken2).PaddingBottom(12).Row(row =>
                     {
                         row.RelativeItem().Column(left =>
                         {
-                            left.Item().Text(StatementPdfConstants.CompanyLine1).SemiBold().FontSize(20);
-                            left.Item().Text(StatementPdfConstants.CompanyLine2).SemiBold().FontSize(20);
-                            left.Item().Text(StatementPdfConstants.CompanyLine3).SemiBold().FontSize(20);
+                            left.Item().Text(StatementPdfConstants.CompanyLine1).SemiBold().FontSize(20).FontColor(Colors.Blue.Darken3);
+                            left.Item().Text(StatementPdfConstants.CompanyLine2).SemiBold().FontSize(20).FontColor(Colors.Blue.Darken3);
+                            left.Item().Text(StatementPdfConstants.CompanyLine3).SemiBold().FontSize(20).FontColor(Colors.Blue.Darken3);
                         });
 
-                        row.ConstantItem(140).AlignCenter().Text("✦").FontSize(38).FontColor(Colors.Grey.Darken1);
+                        row.ConstantItem(130).Height(64).Column(logo =>
+                        {
+                            var logoPath = ResolveStatementLogoPath();
+                            if (!string.IsNullOrWhiteSpace(logoPath))
+                            {
+                                logo.Item().AlignCenter().AlignMiddle().Image(logoPath).FitArea();
+                            }
+                            else
+                            {
+                                logo.Item()
+                                    .Border(1)
+                                    .BorderColor(Colors.Grey.Lighten1)
+                                    .Background(Colors.Grey.Lighten4)
+                                    .AlignCenter()
+                                    .AlignMiddle()
+                                    .Text("Logo")
+                                    .SemiBold()
+                                    .FontSize(12)
+                                    .FontColor(Colors.Grey.Darken1);
+                            }
+                        });
 
                         row.RelativeItem().AlignRight().Column(right =>
                         {
                             right.Item().Text(StatementPdfConstants.HeaderTitle)
-                                .Italic()
                                 .SemiBold()
-                                .FontSize(24)
-                                .FontColor(Colors.Grey.Darken1);
+                                .FontSize(26)
+                                .FontColor(Colors.Blue.Darken2);
+                            right.Item().Text($"Issued {generatedOn:dd MMMM yyyy}").FontSize(9).FontColor(Colors.Grey.Darken1);
                         });
                     });
 
                     column.Item().Row(row =>
                     {
-                        row.RelativeItem().Column(left =>
+                        row.RelativeItem().Padding(10).Background(Colors.Grey.Lighten4).Column(left =>
                         {
+                            left.Item().Text("Office").SemiBold().FontColor(Colors.Grey.Darken2);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine1);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine2);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine3);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine4);
                         });
 
-                        row.RelativeItem().Column(right =>
+                        row.RelativeItem().Padding(10).Background(Colors.Grey.Lighten4).Column(right =>
                         {
+                            right.Item().Text("Contact").SemiBold().FontColor(Colors.Grey.Darken2);
                             right.Item().Text($"Phone: {StatementPdfConstants.Phone}").SemiBold();
                             right.Item().Text($"Fax: {StatementPdfConstants.Fax}").SemiBold();
                             right.Item().Text($"E-mail: {StatementPdfConstants.Email}").FontColor(Colors.Blue.Medium);
@@ -232,18 +256,37 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
                     column.Item().Row(row =>
                     {
-                        row.RelativeItem().Text($"Date: {generatedOn:MMMM d, yyyy}").SemiBold();
-                        row.RelativeItem().AlignRight().Column(right =>
+                        row.RelativeItem().Padding(12).Border(1).BorderColor(Colors.Grey.Lighten2).Column(left =>
                         {
-                            right.Item().Text("Statement To:").SemiBold().FontColor(Colors.Grey.Darken1);
+                            left.Item().Text("Statement details").SemiBold().FontColor(Colors.Grey.Darken1);
+                            left.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
+                            left.Item().Text($"Payment due: {dueDate:dd MMMM yyyy}");
+                            left.Item().Text($"Current balance: {FormatMoney(statement.CurrentBalance)}").SemiBold().FontSize(12);
+                        });
+
+                        row.RelativeItem().Padding(12).Border(1).BorderColor(Colors.Grey.Lighten2).Column(right =>
+                        {
+                            right.Item().Text("Statement To").SemiBold().FontColor(Colors.Grey.Darken1);
                             right.Item().Text(statement.TenantName).SemiBold().FontSize(13);
                             right.Item().Text(statement.PropertyName).FontSize(13);
                             right.Item().Text(statement.PropertyAddress).FontSize(11).FontColor(Colors.Grey.Darken1);
                         });
                     });
 
-                    column.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
-                    column.Item().Text($"Current balance: {FormatMoney(statement.CurrentBalance)}").SemiBold();
+                    if (!string.IsNullOrWhiteSpace(statement.PaymentReference))
+                    {
+                        column.Item()
+                            .Background(Colors.Blue.Lighten5)
+                            .BorderLeft(4)
+                            .BorderColor(Colors.Blue.Darken2)
+                            .Padding(10)
+                            .Text(text =>
+                            {
+                                text.Span("Payment reference: ").SemiBold();
+                                text.Span(statement.PaymentReference).SemiBold().FontColor(Colors.Blue.Darken3);
+                                text.Span(" — please use this exact reference when making payment.");
+                            });
+                    }
 
                     column.Item().Table(table =>
                     {
@@ -308,6 +351,18 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             PdfBytes = pdfBytes,
             FileName = BuildStatementPdfFileName(statement)
         };
+    }
+
+
+    private static string? ResolveStatementLogoPath()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(Directory.GetCurrentDirectory(), StatementPdfConstants.LogoRelativePath),
+            Path.Combine(AppContext.BaseDirectory, StatementPdfConstants.LogoRelativePath)
+        };
+
+        return candidates.FirstOrDefault(File.Exists);
     }
 
     private static string FormatMoney(decimal value) => $"R {value:N2}";

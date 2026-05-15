@@ -55,6 +55,7 @@ public class PropertyStatementVm
     public string PropertyName { get; set; } = string.Empty;
     public string PropertyAddress { get; set; } = string.Empty;
     public string TenantName { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentBalance { get; set; }
     public DateTime StatementMonth { get; set; }
