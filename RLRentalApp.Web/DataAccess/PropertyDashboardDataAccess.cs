@@ -83,9 +83,10 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
+        var paymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection);
         await using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), l.start_date
+        cmd.CommandText = $@"
+            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference, l.start_date
             FROM lease l
             INNER JOIN tenant t ON t.id = l.tenant_id
             WHERE l.property_id = @propertyId AND l.end_date IS NULL
@@ -110,8 +111,70 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             TenantId = reader.GetInt32(1),
             TenantName = reader.GetString(2),
             TenantEmail = reader.GetString(3),
-            StartDate = reader.GetDateTime(4)
+            PaymentReference = reader.GetString(4),
+            StartDate = reader.GetDateTime(5)
         };
+    }
+
+
+    public async Task<List<ActiveLeasePaymentMatchDataModel>> LoadActiveLeasesForPaymentMatchingAsync(DateTime asOfDate)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var paymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = $@"
+            SELECT p.id,
+                   p.name,
+                   l.id,
+                   l.tenant_id,
+                   t.full_name,
+                   {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference,
+                   rr.amount,
+                   COALESCE(svc.current_month_services, 0) AS current_month_services
+            FROM lease l
+            INNER JOIN property p ON p.id = l.property_id
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN LATERAL (
+                SELECT amount
+                FROM rent_rate
+                WHERE lease_id = l.id
+                  AND effective_from <= @asOfDate
+                ORDER BY effective_from DESC
+                LIMIT 1
+            ) rr ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT SUM(amount) AS current_month_services
+                FROM service_charge
+                WHERE lease_id = l.id
+                  AND billing_period = date_trunc('month', @asOfDate)::date
+            ) svc ON TRUE
+            WHERE l.end_date IS NULL
+              AND p.is_active = TRUE
+            ORDER BY p.name;";
+
+        AddParameter(cmd, "@asOfDate", asOfDate.Date);
+
+        var result = new List<ActiveLeasePaymentMatchDataModel>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            result.Add(new ActiveLeasePaymentMatchDataModel
+            {
+                PropertyId = reader.GetInt32(0),
+                PropertyName = reader.GetString(1),
+                LeaseId = reader.GetInt32(2),
+                TenantId = reader.GetInt32(3),
+                TenantName = reader.GetString(4),
+                PaymentReference = reader.GetString(5),
+                LatestRent = reader.IsDBNull(6) ? null : reader.GetDecimal(6),
+                CurrentMonthServiceTotal = reader.IsDBNull(7) ? 0m : reader.GetDecimal(7)
+            });
+        }
+
+        return result;
     }
 
     public async Task<decimal> LoadOpeningOutstandingAsync(int tenantId)
@@ -603,6 +666,23 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         AddParameter(cmd, "@sourceId", sourceId);
 
         await cmd.ExecuteNonQueryAsync();
+    }
+
+
+    private static async Task<bool> HasTenantPaymentReferenceColumnAsync(DbConnection connection)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'tenant'
+                  AND column_name = 'payment_reference'
+            );";
+
+        var value = await cmd.ExecuteScalarAsync();
+        return value is bool exists && exists;
     }
 
     private static void AddParameter(DbCommand cmd, string name, object? value)

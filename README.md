@@ -122,4 +122,3 @@ For production, use environment variables or a managed secret store (Azure Key V
 - The app still reads `appsettings.json` and `appsettings.Development.json` exactly as before.
 - `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
 - Demo/default behavior is unchanged unless you add local secrets or environment variables.
-
