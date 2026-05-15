@@ -83,16 +83,11 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Upload one bank statement PDF. By default the app searches using each renter's saved payment reference, but you can override the search text when someone paid with the wrong reference.</p>
+                <p class="text-muted">Upload one bank statement PDF. The selected-property search uses the editable search text below. The all-renter check still uses each renter's saved database payment reference.</p>
                 <div class="mb-3">
                     <label for="paymentDescriptionContains" class="form-label">Selected-property search text</label>
                     <input class="form-control" id="paymentDescriptionContains" placeholder="Defaults to the selected renter's saved payment reference" />
-                    <div class="form-text">For selected-property-only search. Example: <code>Heino Huur</code> or <code>Betaling Van Heino Huur</code>.</div>
-                </div>
-                <div class="mb-3">
-                    <label for="allRenterReferenceOverrides" class="form-label">All-renter temporary search overrides (optional)</label>
-                    <textarea class="form-control" id="allRenterReferenceOverrides" rows="3" placeholder="Tenant Name = text to search&#10;Property Name|Tenant Name = text to search"></textarea>
-                    <div class="form-text">Leave blank to use saved references from the database. Add one line only for renters who used the wrong reference.</div>
+                    <div class="form-text">Only used by <strong>Search selected property only</strong>. Change this when this renter paid with a different reference.</div>
                 </div>
                 <div class="mb-3">
                     <label for="paymentPdfFile" class="form-label">Statement PDF</label>
@@ -107,7 +102,7 @@
 
                 <div id="paymentResults" class="mt-3 d-none">
                     <h3 class="h6">Detected payments</h3>
-                    <p class="small text-muted mb-2">All-renter mode uses each saved renter payment reference unless you added a temporary override above. It warns when someone did not pay, paid less than rent, or paid rent but not services. You can remove any row before saving. Duplicate same amount on the same day is automatically blocked.</p>
+                    <p class="small text-muted mb-2">All-renter mode uses each saved renter payment reference from the database. It warns when someone did not pay, paid less than rent, or paid rent but not services. You can remove any row before saving. Duplicate same amount on the same day is automatically blocked.</p>
                     <div id="renterPaymentSummary" class="mb-3 d-none"></div>
                     <div class="table-responsive">
                         <table class="table table-sm table-striped">
@@ -405,7 +400,6 @@
             const paymentPdfRawText = document.getElementById('paymentPdfRawText');
             const renterPaymentSummary = document.getElementById('renterPaymentSummary');
             const paymentDescriptionContains = document.getElementById('paymentDescriptionContains');
-            const allRenterReferenceOverrides = document.getElementById('allRenterReferenceOverrides');
             const sendEmailModal = document.getElementById('sendEmailModal');
             const previewEmailTo = document.getElementById('previewEmailTo');
             const previewEmailSubject = document.getElementById('previewEmailSubject');
@@ -640,16 +634,11 @@
 
                 const rows = renterPaymentMatches.map(match => {
                     const rowClass = match.warning ? 'table-warning' : 'table-success';
-                    const savedReference = match.savedPaymentReference || match.paymentReference || '';
-                    const searchReference = match.searchReference || match.paymentReference || '';
-                    const referenceText = savedReference && searchReference && savedReference !== searchReference
-                        ? `<code>${savedReference}</code><div class="small text-muted">searched: <code>${searchReference}</code></div>`
-                        : `<code>${searchReference || savedReference || '-'}</code>`;
                     return `
                         <tr class="${rowClass}">
                             <td>${match.propertyName}</td>
                             <td>${match.tenantName}</td>
-                            <td>${referenceText}</td>
+                            <td><code>${match.paymentReference || '-'}</code></td>
                             <td class="text-end">${match.expectedAmount !== null && match.expectedAmount !== undefined ? Number(match.expectedAmount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : '-'}</td>
                             <td class="text-end">${Number(match.paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
                             <td>${match.warning || 'Paid'}</td>
@@ -766,7 +755,6 @@
 
                 const formData = new FormData();
                 formData.append('pdfFile', file);
-                formData.append('referenceOverrides', allRenterReferenceOverrides?.value || '');
 
                 const response = await fetch('/Home/ParseAllRentersPaymentPdf', {
                     method: 'POST',

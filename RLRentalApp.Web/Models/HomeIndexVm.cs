@@ -180,8 +180,6 @@ public class RenterPaymentMatchVm
     public int TenantId { get; set; }
     public string TenantName { get; set; } = string.Empty;
     public string PaymentReference { get; set; } = string.Empty;
-    public string SavedPaymentReference { get; set; } = string.Empty;
-    public string SearchReference { get; set; } = string.Empty;
     public decimal? ExpectedAmount { get; set; }
     public decimal PaidTotal { get; set; }
     public bool HasPayment { get; set; }
