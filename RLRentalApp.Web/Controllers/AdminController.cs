@@ -66,10 +66,10 @@ public class AdminController : Controller
             INSERT INTO property (name, address_line1, address_line2, notes, is_active)
             VALUES (@name, @address1, @address2, @notes, @isActive);";
 
-        AddParameter(cmd, "@name", request.Name.Trim());
-        AddParameter(cmd, "@address1", request.AddressLine1.Trim());
-        AddParameter(cmd, "@address2", request.AddressLine2.Trim());
-        AddParameter(cmd, "@notes", request.Notes.Trim());
+        AddParameter(cmd, "@name", Clean(request.Name));
+        AddParameter(cmd, "@address1", Clean(request.AddressLine1));
+        AddParameter(cmd, "@address2", Clean(request.AddressLine2));
+        AddParameter(cmd, "@notes", Clean(request.Notes));
         AddParameter(cmd, "@isActive", request.IsActive);
 
         var inserted = await cmd.ExecuteNonQueryAsync();
@@ -185,7 +185,7 @@ public class AdminController : Controller
                 return RedirectToAdminTab(RentTab);
             }
 
-            var rentRateId = await InsertRentRateAsync(connection, tx, request.LeaseId, request.EffectiveFrom, request.Amount, string.IsNullOrWhiteSpace(request.Notes) ? "Rent updated from admin" : request.Notes.Trim());
+            var rentRateId = await InsertRentRateAsync(connection, tx, request.LeaseId, request.EffectiveFrom, request.Amount, string.IsNullOrWhiteSpace(request.Notes) ? "Rent updated from admin" : Clean(request.Notes));
             await UpsertStatementSdtAsync(connection, tx, request.LeaseId, request.EffectiveFrom, "Rent", "Rent for statement month", request.Amount, "rent_rate", rentRateId);
             await tx.CommitAsync();
             TempData["AdminMessage"] = "Rent updated and added to the statement ledger.";
@@ -520,10 +520,10 @@ public class AdminController : Controller
             VALUES (@name, @address1, @address2, @notes, @isActive)
             RETURNING id;";
 
-        AddParameter(cmd, "@name", name.Trim());
-        AddParameter(cmd, "@address1", address1.Trim());
-        AddParameter(cmd, "@address2", address2.Trim());
-        AddParameter(cmd, "@notes", notes.Trim());
+        AddParameter(cmd, "@name", Clean(name));
+        AddParameter(cmd, "@address1", Clean(address1));
+        AddParameter(cmd, "@address2", Clean(address2));
+        AddParameter(cmd, "@notes", Clean(notes));
         AddParameter(cmd, "@isActive", isActive);
 
         var id = await cmd.ExecuteScalarAsync();
@@ -545,14 +545,14 @@ public class AdminController : Controller
                 VALUES (@fullName, @email, @phone, @notes, TRUE, @openingOutstanding, @depositHeld)
                 RETURNING id;";
 
-        AddParameter(cmd, "@fullName", fullName.Trim());
-        AddParameter(cmd, "@email", email.Trim());
-        AddParameter(cmd, "@phone", phone.Trim());
+        AddParameter(cmd, "@fullName", Clean(fullName));
+        AddParameter(cmd, "@email", Clean(email));
+        AddParameter(cmd, "@phone", Clean(phone));
         if (hasPaymentReferenceColumn)
         {
-            AddParameter(cmd, "@paymentReference", paymentReference.Trim());
+            AddParameter(cmd, "@paymentReference", Clean(paymentReference));
         }
-        AddParameter(cmd, "@notes", notes);
+        AddParameter(cmd, "@notes", Clean(notes));
         AddParameter(cmd, "@openingOutstanding", openingOutstanding);
         AddParameter(cmd, "@depositHeld", depositHeld);
 
@@ -572,7 +572,7 @@ public class AdminController : Controller
         AddParameter(cmd, "@propertyId", propertyId);
         AddParameter(cmd, "@tenantId", tenantId);
         AddParameter(cmd, "@startDate", leaseStartDate.Date);
-        AddParameter(cmd, "@notes", notes);
+        AddParameter(cmd, "@notes", Clean(notes));
 
         var id = await cmd.ExecuteScalarAsync();
         return Convert.ToInt32(id);
@@ -590,7 +590,7 @@ public class AdminController : Controller
         AddParameter(cmd, "@leaseId", leaseId);
         AddParameter(cmd, "@effectiveFrom", new DateTime(effectiveFrom.Year, effectiveFrom.Month, 1));
         AddParameter(cmd, "@amount", amount);
-        AddParameter(cmd, "@notes", notes);
+        AddParameter(cmd, "@notes", Clean(notes));
 
         var id = await cmd.ExecuteScalarAsync();
         return Convert.ToInt32(id);
@@ -606,10 +606,10 @@ public class AdminController : Controller
             RETURNING id;";
         AddParameter(cmd, "@leaseId", request.LeaseId);
         AddParameter(cmd, "@entryDate", request.EntryDate.Date);
-        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(request.EntryType) ? "Manual" : request.EntryType.Trim());
-        AddParameter(cmd, "@description", request.Description.Trim());
+        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(request.EntryType) ? "Manual" : Clean(request.EntryType));
+        AddParameter(cmd, "@description", Clean(request.Description));
         AddParameter(cmd, "@amount", request.Amount);
-        AddParameter(cmd, "@notes", request.Notes.Trim());
+        AddParameter(cmd, "@notes", Clean(request.Notes));
         return Convert.ToInt64(await cmd.ExecuteScalarAsync());
     }
 
@@ -635,7 +635,7 @@ public class AdminController : Controller
 
         AddParameter(cmd, "@propertyId", propertyId);
         AddParameter(cmd, "@endDate", newLeaseStartDate.Date.AddDays(-1));
-        AddParameter(cmd, "@notes", notes);
+        AddParameter(cmd, "@notes", Clean(notes));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -662,7 +662,7 @@ public class AdminController : Controller
               );";
         AddParameter(cmd, "@leaseId", leaseId);
         AddParameter(cmd, "@endDate", endDate.Date);
-        AddParameter(cmd, "@notes", string.IsNullOrWhiteSpace(notes) ? "Renter marked as leaving from admin" : notes.Trim());
+        AddParameter(cmd, "@notes", string.IsNullOrWhiteSpace(notes) ? "Renter marked as leaving from admin" : Clean(notes));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -685,8 +685,8 @@ public class AdminController : Controller
 
         AddParameter(cmd, "@leaseId", leaseId);
         AddParameter(cmd, "@entryDate", entryDate.Date);
-        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(entryType) ? "Manual" : entryType.Trim());
-        AddParameter(cmd, "@description", description.Trim());
+        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(entryType) ? "Manual" : Clean(entryType));
+        AddParameter(cmd, "@description", Clean(description));
         AddParameter(cmd, "@amount", amount);
         AddParameter(cmd, "@sourceTable", sourceTable);
         AddParameter(cmd, "@sourceId", sourceId);
@@ -778,8 +778,8 @@ public class AdminController : Controller
     private static void AddCommonStatementUpdateParameters(DbCommand cmd, StatementSource source, UpdateAdminStatementEntryRequestVm request, decimal sourceAmount)
     {
         AddParameter(cmd, "@entryDate", request.EntryDate.Date);
-        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(request.EntryType) ? "Manual" : request.EntryType.Trim());
-        AddParameter(cmd, "@description", request.Description.Trim());
+        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(request.EntryType) ? "Manual" : Clean(request.EntryType));
+        AddParameter(cmd, "@description", Clean(request.Description));
         AddParameter(cmd, "@amount", sourceAmount);
         AddParameter(cmd, "@sourceId", source.SourceId);
         AddParameter(cmd, "@leaseId", source.LeaseId);
@@ -801,8 +801,8 @@ public class AdminController : Controller
         AddParameter(cmd, "@statementEntryId", request.StatementEntryId);
         AddParameter(cmd, "@leaseId", leaseId);
         AddParameter(cmd, "@entryDate", request.EntryDate.Date);
-        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(request.EntryType) ? "Manual" : request.EntryType.Trim());
-        AddParameter(cmd, "@description", request.Description.Trim());
+        AddParameter(cmd, "@entryType", string.IsNullOrWhiteSpace(request.EntryType) ? "Manual" : Clean(request.EntryType));
+        AddParameter(cmd, "@description", Clean(request.Description));
         AddParameter(cmd, "@amount", request.Amount);
         await cmd.ExecuteNonQueryAsync();
     }
@@ -822,6 +822,11 @@ public class AdminController : Controller
 
         var value = await cmd.ExecuteScalarAsync();
         return value is bool exists && exists;
+    }
+
+    private static string Clean(string? value)
+    {
+        return value?.Trim() ?? string.Empty;
     }
 
     private static void AddParameter(DbCommand cmd, string name, object? value)
