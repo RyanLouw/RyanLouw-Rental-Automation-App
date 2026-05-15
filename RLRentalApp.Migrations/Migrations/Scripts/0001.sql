@@ -1,12 +1,15 @@
 -- ============================
 -- 0001.sql - Initial Schema
 -- ============================
-
+-- This migration can run against older development databases that already
+-- contain some of the base tables but do not have FluentMigrator version rows.
+-- Keep the DDL idempotent so the runner can baseline those databases instead
+-- of failing with "relation already exists".
 
 -- ============================
 -- Property
 -- ============================
-CREATE TABLE property (
+CREATE TABLE IF NOT EXISTS property (
     id              SERIAL PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
     address_line1   VARCHAR(300),
@@ -19,7 +22,7 @@ CREATE TABLE property (
 -- ============================
 -- Tenant
 -- ============================
-CREATE TABLE tenant (
+CREATE TABLE IF NOT EXISTS tenant (
     id          SERIAL PRIMARY KEY,
     full_name   VARCHAR(200) NOT NULL,
     email       VARCHAR(200),
@@ -32,7 +35,7 @@ CREATE TABLE tenant (
 -- ============================
 -- Lease (Tenant occupancy)
 -- ============================
-CREATE TABLE lease (
+CREATE TABLE IF NOT EXISTS lease (
     id              SERIAL PRIMARY KEY,
     property_id     INTEGER NOT NULL REFERENCES property(id) ON DELETE CASCADE,
     tenant_id       INTEGER NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
@@ -42,13 +45,13 @@ CREATE TABLE lease (
     created_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ix_lease_property ON lease(property_id);
-CREATE INDEX ix_lease_tenant ON lease(tenant_id);
+CREATE INDEX IF NOT EXISTS ix_lease_property ON lease(property_id);
+CREATE INDEX IF NOT EXISTS ix_lease_tenant ON lease(tenant_id);
 
 -- ============================
 -- RentRate (rent changes over time)
 -- ============================
-CREATE TABLE rent_rate (
+CREATE TABLE IF NOT EXISTS rent_rate (
     id              SERIAL PRIMARY KEY,
     lease_id        INTEGER NOT NULL REFERENCES lease(id) ON DELETE CASCADE,
     effective_from  DATE NOT NULL,
@@ -56,30 +59,40 @@ CREATE TABLE rent_rate (
     notes           TEXT
 );
 
-CREATE INDEX ix_rent_rate_lease ON rent_rate(lease_id);
+CREATE INDEX IF NOT EXISTS ix_rent_rate_lease ON rent_rate(lease_id);
 
 -- ============================
 -- ServiceType (Lookup)
 -- ============================
-CREATE TABLE service_type (
+CREATE TABLE IF NOT EXISTS service_type (
     id          SERIAL PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
     is_utility  BOOLEAN NOT NULL DEFAULT TRUE
 );
 
--- Seed service types
-INSERT INTO service_type (name, is_utility) VALUES
-('Water', TRUE),
-('Electricity', TRUE),
-('Sanitation', TRUE),
-('Refuse', TRUE),
-('Body Corporate', FALSE),
-('Other', FALSE);
+-- Seed service types without duplicating them if this script is baselining an
+-- existing database that was created before migrations were version-tracked.
+INSERT INTO service_type (name, is_utility)
+SELECT seed.name, seed.is_utility
+FROM (
+    VALUES
+        ('Water', TRUE),
+        ('Electricity', TRUE),
+        ('Sanitation', TRUE),
+        ('Refuse', TRUE),
+        ('Body Corporate', FALSE),
+        ('Other', FALSE)
+) AS seed(name, is_utility)
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM service_type st
+    WHERE LOWER(st.name) = LOWER(seed.name)
+);
 
 -- ============================
 -- SourceFile (Uploaded documents)
 -- ============================
-CREATE TABLE source_file (
+CREATE TABLE IF NOT EXISTS source_file (
     id              BIGSERIAL PRIMARY KEY,
     file_name       VARCHAR(300) NOT NULL,
     content_type    VARCHAR(100),
@@ -95,7 +108,7 @@ CREATE TABLE source_file (
 -- ============================
 -- ServiceCharge
 -- ============================
-CREATE TABLE service_charge (
+CREATE TABLE IF NOT EXISTS service_charge (
     id              BIGSERIAL PRIMARY KEY,
     lease_id        INTEGER NOT NULL REFERENCES lease(id) ON DELETE CASCADE,
     service_type_id INTEGER NOT NULL REFERENCES service_type(id),
@@ -105,13 +118,13 @@ CREATE TABLE service_charge (
     notes           TEXT
 );
 
-CREATE INDEX ix_service_charge_lease ON service_charge(lease_id);
-CREATE INDEX ix_service_charge_period ON service_charge(billing_period);
+CREATE INDEX IF NOT EXISTS ix_service_charge_lease ON service_charge(lease_id);
+CREATE INDEX IF NOT EXISTS ix_service_charge_period ON service_charge(billing_period);
 
 -- ============================
 -- Payment
 -- ============================
-CREATE TABLE payment (
+CREATE TABLE IF NOT EXISTS payment (
     id                  BIGSERIAL PRIMARY KEY,
     lease_id            INTEGER NOT NULL REFERENCES lease(id) ON DELETE CASCADE,
     paid_on             DATE NOT NULL,
@@ -124,12 +137,12 @@ CREATE TABLE payment (
     created_at          TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ix_payment_lease ON payment(lease_id);
-CREATE INDEX ix_payment_date ON payment(paid_on);
+CREATE INDEX IF NOT EXISTS ix_payment_lease ON payment(lease_id);
+CREATE INDEX IF NOT EXISTS ix_payment_date ON payment(paid_on);
 
 -- ============================
 -- Prevent multiple active leases per property
 -- ============================
-CREATE UNIQUE INDEX ux_active_lease_per_property
+CREATE UNIQUE INDEX IF NOT EXISTS ux_active_lease_per_property
 ON lease(property_id)
 WHERE end_date IS NULL;

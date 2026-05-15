@@ -93,6 +93,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             TenantId = activeLease.TenantId,
             TenantName = activeLease.TenantName,
             TenantEmail = activeLease.TenantEmail,
+            PaymentReference = activeLease.PaymentReference,
             LeaseStartDate = activeLease.StartDate,
             LatestRent = latestRent,
             OpeningOutstanding = openingOutstanding,
@@ -478,6 +479,11 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     public async Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request)
     {
+        if (request.RenterMatches.Count > 0)
+        {
+            return await SaveRenterMatchPaymentsAsync(request);
+        }
+
         var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
         if (activeLease is null)
         {
@@ -488,9 +494,59 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             };
         }
 
-        var cleanedPayments = request.Payments
+        return await SavePaymentsForLeaseAsync(activeLease.LeaseId, request.Payments, request.Notes, "Captured from statement PDF");
+    }
+
+    private async Task<SavePaymentsResultVm> SaveRenterMatchPaymentsAsync(SavePaymentsRequestVm request)
+    {
+        var matches = request.RenterMatches
+            .Where(x => x.LeaseId > 0 && x.Payments.Any(p => p.Amount > 0))
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            return new SavePaymentsResultVm
+            {
+                Success = false,
+                Message = "No matched renter payments to save."
+            };
+        }
+
+        var savedPayments = new List<PaymentCandidateVm>();
+        var addedCount = 0;
+        var skippedDuplicates = 0;
+
+        foreach (var match in matches)
+        {
+            var result = await SavePaymentsForLeaseAsync(
+                match.LeaseId,
+                match.Payments,
+                request.Notes,
+                $"Captured from bank PDF for {match.PaymentReference}");
+
+            addedCount += result.AddedCount;
+            skippedDuplicates += result.SkippedDuplicates;
+            savedPayments.AddRange(result.SavedPayments);
+        }
+
+        return new SavePaymentsResultVm
+        {
+            Success = addedCount > 0,
+            AddedCount = addedCount,
+            SkippedDuplicates = skippedDuplicates,
+            SavedPayments = savedPayments,
+            RenterMatches = request.RenterMatches,
+            Message = addedCount > 0
+                ? $"Saved {addedCount} payment(s) across {matches.Count} renter(s). Skipped {skippedDuplicates} duplicate(s)."
+                : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."
+        };
+    }
+
+    private async Task<SavePaymentsResultVm> SavePaymentsForLeaseAsync(int leaseId, List<PaymentCandidateVm> payments, string notes, string defaultNotes)
+    {
+        var cleanedPayments = payments
             .Where(x => x.Amount > 0)
-            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount })
+            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount, Description = x.Description.Trim() })
             .Select(g => g.First())
             .ToList();
 
@@ -508,7 +564,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         foreach (var payment in cleanedPayments)
         {
-            var exists = await _dataAccess.PaymentExistsAsync(activeLease.LeaseId, payment.PaidOn, payment.Amount);
+            var exists = await _dataAccess.PaymentExistsAsync(leaseId, payment.PaidOn, payment.Amount);
             if (exists)
             {
                 skippedDuplicates++;
@@ -520,11 +576,11 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 PaidOn = payment.PaidOn.Date,
                 Amount = payment.Amount,
                 Reference = payment.Description,
-                Notes = string.IsNullOrWhiteSpace(request.Notes) ? "Captured from statement PDF" : request.Notes
+                Notes = string.IsNullOrWhiteSpace(notes) ? defaultNotes : notes
             });
         }
 
-        var inserted = await _dataAccess.InsertPaymentsAsync(activeLease.LeaseId, toInsert);
+        var inserted = await _dataAccess.InsertPaymentsAsync(leaseId, toInsert);
         var savedPayments = toInsert
             .Select(x => new PaymentCandidateVm
             {
@@ -579,6 +635,37 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         {
             Success = true,
             Payments = payments,
+            RawTextPreview = text.Length > 4000 ? text[..4000] : text
+        };
+    }
+
+    public async Task<PaymentPdfParseResultVm> ParseAllRentersPaymentPdfAsync(IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Please choose a PDF file." };
+        }
+
+        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Only PDF files are supported." };
+        }
+
+        await using var stream = file.OpenReadStream();
+        var text = ExtractPdfText(stream);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Could not read text from the PDF." };
+        }
+
+        var renters = await _dataAccess.LoadActiveLeasesForPaymentMatchingAsync(DateTime.UtcNow.Date);
+        var matches = BuildRenterPaymentMatches(text, renters);
+
+        return new PaymentPdfParseResultVm
+        {
+            Success = true,
+            RenterMatches = matches,
             RawTextPreview = text.Length > 4000 ? text[..4000] : text
         };
     }
@@ -810,6 +897,57 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
+
+
+    private static List<RenterPaymentMatchVm> BuildRenterPaymentMatches(string text, List<ActiveLeasePaymentMatchDataModel> renters)
+    {
+        var matches = new List<RenterPaymentMatchVm>();
+
+        foreach (var renter in renters)
+        {
+            var reference = renter.PaymentReference?.Trim() ?? string.Empty;
+            var payments = reference.Length >= 3 ? ParsePaymentRows(text, reference) : new List<PaymentCandidateVm>();
+            var paidTotal = payments.Sum(x => x.Amount);
+            var expectedAmount = renter.ExpectedMonthlyTotal;
+            var rentAmount = renter.LatestRent;
+            var warning = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(reference))
+            {
+                warning = "No payment reference saved for this renter.";
+            }
+            else if (payments.Count == 0)
+            {
+                warning = "No payment found in the bank PDF for this renter.";
+            }
+            else if (rentAmount.HasValue && paidTotal < rentAmount.Value)
+            {
+                warning = $"Paid {FormatMoney(paidTotal)}, which is less than rent {FormatMoney(rentAmount.Value)}.";
+            }
+            else if (expectedAmount.HasValue && paidTotal < expectedAmount.Value)
+            {
+                warning = $"Paid rent but not all services: paid {FormatMoney(paidTotal)}, expected rent plus services {FormatMoney(expectedAmount.Value)}.";
+            }
+
+            matches.Add(new RenterPaymentMatchVm
+            {
+                PropertyId = renter.PropertyId,
+                PropertyName = renter.PropertyName,
+                LeaseId = renter.LeaseId,
+                TenantId = renter.TenantId,
+                TenantName = renter.TenantName,
+                PaymentReference = reference,
+                ExpectedAmount = expectedAmount,
+                PaidTotal = paidTotal,
+                HasPayment = payments.Count > 0,
+                IsShortPaid = expectedAmount.HasValue && paidTotal > 0 && paidTotal < expectedAmount.Value,
+                Warning = warning,
+                Payments = payments
+            });
+        }
+
+        return matches;
+    }
 
     private static List<PaymentCandidateVm> ParsePaymentRows(string text, string descriptionFilter)
     {
