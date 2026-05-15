@@ -972,7 +972,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             var forwardWindowLength = Math.Min(140, Math.Max(0, text.Length - forwardStart));
             var forwardWindow = forwardWindowLength > 0 ? text.Substring(forwardStart, forwardWindowLength) : string.Empty;
 
-            var dateMatches = Regex.Matches(backWindow, @"(?i)(?<!\d)(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)");
+            var dateMatches = Regex.Matches(backWindow, @"(?i)(?<!\d)(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Sep|Oct|Okt|Nov|Dec|Des)");
             if (dateMatches.Count == 0)
             {
                 continue;
@@ -1064,10 +1064,45 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static bool TryParseStatementDate(string dateToken, int year, out DateTime date)
     {
+        var tokenMatch = Regex.Match(dateToken, @"(?i)^\s*(\d{1,2})\s*([A-Za-z]+)\s*$");
+        if (tokenMatch.Success
+            && int.TryParse(tokenMatch.Groups[1].Value, out var day)
+            && TryParseStatementMonth(tokenMatch.Groups[2].Value, out var month))
+        {
+            date = new DateTime(year, month, day);
+            return true;
+        }
+
         var composed = $"{dateToken} {year}";
 
         return DateTime.TryParseExact(composed, "d MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
                || DateTime.TryParseExact(composed, "dd MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+    }
+
+    private static bool TryParseStatementMonth(string monthToken, out int month)
+    {
+        month = monthToken.Trim().ToLowerInvariant() switch
+        {
+            "jan" => 1,
+            "feb" => 2,
+            "mar" => 3,
+            "mrt" => 3,
+            "apr" => 4,
+            "may" => 5,
+            "mei" => 5,
+            "jun" => 6,
+            "jul" => 7,
+            "aug" => 8,
+            "sep" => 9,
+            "oct" => 10,
+            "okt" => 10,
+            "nov" => 11,
+            "dec" => 12,
+            "des" => 12,
+            _ => 0
+        };
+
+        return month > 0;
     }
 
 

@@ -161,6 +161,21 @@ public class PropertyDashboardManagerTests
         Assert.NotEmpty(emailService.LastAttachmentBytes!);
     }
 
+
+    [Fact]
+    public void ParsePaymentRows_ParsesAfrikaansMonthStatementDates()
+    {
+        const string statementText = "Staatdatum : 9 Mei 2026 Transaksies in RAND (ZAR) 02 MeiDebiet Order Krediet Investecpbsbusiso Ngcobo11,000.00Kt105,683.94Kt";
+        var parseMethod = typeof(PropertyDashboardManager).GetMethod("ParsePaymentRows", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(parseMethod);
+        var payments = Assert.IsType<List<PaymentCandidateVm>>(parseMethod!.Invoke(null, [statementText, "Investecpbsbusiso Ngcobo"]));
+
+        var payment = Assert.Single(payments);
+        Assert.Equal(new DateTime(2026, 5, 2), payment.PaidOn);
+        Assert.Equal(11000m, payment.Amount);
+    }
+
     private sealed class FakePropertyDashboardDataAccess : IPropertyDashboardDataAccess
     {
         public PropertyOptionVm? Property { get; set; }
