@@ -133,9 +133,9 @@ public class HomeController : Controller
 
 
     [HttpPost]
-    public async Task<IActionResult> ParseAllRentersPaymentPdf(IFormFile? pdfFile)
+    public async Task<IActionResult> ParseAllRentersPaymentPdf(IFormFile? pdfFile, string? referenceOverrides)
     {
-        var result = await _propertyDashboardManager.ParseAllRentersPaymentPdfAsync(pdfFile);
+        var result = await _propertyDashboardManager.ParseAllRentersPaymentPdfAsync(pdfFile, referenceOverrides);
 
         if (!result.Success)
         {

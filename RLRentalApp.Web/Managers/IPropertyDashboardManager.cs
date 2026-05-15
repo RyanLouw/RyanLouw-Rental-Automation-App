@@ -14,7 +14,7 @@ public interface IPropertyDashboardManager
     Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request);
     Task<SaveRentResultVm> SaveRentAsync(SaveRentRequestVm request);
     Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains);
-    Task<PaymentPdfParseResultVm> ParseAllRentersPaymentPdfAsync(IFormFile? file);
+    Task<PaymentPdfParseResultVm> ParseAllRentersPaymentPdfAsync(IFormFile? file, string? referenceOverrides);
     Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request);
     Task<SendTenantEmailResultVm> SendTenantEmailAsync(SendTenantEmailRequestVm request);
 }

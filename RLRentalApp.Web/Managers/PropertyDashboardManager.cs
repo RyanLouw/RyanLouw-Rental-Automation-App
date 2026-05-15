@@ -639,7 +639,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
-    public async Task<PaymentPdfParseResultVm> ParseAllRentersPaymentPdfAsync(IFormFile? file)
+    public async Task<PaymentPdfParseResultVm> ParseAllRentersPaymentPdfAsync(IFormFile? file, string? referenceOverrides)
     {
         if (file is null || file.Length == 0)
         {
@@ -660,7 +660,8 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var renters = await _dataAccess.LoadActiveLeasesForPaymentMatchingAsync(DateTime.UtcNow.Date);
-        var matches = BuildRenterPaymentMatches(text, renters);
+        var overrides = ParsePaymentReferenceOverrides(referenceOverrides);
+        var matches = BuildRenterPaymentMatches(text, renters, overrides);
 
         return new PaymentPdfParseResultVm
         {
@@ -899,13 +900,14 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
 
 
-    private static List<RenterPaymentMatchVm> BuildRenterPaymentMatches(string text, List<ActiveLeasePaymentMatchDataModel> renters)
+    private static List<RenterPaymentMatchVm> BuildRenterPaymentMatches(string text, List<ActiveLeasePaymentMatchDataModel> renters, IReadOnlyDictionary<string, string>? referenceOverrides = null)
     {
         var matches = new List<RenterPaymentMatchVm>();
 
         foreach (var renter in renters)
         {
-            var reference = renter.PaymentReference?.Trim() ?? string.Empty;
+            var savedReference = renter.PaymentReference?.Trim() ?? string.Empty;
+            var reference = ResolvePaymentReferenceOverride(renter, referenceOverrides) ?? savedReference;
             var payments = reference.Length >= 3 ? ParsePaymentRows(text, reference) : new List<PaymentCandidateVm>();
             var paidTotal = payments.Sum(x => x.Amount);
             var expectedAmount = renter.ExpectedMonthlyTotal;
@@ -937,6 +939,8 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 TenantId = renter.TenantId,
                 TenantName = renter.TenantName,
                 PaymentReference = reference,
+                SavedPaymentReference = savedReference,
+                SearchReference = reference,
                 ExpectedAmount = expectedAmount,
                 PaidTotal = paidTotal,
                 HasPayment = payments.Count > 0,
@@ -947,6 +951,71 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         return matches;
+    }
+
+
+    private static Dictionary<string, string> ParsePaymentReferenceOverrides(string? input)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return result;
+        }
+
+        var lines = input.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var line in lines)
+        {
+            if (line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            var separatorIndex = line.IndexOf('=');
+            if (separatorIndex < 0)
+            {
+                separatorIndex = line.IndexOf(':');
+            }
+
+            if (separatorIndex <= 0 || separatorIndex >= line.Length - 1)
+            {
+                continue;
+            }
+
+            var key = line[..separatorIndex].Trim();
+            var value = line[(separatorIndex + 1)..].Trim();
+            if (key.Length > 0 && value.Length >= 3)
+            {
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+
+    private static string? ResolvePaymentReferenceOverride(ActiveLeasePaymentMatchDataModel renter, IReadOnlyDictionary<string, string>? overrides)
+    {
+        if (overrides is null || overrides.Count == 0)
+        {
+            return null;
+        }
+
+        var propertyTenantKey = $"{renter.PropertyName}|{renter.TenantName}";
+        if (overrides.TryGetValue(propertyTenantKey, out var propertyTenantReference))
+        {
+            return propertyTenantReference;
+        }
+
+        if (overrides.TryGetValue(renter.TenantName, out var tenantReference))
+        {
+            return tenantReference;
+        }
+
+        if (overrides.TryGetValue(renter.PropertyName, out var propertyReference))
+        {
+            return propertyReference;
+        }
+
+        return null;
     }
 
     private static List<PaymentCandidateVm> ParsePaymentRows(string text, string descriptionFilter)
