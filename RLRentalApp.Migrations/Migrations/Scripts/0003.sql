@@ -89,3 +89,60 @@ WHERE p.name = 'Demo Property - Green Villa'
       WHERE py.lease_id = l.id
         AND py.reference = x.reference
   );
+
+-- Demo seed migrations now run after the statement ledger exists, so keep the
+-- ledger in sync for the seeded rent/services/payments.
+INSERT INTO statement_sdt (property_id, tenant_id, lease_id, entry_date, entry_type, description, amount, source_table, source_id)
+SELECT l.property_id,
+       l.tenant_id,
+       rr.lease_id,
+       rr.effective_from,
+       'Rent',
+       'Rent for statement month',
+       rr.amount,
+       'rent_rate',
+       rr.id
+FROM rent_rate rr
+JOIN lease l ON l.id = rr.lease_id
+JOIN property p ON p.id = l.property_id
+JOIN tenant t ON t.id = l.tenant_id
+WHERE p.name = 'Demo Property - Green Villa'
+  AND t.full_name = 'Demo Tenant - Alex Smith'
+ON CONFLICT (source_table, source_id) DO NOTHING;
+
+INSERT INTO statement_sdt (property_id, tenant_id, lease_id, entry_date, entry_type, description, amount, source_table, source_id)
+SELECT l.property_id,
+       l.tenant_id,
+       sc.lease_id,
+       sc.billing_period,
+       'Service',
+       CONCAT(COALESCE(st.name, 'Service'), ' charge'),
+       sc.amount,
+       'service_charge',
+       sc.id
+FROM service_charge sc
+JOIN lease l ON l.id = sc.lease_id
+JOIN property p ON p.id = l.property_id
+JOIN tenant t ON t.id = l.tenant_id
+LEFT JOIN service_type st ON st.id = sc.service_type_id
+WHERE p.name = 'Demo Property - Green Villa'
+  AND t.full_name = 'Demo Tenant - Alex Smith'
+ON CONFLICT (source_table, source_id) DO NOTHING;
+
+INSERT INTO statement_sdt (property_id, tenant_id, lease_id, entry_date, entry_type, description, amount, source_table, source_id)
+SELECT l.property_id,
+       l.tenant_id,
+       py.lease_id,
+       py.paid_on,
+       'Payment',
+       COALESCE(NULLIF(py.reference, ''), 'Payment received'),
+       -py.amount,
+       'payment',
+       py.id
+FROM payment py
+JOIN lease l ON l.id = py.lease_id
+JOIN property p ON p.id = l.property_id
+JOIN tenant t ON t.id = l.tenant_id
+WHERE p.name = 'Demo Property - Green Villa'
+  AND t.full_name = 'Demo Tenant - Alex Smith'
+ON CONFLICT (source_table, source_id) DO NOTHING;

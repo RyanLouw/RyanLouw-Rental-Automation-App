@@ -14,7 +14,7 @@ public static class Program
 
     private static readonly MigratorTag[] MigratorTags =
     [
-        new("rentaldb", TagNames.Rental) 
+        new("rentaldb", TagNames.Rental)
     ];
 
     public static int Main(string[] args)

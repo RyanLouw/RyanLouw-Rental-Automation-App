@@ -1,2 +1,2 @@
 ALTER TABLE tenant
-ADD COLUMN current_amount_outstanding NUMERIC(12,2) NOT NULL DEFAULT 0;
+ADD COLUMN IF NOT EXISTS current_amount_outstanding NUMERIC(12,2) NOT NULL DEFAULT 0;

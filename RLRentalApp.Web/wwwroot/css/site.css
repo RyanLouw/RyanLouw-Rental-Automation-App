@@ -23,3 +23,152 @@ body {
 .property-dashboard .card {
   border-radius: 0.75rem;
 }
+
+.admin-setup .admin-hero {
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 55%, #fff7e6 100%);
+  border: 1px solid #e7eef7;
+  border-radius: 1.25rem;
+}
+
+.admin-card,
+.admin-stat-card {
+  border: 1px solid #e9edf3;
+  border-radius: 1rem;
+}
+
+.admin-card {
+  overflow: hidden;
+}
+
+.admin-stat-card {
+  background: rgba(255, 255, 255, 0.86);
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.admin-tabs {
+  gap: 0.5rem;
+}
+
+.admin-tabs .nav-link {
+  align-items: center;
+  border-radius: 0.85rem 0.85rem 0 0;
+  color: #4b5563;
+  display: flex;
+  gap: 0.75rem;
+  min-height: 4.5rem;
+  padding: 0.85rem 1rem;
+  text-align: left;
+}
+
+.admin-tabs .nav-link.active {
+  background: #fff;
+  border-color: #dee2e6 #dee2e6 #fff;
+  color: #0d6efd;
+}
+
+.admin-tabs .nav-link small {
+  color: #6c757d;
+}
+
+.admin-tab-icon,
+.admin-section-icon {
+  align-items: center;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+}
+
+.admin-tab-icon {
+  border-radius: 0.75rem;
+  box-shadow: 0 0.5rem 1rem rgba(15, 23, 42, 0.08);
+  flex: 0 0 2.25rem;
+  height: 2.25rem;
+  width: 2.25rem;
+}
+
+.admin-section-icon {
+  border-radius: 50%;
+  flex: 0 0 2.75rem;
+  height: 2.75rem;
+  width: 2.75rem;
+}
+
+.admin-section-heading {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+}
+
+.admin-form-body {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.admin-form-grid .form-label {
+  color: #344054;
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.admin-form-grid .form-control,
+.admin-form-grid .form-select {
+  border-color: #d9e2ec;
+  border-radius: 0.75rem;
+}
+
+.admin-section-title {
+  align-items: center;
+  color: #475467;
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 0.75rem;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.admin-section-title::after {
+  background: #e6edf5;
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
+.admin-property-table {
+  max-height: 38rem;
+}
+
+.admin-property-table thead th {
+  background: #f8fafc;
+  color: #667085;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 1;
+}
+
+.admin-property-table tbody tr:hover {
+  background: #f8fbff;
+}
+
+.bg-primary-subtle {
+  background-color: #e7f1ff;
+}
+
+@media (max-width: 575.98px) {
+  .admin-tabs {
+    flex-direction: column;
+  }
+
+  .admin-tabs .nav-link {
+    border-radius: 0.85rem;
+  }
+
+  .admin-section-heading {
+    align-items: flex-start;
+  }
+}

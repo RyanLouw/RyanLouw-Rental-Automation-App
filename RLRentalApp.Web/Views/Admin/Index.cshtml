@@ -2,103 +2,234 @@
 
 @{
     ViewData["Title"] = "Admin";
+    var activeProperties = 0;
+    var currentLeases = 0;
+    foreach (var property in Model.Properties)
+    {
+        if (property.IsActive) activeProperties++;
+    }
+    foreach (var lease in Model.Leases)
+    {
+        if (lease.IsActive) currentLeases++;
+    }
+
+    var propertyActive = Model.ActiveTab == "property";
+    var renterActive = Model.ActiveTab == "renter";
+    var rentActive = Model.ActiveTab == "rent";
+    var leavingActive = Model.ActiveTab == "leaving";
+    var statementActive = Model.ActiveTab == "statement";
+
+    var propertyTabClass = propertyActive ? "nav-link active" : "nav-link";
+    var renterTabClass = renterActive ? "nav-link active" : "nav-link";
+    var rentTabClass = rentActive ? "nav-link active" : "nav-link";
+    var leavingTabClass = leavingActive ? "nav-link active" : "nav-link";
+    var statementTabClass = statementActive ? "nav-link active" : "nav-link";
+    var propertyPaneClass = propertyActive ? "tab-pane fade show active" : "tab-pane fade";
+    var renterPaneClass = renterActive ? "tab-pane fade show active" : "tab-pane fade";
+    var rentPaneClass = rentActive ? "tab-pane fade show active" : "tab-pane fade";
+    var leavingPaneClass = leavingActive ? "tab-pane fade show active" : "tab-pane fade";
+    var statementPaneClass = statementActive ? "tab-pane fade show active" : "tab-pane fade";
 }
 
-<div class="container py-4">
-    <h1 class="mb-3">Admin Setup</h1>
-    <p class="text-muted">Create properties, onboard existing properties with saldo taken over, and add a new tenant to an existing property with deposit entered by hand.</p>
+<div class="admin-setup py-4">
+    <div class="admin-hero p-4 p-lg-5 mb-4">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-8">
+                <span class="badge rounded-pill bg-primary-subtle text-primary mb-3">Real data setup</span>
+                <h1 class="display-6 fw-bold mb-2">Admin Portal</h1>
+                <p class="lead text-muted mb-0">
+                    Start from a clean database, add real properties and renters, update rent, close leases when renters leave, and view or edit full statements.
+                </p>
+            </div>
+            <div class="col-lg-4">
+                <div class="row g-2">
+                    <div class="col-4"><div class="admin-stat-card"><div class="small text-muted">Properties</div><div class="fs-3 fw-bold">@Model.Properties.Count</div></div></div>
+                    <div class="col-4"><div class="admin-stat-card"><div class="small text-muted">Active</div><div class="fs-3 fw-bold text-success">@activeProperties</div></div></div>
+                    <div class="col-4"><div class="admin-stat-card"><div class="small text-muted">Renters</div><div class="fs-3 fw-bold text-primary">@currentLeases</div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
     {
-        <div class="alert alert-danger">@Model.ErrorMessage</div>
+        <div class="alert alert-danger shadow-sm">@Model.ErrorMessage</div>
     }
 
     @if (!string.IsNullOrWhiteSpace(Model.Message))
     {
-        <div class="alert alert-success">@Model.Message</div>
+        <div class="alert alert-success shadow-sm">@Model.Message</div>
     }
 
-    <div class="row g-3">
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-header">Create new property only</div>
-                <div class="card-body">
-                    <form asp-action="CreateProperty" method="post">
-                        <div class="mb-2">
-                            <label class="form-label">Property name</label>
-                            <input class="form-control" name="Name" required />
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Address line 1</label>
-                            <input class="form-control" name="AddressLine1" required />
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Address line 2</label>
-                            <input class="form-control" name="AddressLine2" />
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Notes</label>
-                            <input class="form-control" name="Notes" />
-                        </div>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="isActive" name="IsActive" value="true" checked />
-                            <label class="form-check-label" for="isActive">Active property</label>
-                        </div>
-                        <button class="btn btn-primary" type="submit">Save property</button>
-                    </form>
-                </div>
-            </div>
+    <div class="card admin-card shadow-sm">
+        <div class="card-header bg-white border-bottom-0 pb-0">
+            <ul class="nav nav-tabs admin-tabs" id="adminTabs" role="tablist">
+                <li class="nav-item" role="presentation"><button class="@propertyTabClass" data-bs-toggle="tab" data-bs-target="#property-pane" type="button" role="tab"><span class="admin-tab-icon bg-primary text-white">P</span><span><span class="d-block fw-semibold">Properties</span><small>Add property</small></span></button></li>
+                <li class="nav-item" role="presentation"><button class="@renterTabClass" data-bs-toggle="tab" data-bs-target="#renter-pane" type="button" role="tab"><span class="admin-tab-icon bg-success text-white">R</span><span><span class="d-block fw-semibold">Renters</span><small>Add renter to property</small></span></button></li>
+                <li class="nav-item" role="presentation"><button class="@rentTabClass" data-bs-toggle="tab" data-bs-target="#rent-pane" type="button" role="tab"><span class="admin-tab-icon bg-info text-white">$</span><span><span class="d-block fw-semibold">Rent</span><small>Update rent</small></span></button></li>
+                <li class="nav-item" role="presentation"><button class="@leavingTabClass" data-bs-toggle="tab" data-bs-target="#leaving-pane" type="button" role="tab"><span class="admin-tab-icon bg-warning text-dark">L</span><span><span class="d-block fw-semibold">Leaving</span><small>Close lease</small></span></button></li>
+                <li class="nav-item" role="presentation"><button class="@statementTabClass" data-bs-toggle="tab" data-bs-target="#statement-pane" type="button" role="tab"><span class="admin-tab-icon bg-dark text-white">S</span><span><span class="d-block fw-semibold">Statements</span><small>View / edit rows</small></span></button></li>
+            </ul>
         </div>
 
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-header">Onboard existing property (saldo taken over)</div>
-                <div class="card-body">
-                    <form asp-action="OnboardExistingProperty" method="post">
-                        <div class="mb-2"><label class="form-label">Property name</label><input class="form-control" name="PropertyName" required /></div>
-                        <div class="mb-2"><label class="form-label">Property address</label><input class="form-control" name="PropertyAddressLine1" required /></div>
-                        <div class="mb-2"><label class="form-label">Address line 2</label><input class="form-control" name="PropertyAddressLine2" /></div>
-                        <div class="mb-2"><label class="form-label">Property notes</label><input class="form-control" name="PropertyNotes" /></div>
-                        <hr />
-                        <div class="mb-2"><label class="form-label">Tenant full name</label><input class="form-control" name="TenantFullName" required /></div>
-                        <div class="mb-2"><label class="form-label">Tenant email</label><input class="form-control" type="email" name="TenantEmail" /></div>
-                        <div class="mb-2"><label class="form-label">Tenant phone</label><input class="form-control" name="TenantPhone" /></div>
-                        <div class="mb-2"><label class="form-label">Lease start date</label><input class="form-control" type="date" name="LeaseStartDate" required /></div>
-                        <div class="mb-2"><label class="form-label">Opening saldo taken over</label><input class="form-control" type="number" step="0.01" name="OpeningOutstanding" value="0" /></div>
-                        <div class="mb-2"><label class="form-label">Deposit required (tenant still owes this)</label><input class="form-control" type="number" step="0.01" name="DepositRequired" value="0" /></div>
-                        <div class="mb-3"><label class="form-label">Initial rent</label><input class="form-control" type="number" step="0.01" name="InitialRent" required /></div>
-                        <button class="btn btn-success" type="submit">Onboard existing property</button>
+        <div class="card-body admin-form-body p-4">
+            <div class="tab-content">
+                <div class="@propertyPaneClass" id="property-pane" role="tabpanel">
+                    <div class="admin-section-heading mb-4"><div class="admin-section-icon bg-primary text-white">1</div><div><h2 class="h4 mb-1">Add a property</h2><p class="text-muted mb-0">Create the real property first. Then go to the Renters tab to add the tenant for that property.</p></div></div>
+                    <form asp-action="CreateProperty" method="post" class="row g-3 admin-form-grid">
+                        <div class="col-md-6"><label class="form-label">Property name</label><input class="form-control form-control-lg" name="Name" required /></div>
+                        <div class="col-md-6"><label class="form-label">Address line 1</label><input class="form-control form-control-lg" name="AddressLine1" required /></div>
+                        <div class="col-md-6"><label class="form-label">Address line 2</label><input class="form-control" name="AddressLine2" /></div>
+                        <div class="col-md-6"><label class="form-label">Notes</label><input class="form-control" name="Notes" /></div>
+                        <div class="col-12"><div class="form-check form-switch"><input type="hidden" name="IsActive" value="false" /><input class="form-check-input" type="checkbox" id="isActive" name="IsActive" value="true" checked /><label class="form-check-label" for="isActive">Active property</label></div></div>
+                        <div class="col-12 text-end"><button class="btn btn-primary btn-lg" type="submit">Save property</button></div>
                     </form>
                 </div>
-            </div>
-        </div>
 
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-header">Add new tenant in existing property</div>
-                <div class="card-body">
-                    <form asp-action="AddTenantToProperty" method="post">
-                        <div class="mb-2">
-                            <label class="form-label">Existing property</label>
-                            <select class="form-select" name="PropertyId" required>
-                                <option value="">-- Select property --</option>
-                                @foreach (var property in Model.Properties)
+                <div class="@renterPaneClass" id="renter-pane" role="tabpanel">
+                    <div class="admin-section-heading mb-4"><div class="admin-section-icon bg-success text-white">2</div><div><h2 class="h4 mb-1">Add renters to properties</h2><p class="text-muted mb-0">Use an existing property for normal setup, or use takeover if you need to create a property and renter together.</p></div></div>
+                    <div class="row g-4">
+                        <div class="col-lg-6">
+                            <h3 class="admin-section-title mb-3">Add renter to existing property</h3>
+                            <form asp-action="AddTenantToProperty" method="post" class="row g-3 admin-form-grid">
+                                <div class="col-12"><label class="form-label">Property</label><select class="form-select" name="PropertyId" required><option value="">Select property</option>@foreach (var property in Model.Properties){<option value="@property.Id">@property.Name (@property.AddressLine1)</option>}</select></div>
+                                <div class="col-md-6"><label class="form-label">Tenant full name</label><input class="form-control" name="TenantFullName" required /></div>
+                                <div class="col-md-6"><label class="form-label">Payment reference</label><input class="form-control" name="PaymentReference" /></div>
+                                <div class="col-md-6"><label class="form-label">Tenant email</label><input class="form-control" type="email" name="TenantEmail" /></div>
+                                <div class="col-md-6"><label class="form-label">Tenant phone</label><input class="form-control" name="TenantPhone" /></div>
+                                <div class="col-md-6"><label class="form-label">Lease start date</label><input class="form-control" type="date" name="LeaseStartDate" required /></div>
+                                <div class="col-md-6"><label class="form-label">Initial rent</label><input class="form-control" type="number" step="0.01" name="InitialRent" required /></div>
+                                <div class="col-md-6"><label class="form-label">Opening saldo</label><input class="form-control" type="number" step="0.01" name="OpeningOutstanding" value="0" /></div>
+                                <div class="col-md-6"><label class="form-label">Deposit required</label><input class="form-control" type="number" step="0.01" name="DepositRequired" value="0" /></div>
+                                <div class="col-12 text-end"><button class="btn btn-success" type="submit">Add renter</button></div>
+                            </form>
+                        </div>
+                        <div class="col-lg-6">
+                            <h3 class="admin-section-title mb-3">Take over existing property</h3>
+                            <form asp-action="OnboardExistingProperty" method="post" class="row g-3 admin-form-grid">
+                                <div class="col-md-6"><label class="form-label">Property name</label><input class="form-control" name="PropertyName" required /></div>
+                                <div class="col-md-6"><label class="form-label">Property address</label><input class="form-control" name="PropertyAddressLine1" required /></div>
+                                <div class="col-md-6"><label class="form-label">Tenant full name</label><input class="form-control" name="TenantFullName" required /></div>
+                                <div class="col-md-6"><label class="form-label">Payment reference</label><input class="form-control" name="PaymentReference" /></div>
+                                <div class="col-md-6"><label class="form-label">Lease start date</label><input class="form-control" type="date" name="LeaseStartDate" required /></div>
+                                <div class="col-md-6"><label class="form-label">Initial rent</label><input class="form-control" type="number" step="0.01" name="InitialRent" required /></div>
+                                <div class="col-md-6"><label class="form-label">Tenant email</label><input class="form-control" type="email" name="TenantEmail" /></div>
+                                <div class="col-md-6"><label class="form-label">Tenant phone</label><input class="form-control" name="TenantPhone" /></div>
+                                <div class="col-md-6"><label class="form-label">Opening saldo</label><input class="form-control" type="number" step="0.01" name="OpeningOutstanding" value="0" /></div>
+                                <div class="col-md-6"><label class="form-label">Deposit required</label><input class="form-control" type="number" step="0.01" name="DepositRequired" value="0" /></div>
+                                <div class="col-12"><label class="form-label">Property notes</label><input class="form-control" name="PropertyNotes" /></div>
+                                <div class="col-12 text-end"><button class="btn btn-outline-success" type="submit">Create property + renter</button></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="@rentPaneClass" id="rent-pane" role="tabpanel">
+                    <div class="admin-section-heading mb-4"><div class="admin-section-icon bg-info text-white">3</div><div><h2 class="h4 mb-1">Update rent</h2><p class="text-muted mb-0">Adds a new rent rate for the selected current renter and records it on the statement ledger.</p></div></div>
+                    <form asp-action="UpdateRent" method="post" class="row g-3 admin-form-grid">
+                        <div class="col-md-6"><label class="form-label">Current property / renter</label><select class="form-select" name="LeaseId" required><option value="">Select current renter</option>@foreach (var lease in Model.Leases){if (lease.IsActive){<option value="@lease.LeaseId">@lease.DisplayName</option>}}</select></div>
+                        <div class="col-md-3"><label class="form-label">Effective month</label><input class="form-control" type="date" name="EffectiveFrom" required /></div>
+                        <div class="col-md-3"><label class="form-label">New rent amount</label><input class="form-control" type="number" step="0.01" name="Amount" required /></div>
+                        <div class="col-12"><label class="form-label">Notes</label><input class="form-control" name="Notes" placeholder="Why rent changed" /></div>
+                        <div class="col-12 text-end"><button class="btn btn-info text-white" type="submit">Save rent update</button></div>
+                    </form>
+                </div>
+
+                <div class="@leavingPaneClass" id="leaving-pane" role="tabpanel">
+                    <div class="admin-section-heading mb-4"><div class="admin-section-icon bg-warning text-dark">4</div><div><h2 class="h4 mb-1">Renter is leaving</h2><p class="text-muted mb-0">Closes the current active lease. The renter stays in history so old statements still work.</p></div></div>
+                    <form asp-action="EndLease" method="post" class="row g-3 admin-form-grid">
+                        <div class="col-md-6"><label class="form-label">Current property / renter</label><select class="form-select" name="LeaseId" required><option value="">Select current renter</option>@foreach (var lease in Model.Leases){if (lease.IsActive){<option value="@lease.LeaseId">@lease.DisplayName</option>}}</select></div>
+                        <div class="col-md-3"><label class="form-label">Leaving date</label><input class="form-control" type="date" name="EndDate" required /></div>
+                        <div class="col-md-3"><label class="form-label">Notes</label><input class="form-control" name="Notes" placeholder="Reason / handover note" /></div>
+                        <div class="col-12 text-end"><button class="btn btn-warning" type="submit">Close lease</button></div>
+                    </form>
+                </div>
+
+                <div class="@statementPaneClass" id="statement-pane" role="tabpanel">
+                    <div class="admin-section-heading mb-4"><div class="admin-section-icon bg-dark text-white">5</div><div><h2 class="h4 mb-1">Property / renter statements</h2><p class="text-muted mb-0">Select only a property for the full property lifecycle, or select a tenant for that tenant's full history. Add date filters when needed.</p></div></div>
+                    <form asp-action="Index" method="get" class="row g-3 admin-form-grid mb-4">
+                        <input type="hidden" name="tab" value="statement" />
+                        <div class="col-md-3"><label class="form-label">Property</label><select class="form-select" name="PropertyId"><option value="">All properties</option>@foreach (var property in Model.Properties){<option value="@property.Id" selected="@(Model.StatementFilter.PropertyId == property.Id)">@property.Name</option>}</select></div>
+                        <div class="col-md-3"><label class="form-label">Tenant</label><select class="form-select" name="TenantId"><option value="">All tenants for property</option>@foreach (var tenant in Model.Tenants){<option value="@tenant.TenantId" selected="@(Model.StatementFilter.TenantId == tenant.TenantId)">@tenant.TenantName</option>}</select></div>
+                        <div class="col-md-2"><label class="form-label">From</label><input class="form-control" type="date" name="FromDate" value="@Model.StatementFilter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                        <div class="col-md-2"><label class="form-label">To</label><input class="form-control" type="date" name="ToDate" value="@Model.StatementFilter.ToDate?.ToString("yyyy-MM-dd")" /></div>
+                        <div class="col-md-2 d-flex align-items-end"><button class="btn btn-dark w-100" type="submit">Load</button></div>
+                    </form>
+
+                    <div class="card mb-4 border-0 bg-light">
+                        <div class="card-body">
+                            <h3 class="h5">Add row for current tenant</h3>
+                            <p class="text-muted small">Use positive amounts for bills/charges and negative amounts for credits. Notes can be zero amount.</p>
+                            <form asp-action="AddManualStatementEntry" method="post" class="row g-3 admin-form-grid">
+                                <div class="col-md-4"><label class="form-label">Current property / renter</label><select class="form-select" name="LeaseId" required><option value="">Select current renter</option>@foreach (var lease in Model.Leases){if (lease.IsActive){<option value="@lease.LeaseId">@lease.DisplayName</option>}}</select></div>
+                                <div class="col-md-2"><label class="form-label">Date</label><input class="form-control" type="date" name="EntryDate" required /></div>
+                                <div class="col-md-2"><label class="form-label">Type</label><select class="form-select" name="EntryType"><option>Bill</option><option>Repair</option><option>Complaint</option><option>Credit</option><option>Note</option><option>Manual</option></select></div>
+                                <div class="col-md-2"><label class="form-label">Amount</label><input class="form-control" type="number" step="0.01" name="Amount" value="0" /></div>
+                                <div class="col-md-2"><label class="form-label">Description</label><input class="form-control" name="Description" required /></div>
+                                <div class="col-12"><label class="form-label">Notes</label><input class="form-control" name="Notes" /></div>
+                                <div class="col-12 text-end"><button class="btn btn-outline-dark" type="submit">Add statement row</button></div>
+                            </form>
+                        </div>
+                    </div>
+
+                    @if (Model.Statement is not null)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div><h3 class="h5 mb-0">@Model.Statement.ScopeTitle</h3><small class="text-muted">Opening @Model.Statement.OpeningBalance.ToString("C") | Closing @Model.Statement.ClosingBalance.ToString("C")</small></div>
+                            <span class="badge bg-light text-dark">@Model.Statement.Entries.Count rows</span>
+                        </div>
+                        <div class="table-responsive admin-property-table">
+                            <table class="table table-sm align-middle">
+                                <thead><tr><th>Date</th><th>Property</th><th>Tenant</th><th>Type</th><th>Description</th><th class="text-end">Amount</th><th class="text-end">Balance</th><th>Edit</th></tr></thead>
+                                <tbody>
+                                @if (Model.Statement.Entries.Count == 0)
                                 {
-                                    <option value="@property.Id">@property.Name (@property.AddressLine1)</option>
+                                    <tr><td colspan="8" class="text-center text-muted py-4">No statement rows found for this selection.</td></tr>
                                 }
-                            </select>
+                                else
+                                {
+                                    @foreach (var row in Model.Statement.Entries)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <form id="statement-row-@row.StatementEntryId" asp-action="UpdateStatementEntry" method="post">
+                                                    <input type="hidden" name="StatementEntryId" value="@row.StatementEntryId" />
+                                                </form>
+                                                <input form="statement-row-@row.StatementEntryId" class="form-control form-control-sm" type="date" name="EntryDate" value="@row.EntryDate.ToString("yyyy-MM-dd")" @(row.CanEdit ? null : "disabled") />
+                                            </td>
+                                            <td>@row.PropertyName</td>
+                                            <td>@row.TenantName</td>
+                                            <td><input form="statement-row-@row.StatementEntryId" class="form-control form-control-sm" name="EntryType" value="@row.EntryType" @(row.CanEdit ? null : "disabled") /></td>
+                                            <td><input form="statement-row-@row.StatementEntryId" class="form-control form-control-sm" name="Description" value="@row.Description" @(row.CanEdit ? null : "disabled") /></td>
+                                            <td><input form="statement-row-@row.StatementEntryId" class="form-control form-control-sm text-end" type="number" step="0.01" name="Amount" value="@row.Amount" @(row.CanEdit ? null : "disabled") /></td>
+                                            <td class="text-end fw-semibold">@row.RunningBalance.ToString("C")</td>
+                                            <td>@if (row.CanEdit){<button form="statement-row-@row.StatementEntryId" class="btn btn-sm btn-outline-primary" type="submit">Save</button>}else{<span class="badge bg-secondary">History</span>}</td>
+                                        </tr>
+                                    }
+                                }
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="mb-2"><label class="form-label">Tenant full name</label><input class="form-control" name="TenantFullName" required /></div>
-                        <div class="mb-2"><label class="form-label">Tenant email</label><input class="form-control" type="email" name="TenantEmail" /></div>
-                        <div class="mb-2"><label class="form-label">Tenant phone</label><input class="form-control" name="TenantPhone" /></div>
-                        <div class="mb-2"><label class="form-label">Lease start date</label><input class="form-control" type="date" name="LeaseStartDate" required /></div>
-                        <div class="mb-2"><label class="form-label">Opening saldo carried in</label><input class="form-control" type="number" step="0.01" name="OpeningOutstanding" value="0" /></div>
-                        <div class="mb-2"><label class="form-label">Deposit required (tenant still owes this)</label><input class="form-control" type="number" step="0.01" name="DepositRequired" value="0" /></div>
-                        <div class="mb-3"><label class="form-label">Initial rent</label><input class="form-control" type="number" step="0.01" name="InitialRent" required /></div>
-                        <button class="btn btn-warning" type="submit">Add tenant</button>
-                    </form>
+                    }
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        (() => {
+            document.querySelectorAll('#adminTabs [data-bs-toggle="tab"]').forEach((tabButton) => {
+                tabButton.addEventListener('shown.bs.tab', (event) => {
+                    const target = event.target?.getAttribute('data-bs-target') || '';
+                    const tab = target.replace('#', '').replace('-pane', '');
+                    if (!tab) return;
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('tab', tab);
+                    window.history.replaceState({}, '', url);
+                });
+            });
+        })();
+    </script>
+}
