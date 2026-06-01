@@ -1,5 +1,66 @@
 # RyanLouw-Rental-Automation-App
 
+## One-shot database migration script
+
+If you want one file to run now instead of opening all 10 migration files, generate a combined SQL script from the existing ordered migration scripts and run that single file with `psql`.
+
+> ⚠️ Important: migration `0009.sql` intentionally clears the demo/test rental data so you can start entering real property and renter data. Do not run the full script against a database that contains rental data you want to keep.
+
+### macOS / Linux / Git Bash
+
+```bash
+# Run from the repository root.
+set -euo pipefail
+
+mkdir -p build
+OUTPUT_FILE="build/full-rental-db-migration.sql"
+: > "$OUTPUT_FILE"
+
+for file in RLRentalApp.Migrations/Migrations/Scripts/*.sql; do
+  {
+    echo ""
+    echo "-- ============================================================"
+    echo "-- $file"
+    echo "-- ============================================================"
+    cat "$file"
+    echo ""
+  } >> "$OUTPUT_FILE"
+done
+
+echo "Created $OUTPUT_FILE"
+
+# Apply the one generated file. Replace the connection string with your database details.
+psql "Host=localhost;Port=5432;Database=rentaldb;Username=postgres;Password=your-password" -v ON_ERROR_STOP=1 -f "$OUTPUT_FILE"
+```
+
+### Windows PowerShell
+
+```powershell
+# Run from the repository root.
+$ErrorActionPreference = "Stop"
+
+New-Item -ItemType Directory -Force -Path build | Out-Null
+$outputFile = "build/full-rental-db-migration.sql"
+Set-Content -Path $outputFile -Value ""
+
+Get-ChildItem "RLRentalApp.Migrations/Migrations/Scripts/*.sql" | Sort-Object Name | ForEach-Object {
+    Add-Content -Path $outputFile -Value ""
+    Add-Content -Path $outputFile -Value "-- ============================================================"
+    Add-Content -Path $outputFile -Value "-- $($_.FullName)"
+    Add-Content -Path $outputFile -Value "-- ============================================================"
+    Get-Content $_.FullName | Add-Content -Path $outputFile
+    Add-Content -Path $outputFile -Value ""
+}
+
+Write-Host "Created $outputFile"
+
+# Apply the one generated file. Replace the connection string with your database details.
+psql "Host=localhost;Port=5432;Database=rentaldb;Username=postgres;Password=your-password" -v ON_ERROR_STOP=1 -f $outputFile
+```
+
+If you want to keep the demo/test data, use the normal migration runner instead of this full reset-style script, or remove the `0009.sql` section from `build/full-rental-db-migration.sql` before running it.
+
+
 ## Gmail SMTP setup (send emails to tenants)
 
 Use the `GmailSmtp` section in `RLRentalApp.Web/appsettings.Development.json` (or environment variables in production).
