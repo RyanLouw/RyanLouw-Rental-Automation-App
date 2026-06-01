@@ -61,6 +61,78 @@ psql "Host=localhost;Port=5432;Database=rentaldb;Username=postgres;Password=your
 If you want to keep the demo/test data, use the normal migration runner instead of this full reset-style script, or remove the `0009.sql` section from `build/full-rental-db-migration.sql` before running it.
 
 
+## Going to a live database / production
+
+Use PostgreSQL for the live database and keep production secrets outside git.
+
+### 1. Create the live PostgreSQL database
+
+Create a hosted PostgreSQL database with SSL enabled. Keep these values from your provider:
+
+- Host
+- Port, normally `5432`
+- Database name, for example `rentaldb`
+- Username
+- Password
+- SSL requirement
+
+Before changing an existing live database, take a backup first.
+
+### 2. Configure the live connection string
+
+Set the production connection string as an environment variable on the server or hosting platform:
+
+```bash
+ConnectionStrings__rentaldb="Host=your-db-host;Port=5432;Database=rentaldb;Username=your-db-user;Password=your-db-password;SSL Mode=Require;Trust Server Certificate=true"
+```
+
+Do not put the live password in `appsettings.json`, `appsettings.Development.json`, or any committed file.
+
+### 3. Configure live email secrets
+
+Set the Gmail SMTP values as environment variables too:
+
+```bash
+GmailSmtp__Host="smtp.gmail.com"
+GmailSmtp__Port="587"
+GmailSmtp__EnableSsl="true"
+GmailSmtp__Username="yourgmail@gmail.com"
+GmailSmtp__AppPassword="your-16-char-app-password"
+GmailSmtp__FromEmail="yourgmail@gmail.com"
+GmailSmtp__FromDisplayName="MH & Sons Properties"
+```
+
+### 4. Run the rental database migrations once
+
+For a brand-new live database, run the migration project against the live connection string:
+
+```bash
+ConnectionStrings__rentaldb="Host=your-db-host;Port=5432;Database=rentaldb;Username=your-db-user;Password=your-db-password;SSL Mode=Require;Trust Server Certificate=true" \
+  dotnet run --project RLRentalApp.Migrations/RLRentalApp.Migrations.csproj
+```
+
+You can also use the one-shot SQL script above, but check `0009.sql` first because it truncates rental data. On a new empty live database that is fine; on a database with real data, do not run the truncation section.
+
+### 5. Start the web app
+
+Start `RLRentalApp.Web` with the same `ConnectionStrings__rentaldb` and `GmailSmtp__...` environment variables. When the web app starts, it automatically applies the ASP.NET Identity tables/migrations for login users.
+
+```bash
+ASPNETCORE_ENVIRONMENT="Production" \
+ConnectionStrings__rentaldb="Host=your-db-host;Port=5432;Database=rentaldb;Username=your-db-user;Password=your-db-password;SSL Mode=Require;Trust Server Certificate=true" \
+dotnet run --project RLRentalApp.Web/RLRentalApp.Web.csproj
+```
+
+### 6. Production checklist
+
+- Keep SSL required for the database connection.
+- Keep all passwords and app passwords in environment variables or a managed secret store.
+- Run migrations before pointing users at the app.
+- Confirm login works and change any default/admin password immediately.
+- Send one test statement email to yourself before emailing tenants.
+- Schedule automatic database backups with your hosting provider.
+- Do not run the `0009.sql` truncation step after real rental data exists.
+
 ## Gmail SMTP setup (send emails to tenants)
 
 Use the `GmailSmtp` section in `RLRentalApp.Web/appsettings.Development.json` (or environment variables in production).
