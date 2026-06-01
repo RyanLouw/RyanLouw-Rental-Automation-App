@@ -80,7 +80,7 @@ WITH demo_data(property_name, tenant_name, rent_amount) AS (
     RETURNING id, lease_id, effective_from, amount
 )
 INSERT INTO statement_sdt (property_id, tenant_id, lease_id, entry_date, entry_type, description, amount, source_table, source_id)
-SELECT l.property_id, l.tenant_id, rr.lease_id, rr.effective_from, 'Rent', 'Rent for statement month', rr.amount, 'rent_rate', rr.id
+SELECT l.property_id, l.tenant_id, rr.lease_id, rr.effective_from, 'Rent', 'Rental', rr.amount, 'rent_rate', rr.id
 FROM inserted_rent rr
 JOIN lease l ON l.id = rr.lease_id
 ON CONFLICT (source_table, source_id) DO NOTHING;

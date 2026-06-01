@@ -506,7 +506,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             leaseId,
             effectiveFrom.Date,
             "Rent",
-            "Rent for statement month",
+            "Rental",
             amount,
             "rent_rate",
             rentRateId.Value);
@@ -624,7 +624,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
                 leaseId,
                 payment.PaidOn.Date,
                 "Payment",
-                string.IsNullOrWhiteSpace(payment.Reference) ? "Payment received" : payment.Reference,
+                "Payment received, thank you",
                 -payment.Amount,
                 "payment",
                 Convert.ToInt64(insertedId));

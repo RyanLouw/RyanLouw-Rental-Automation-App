@@ -102,7 +102,7 @@ public class AdminController : Controller
             var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.PaymentReference, request.OpeningOutstanding, 0m, "Onboarded as existing property takeover");
             var leaseId = await InsertLeaseAsync(connection, tx, propertyId, tenantId, request.LeaseStartDate, "Onboarded from admin");
             var rentRateId = await InsertRentRateAsync(connection, tx, leaseId, request.LeaseStartDate, request.InitialRent, "Initial rent on takeover");
-            await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rent for statement month", request.InitialRent, "rent_rate", rentRateId);
+            await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rental", request.InitialRent, "rent_rate", rentRateId);
             if (request.DepositRequired > 0)
             {
                 await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Deposit", "Deposit required", request.DepositRequired, "tenant_deposit", tenantId);
@@ -145,7 +145,7 @@ public class AdminController : Controller
             var tenantId = await InsertTenantAsync(connection, tx, request.TenantFullName, request.TenantEmail, request.TenantPhone, request.PaymentReference, request.OpeningOutstanding, 0m, "Added as new tenant to existing property");
             var leaseId = await InsertLeaseAsync(connection, tx, request.PropertyId, tenantId, request.LeaseStartDate, "Tenant change from admin");
             var rentRateId = await InsertRentRateAsync(connection, tx, leaseId, request.LeaseStartDate, request.InitialRent, "Initial rent for new tenant");
-            await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rent for statement month", request.InitialRent, "rent_rate", rentRateId);
+            await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Rent", "Rental", request.InitialRent, "rent_rate", rentRateId);
             if (request.DepositRequired > 0)
             {
                 await UpsertStatementSdtAsync(connection, tx, leaseId, request.LeaseStartDate, "Deposit", "Deposit required", request.DepositRequired, "tenant_deposit", tenantId);
@@ -186,7 +186,7 @@ public class AdminController : Controller
             }
 
             var rentRateId = await InsertRentRateAsync(connection, tx, request.LeaseId, request.EffectiveFrom, request.Amount, string.IsNullOrWhiteSpace(request.Notes) ? "Rent updated from admin" : Clean(request.Notes));
-            await UpsertStatementSdtAsync(connection, tx, request.LeaseId, request.EffectiveFrom, "Rent", "Rent for statement month", request.Amount, "rent_rate", rentRateId);
+            await UpsertStatementSdtAsync(connection, tx, request.LeaseId, request.EffectiveFrom, "Rent", "Rental", request.Amount, "rent_rate", rentRateId);
             await tx.CommitAsync();
             TempData["AdminMessage"] = "Rent updated and added to the statement ledger.";
         }
