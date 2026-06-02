@@ -25,6 +25,7 @@ public class PropertyStatusVm
     public int? TenantId { get; set; }
     public string? TenantName { get; set; }
     public string? TenantEmail { get; set; }
+    public string? PaymentReference { get; set; }
     public DateTime? LeaseStartDate { get; set; }
     public decimal? LatestRent { get; set; }
     public decimal OpeningOutstanding { get; set; }
@@ -54,6 +55,7 @@ public class PropertyStatementVm
     public string PropertyName { get; set; } = string.Empty;
     public string PropertyAddress { get; set; } = string.Empty;
     public string TenantName { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentBalance { get; set; }
     public DateTime StatementMonth { get; set; }
@@ -142,6 +144,7 @@ public class PaymentPdfParseResultVm
     public bool Success { get; set; }
     public string? ErrorMessage { get; set; }
     public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
     public string RawTextPreview { get; set; } = string.Empty;
 }
 
@@ -156,6 +159,7 @@ public class SavePaymentsRequestVm
 {
     public int PropertyId { get; set; }
     public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
     public string Notes { get; set; } = string.Empty;
 }
 
@@ -166,6 +170,23 @@ public class SavePaymentsResultVm
     public int AddedCount { get; set; }
     public int SkippedDuplicates { get; set; }
     public List<PaymentCandidateVm> SavedPayments { get; set; } = [];
+    public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
+}
+
+public class RenterPaymentMatchVm
+{
+    public int PropertyId { get; set; }
+    public string PropertyName { get; set; } = string.Empty;
+    public int LeaseId { get; set; }
+    public int TenantId { get; set; }
+    public string TenantName { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
+    public decimal? ExpectedAmount { get; set; }
+    public decimal PaidTotal { get; set; }
+    public bool HasPayment { get; set; }
+    public bool IsShortPaid { get; set; }
+    public string Warning { get; set; } = string.Empty;
+    public List<PaymentCandidateVm> Payments { get; set; } = [];
 }
 
 

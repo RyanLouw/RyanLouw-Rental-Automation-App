@@ -1,10 +1,10 @@
-﻿using FluentMigrator;
+using FluentMigrator;
 
 namespace Database.Migrations;
 
 [Tags(TagNames.Rental)]
-[Migration(0003)]
-public class _0003_SeedDummyData : Migration
+[Migration(0010)]
+public class _0010_AddManualStatementEntry : Migration
 {
     public override void Down()
     {
@@ -13,6 +13,6 @@ public class _0003_SeedDummyData : Migration
 
     public override void Up()
     {
-       // Execute.Script(@"Migrations\Scripts\0003.sql");
+        Execute.Script(@"Migrations\Scripts\0010.sql");
     }
 }

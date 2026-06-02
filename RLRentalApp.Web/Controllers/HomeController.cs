@@ -133,6 +133,20 @@ public class HomeController : Controller
 
 
     [HttpPost]
+    public async Task<IActionResult> ParseAllRentersPaymentPdf(IFormFile? pdfFile)
+    {
+        var result = await _propertyDashboardManager.ParseAllRentersPaymentPdfAsync(pdfFile);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
+    [HttpPost]
     public async Task<IActionResult> SavePayments([FromBody] SavePaymentsRequestVm request)
     {
         var result = await _propertyDashboardManager.SavePaymentsAsync(request);

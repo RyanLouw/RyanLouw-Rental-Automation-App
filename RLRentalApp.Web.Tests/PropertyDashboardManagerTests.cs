@@ -43,7 +43,7 @@ public class PropertyDashboardManagerTests
         var dataAccess = new FakePropertyDashboardDataAccess
         {
             Property = new PropertyOptionVm { Id = 8, Name = "Flat", AddressLine1 = "45 Oak", IsActive = true },
-            ActiveLease = new ActiveLeaseDataModel { LeaseId = 12, TenantId = 16, TenantName = "Alice", StartDate = new DateTime(2023, 6, 1) },
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 12, TenantId = 16, TenantName = "Alice", PaymentReference = "ALICE-UNIT-8", StartDate = new DateTime(2023, 6, 1) },
             OpeningOutstanding = 1000m,
             AmountBeforeDate = 400m,
             Snapshot = new StatementSnapshotDataModel { AmountThroughMonth = 900m }
@@ -71,6 +71,7 @@ public class PropertyDashboardManagerTests
         Assert.NotNull(statement);
         Assert.Equal(1400m, statement!.OpeningOutstanding);
         Assert.Equal(1900m, statement.CurrentBalance);
+        Assert.Equal("ALICE-UNIT-8", statement.PaymentReference);
 
         Assert.Equal(new DateTime(2025, 1, 1), dataAccess.RequestedStatementMonths[0]);
         Assert.Equal(new DateTime(2025, 2, 1), dataAccess.RequestedStatementMonths[1]);
@@ -161,6 +162,21 @@ public class PropertyDashboardManagerTests
         Assert.NotEmpty(emailService.LastAttachmentBytes!);
     }
 
+
+    [Fact]
+    public void ParsePaymentRows_ParsesAfrikaansMonthStatementDates()
+    {
+        const string statementText = "Staatdatum : 9 Mei 2026 Transaksies in RAND (ZAR) 02 MeiDebiet Order Krediet Investecpbsbusiso Ngcobo11,000.00Kt105,683.94Kt";
+        var parseMethod = typeof(PropertyDashboardManager).GetMethod("ParsePaymentRows", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(parseMethod);
+        var payments = Assert.IsType<List<PaymentCandidateVm>>(parseMethod!.Invoke(null, [statementText, "Investecpbsbusiso Ngcobo"]));
+
+        var payment = Assert.Single(payments);
+        Assert.Equal(new DateTime(2026, 5, 2), payment.PaidOn);
+        Assert.Equal(11000m, payment.Amount);
+    }
+
     private sealed class FakePropertyDashboardDataAccess : IPropertyDashboardDataAccess
     {
         public PropertyOptionVm? Property { get; set; }
@@ -175,6 +191,7 @@ public class PropertyDashboardManagerTests
         public Task<List<PropertyOptionVm>> LoadPropertiesAsync() => Task.FromResult(new List<PropertyOptionVm>());
         public Task<PropertyOptionVm?> LoadPropertyAsync(int propertyId) => Task.FromResult(Property);
         public Task<ActiveLeaseDataModel?> LoadActiveLeaseAsync(int propertyId) => Task.FromResult(ActiveLease);
+        public Task<List<ActiveLeasePaymentMatchDataModel>> LoadActiveLeasesForPaymentMatchingAsync(DateTime asOfDate) => Task.FromResult(new List<ActiveLeasePaymentMatchDataModel>());
         public Task<decimal> LoadOpeningOutstandingAsync(int tenantId) => Task.FromResult(OpeningOutstanding);
         public Task<decimal?> LoadLatestRentAsync(int leaseId, DateTime asOfDate) => Task.FromResult(LatestRent);
         public Task<StatementSnapshotDataModel> LoadStatementSnapshotAsync(int leaseId, DateTime monthStart) => Task.FromResult(Snapshot);
