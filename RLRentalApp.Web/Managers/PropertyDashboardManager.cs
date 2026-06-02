@@ -37,7 +37,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         public const string CompanyLine2 = "Investment";
         public const string CompanyLine3 = "Properties";
         public const string HeaderTitle = "Statement";
-        public const string LogoRelativePath = "wwwroot/images/statement-logo.png";
+        public const string LogoRelativePath = "wwwroot/Logo.enc";//C:\Users\louwr\Source\Repos\RyanLouw-Rental-Automation-App\RLRentalApp.Web\wwwroot\Logo.enc
         public const string OfficeAddressLine1 = "No 9 Waterberg straat";
         public const string OfficeAddressLine2 = "Noordheuwel X6";
         public const string OfficeAddressLine3 = "Krugersdorp";

@@ -13,6 +13,6 @@ public class _0003_SeedDummyData : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0003.sql");
+       // Execute.Script(@"Migrations\Scripts\0003.sql");
     }
 }
