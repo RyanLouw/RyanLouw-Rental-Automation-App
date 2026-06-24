@@ -173,6 +173,23 @@ public class SavePaymentsResultVm
     public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
 }
 
+public class LatePaymentChargeDataModel
+{
+    public int LeaseId { get; set; }
+    public int TenantId { get; set; }
+    public string TenantName { get; set; } = string.Empty;
+    public string TenantEmail { get; set; } = string.Empty;
+    public DateTime PaidOn { get; set; }
+    public decimal PaymentAmount { get; set; }
+    public decimal BalanceBeforePayment { get; set; }
+    public decimal BalanceAfterPayment { get; set; }
+    public int DaysLate { get; set; }
+    public decimal InterestAmount { get; set; }
+    public decimal LetterAmount { get; set; }
+    public decimal CurrentBalance { get; set; }
+    public string InterestDescription { get; set; } = string.Empty;
+}
+
 public class RenterPaymentMatchVm
 {
     public int PropertyId { get; set; }

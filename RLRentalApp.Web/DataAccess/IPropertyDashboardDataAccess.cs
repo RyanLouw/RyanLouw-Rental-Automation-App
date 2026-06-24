@@ -18,4 +18,5 @@ public interface IPropertyDashboardDataAccess
     Task<int> UpsertRentRateAsync(int leaseId, DateTime effectiveFrom, decimal amount, string notes);
     Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount);
     Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments);
+    Task<List<LatePaymentChargeDataModel>> ApplyLatePaymentChargesAsync(int leaseId, List<PaymentInsertDataModel> payments);
 }

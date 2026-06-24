@@ -586,6 +586,164 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return exists is not null and not DBNull;
     }
 
+
+    public async Task<List<LatePaymentChargeDataModel>> ApplyLatePaymentChargesAsync(int leaseId, List<PaymentInsertDataModel> payments)
+    {
+        var charges = new List<LatePaymentChargeDataModel>();
+        if (payments.Count == 0)
+        {
+            return charges;
+        }
+
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        foreach (var payment in payments.Where(x => x.Amount > 0 && x.PaidOn.Day > 4))
+        {
+            var paymentId = await LoadLatestPaymentIdAsync(connection, leaseId, payment.PaidOn.Date, payment.Amount);
+            if (!paymentId.HasValue || await LateChargeExistsAsync(connection, paymentId.Value))
+            {
+                continue;
+            }
+
+            var dueDate = new DateTime(payment.PaidOn.Year, payment.PaidOn.Month, 4);
+            var daysLate = (payment.PaidOn.Date - dueDate).Days;
+            if (daysLate <= 0)
+            {
+                continue;
+            }
+
+            var balanceBeforePayment = await LoadBalanceBeforePaymentAsync(connection, leaseId, payment.PaidOn.Date);
+            if (balanceBeforePayment <= 0)
+            {
+                continue;
+            }
+
+            var balanceAfterPayment = Math.Max(0m, balanceBeforePayment - payment.Amount);
+            var firstInterest = RoundMoney(balanceBeforePayment * daysLate / 365m * 0.23m);
+            var ongoingInterest = balanceAfterPayment > 0 ? RoundMoney(balanceAfterPayment * 30m / 365m * 0.23m) : 0m;
+            var interestAmount = firstInterest + ongoingInterest;
+            if (interestAmount <= 0)
+            {
+                continue;
+            }
+
+            var interestDescription = balanceAfterPayment > 0
+                ? $"Late payment interest: R {balanceBeforePayment:N2} x {daysLate}/365 x 23% = R {firstInterest:N2}; outstanding after payment R {balanceAfterPayment:N2} x 30/365 x 23% = R {ongoingInterest:N2}"
+                : $"Late payment interest: R {balanceBeforePayment:N2} x {daysLate}/365 x 23% = R {firstInterest:N2}";
+
+            await InsertStatementOnlyEntryAsync(connection, leaseId, payment.PaidOn.Date, "Interest", interestDescription, interestAmount, "late_interest", paymentId.Value);
+
+            var letterAmount = 0m;
+            if (balanceAfterPayment > 0)
+            {
+                letterAmount = 200m;
+                await InsertStatementOnlyEntryAsync(connection, leaseId, payment.PaidOn.Date, "Fee", "Late payment letter", letterAmount, "late_payment_letter", paymentId.Value);
+            }
+
+            var noticeInfo = await LoadLatePaymentNoticeInfoAsync(connection, leaseId);
+            noticeInfo.PaidOn = payment.PaidOn.Date;
+            noticeInfo.PaymentAmount = payment.Amount;
+            noticeInfo.BalanceBeforePayment = balanceBeforePayment;
+            noticeInfo.BalanceAfterPayment = balanceAfterPayment;
+            noticeInfo.DaysLate = daysLate;
+            noticeInfo.InterestAmount = interestAmount;
+            noticeInfo.LetterAmount = letterAmount;
+            noticeInfo.CurrentBalance = await LoadCurrentLeaseBalanceAsync(connection, leaseId);
+            noticeInfo.InterestDescription = interestDescription;
+            charges.Add(noticeInfo);
+        }
+
+        return charges;
+    }
+
+    private static decimal RoundMoney(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    private static async Task<long?> LoadLatestPaymentIdAsync(DbConnection connection, int leaseId, DateTime paidOn, decimal amount)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"SELECT id FROM payment WHERE lease_id = @leaseId AND paid_on = @paidOn AND amount = @amount ORDER BY id DESC LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@paidOn", paidOn.Date);
+        AddParameter(cmd, "@amount", amount);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is null or DBNull ? null : Convert.ToInt64(value);
+    }
+
+    private static async Task<bool> LateChargeExistsAsync(DbConnection connection, long paymentId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"SELECT 1 FROM statement_sdt WHERE source_table IN ('late_interest', 'late_payment_letter') AND source_id = @paymentId LIMIT 1;";
+        AddParameter(cmd, "@paymentId", paymentId);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is not null and not DBNull;
+    }
+
+    private static async Task<decimal> LoadBalanceBeforePaymentAsync(DbConnection connection, int leaseId, DateTime paidOn)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COALESCE(t.current_amount_outstanding, 0) + COALESCE((
+                SELECT SUM(amount)
+                FROM statement_sdt
+                WHERE lease_id = @leaseId
+                  AND entry_date < @paidOn
+            ), 0)
+            FROM lease l
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            WHERE l.id = @leaseId
+            LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@paidOn", paidOn.Date);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    private static async Task<decimal> LoadCurrentLeaseBalanceAsync(DbConnection connection, int leaseId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COALESCE(t.current_amount_outstanding, 0) + COALESCE(SUM(s.amount), 0)
+            FROM lease l
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN statement_sdt s ON s.lease_id = l.id
+            WHERE l.id = @leaseId
+            GROUP BY t.current_amount_outstanding
+            LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    private static async Task<LatePaymentChargeDataModel> LoadLatePaymentNoticeInfoAsync(DbConnection connection, int leaseId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, '')
+            FROM lease l
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            WHERE l.id = @leaseId
+            LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return new LatePaymentChargeDataModel { LeaseId = leaseId };
+        }
+        return new LatePaymentChargeDataModel
+        {
+            LeaseId = reader.GetInt32(0),
+            TenantId = reader.GetInt32(1),
+            TenantName = reader.GetString(2),
+            TenantEmail = reader.GetString(3)
+        };
+    }
+
+    private static async Task InsertStatementOnlyEntryAsync(DbConnection connection, int leaseId, DateTime entryDate, string entryType, string description, decimal amount, string sourceTable, long sourceId)
+    {
+        await UpsertStatementSdtEntryAsync(connection, leaseId, entryDate, entryType, description, amount, sourceTable, sourceId);
+    }
+
     public async Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments)
     {
         if (payments.Count == 0)

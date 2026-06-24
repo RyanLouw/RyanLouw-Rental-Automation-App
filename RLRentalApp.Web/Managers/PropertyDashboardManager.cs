@@ -637,6 +637,15 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var inserted = await _dataAccess.InsertPaymentsAsync(leaseId, toInsert);
+        var lateCharges = inserted > 0
+            ? await _dataAccess.ApplyLatePaymentChargesAsync(leaseId, toInsert)
+            : [];
+
+        foreach (var charge in lateCharges)
+        {
+            await SendLatePaymentNoticeAsync(charge);
+        }
+
         var savedPayments = toInsert
             .Select(x => new PaymentCandidateVm
             {
@@ -653,9 +662,47 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             SkippedDuplicates = skippedDuplicates,
             SavedPayments = savedPayments,
             Message = inserted > 0
-                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s)."
+                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s). Added late interest for {lateCharges.Count} late payment(s)."
                 : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."
         };
+    }
+
+    private async Task SendLatePaymentNoticeAsync(LatePaymentChargeDataModel charge)
+    {
+        if (string.IsNullOrWhiteSpace(charge.TenantEmail))
+        {
+            return;
+        }
+
+        var addedTotal = charge.InterestAmount + charge.LetterAmount;
+        var subject = $"Late rent - demand for payment - {charge.PaidOn:dd MMMM yyyy}";
+        var body = BuildLatePaymentNoticeBody(charge, addedTotal);
+
+        try
+        {
+            await _emailService.SendEmailAsync(charge.TenantEmail.Trim(), subject, body);
+        }
+        catch
+        {
+            // Payment saving must not fail because the late-payment notice email could not be sent.
+        }
+    }
+
+    private static string BuildLatePaymentNoticeBody(LatePaymentChargeDataModel charge, decimal addedTotal)
+    {
+        var letterLine = charge.LetterAmount > 0
+            ? $"\nLate payment letter: {FormatMoney(charge.LetterAmount)}"
+            : string.Empty;
+
+        return $"Dear {charge.TenantName}\n\n" +
+               $"Late rent - demand for payment\n\n" +
+               $"Your payment was received after the 4th of the month. As a result and according to our lease agreement, a late charge has been added to your total balance.\n\n" +
+               $"Interest calculation: {charge.InterestDescription}\n" +
+               $"Interest added: {FormatMoney(charge.InterestAmount)}{letterLine}\n" +
+               $"Total late charges added: {FormatMoney(addedTotal)}\n\n" +
+               $"Your current balance is {FormatMoney(charge.CurrentBalance)}. THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY. This is a serious matter and your urgent attention is required. Failure to act promptly may lead to eviction proceedings. If such is sought you may be liable / responsible for additional charges, such as, but not limited to attorney fees and your credit rating could be affected. Please contact me as soon as you receive this notice.\n\n" +
+               $"This is also a friendly reminder that your rent has not been received on time and is due. If this was an oversight, please send your payment immediately in order to avoid further late charges. Remember that paying your rent on time is of great importance, and the rent must be received by me on the due date in order to be considered on time.\n\n" +
+               $"Thank you in advance for your prompt attention to this matter. Feel free to contact me with any questions or concerns.";
     }
 
     public async Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains)
