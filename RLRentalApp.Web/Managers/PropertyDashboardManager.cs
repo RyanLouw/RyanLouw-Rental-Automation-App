@@ -903,16 +903,23 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return result;
         }
 
-        var invoiceLineMatch = Regex.Match(
+        var invoiceLineMatches = Regex.Matches(
             text,
-            $@"(?is)\b{meterType}\b[^\r\n]*(?:\r?\n[^\r\n]*){{0,2}}?Previous\s*:\s*(\d+(?:\.\d+)?)\s*,\s*Current\s*:\s*(\d+(?:\.\d+)?)[\s\S]{{0,120}}?Usage\s*:\s*\d+(?:\.\d+)?\s+([\d,]+\.\d{{2}})\s+0\s+[\d\s,]+\.\d{{2}}");
+            $@"(?is)\b{meterType}\b[\s\S]{{0,180}}?Previous\s*:\s*(\d+(?:\.\d+)?)\s*,\s*Current\s*:\s*(\d+(?:\.\d+)?)[\s\S]{{0,80}}?Usage\s*:\s*([0-9][0-9\s,.]{{0,50}})");
 
-        if (invoiceLineMatch.Success)
+        foreach (var invoiceLineMatch in invoiceLineMatches.Cast<Match>().Reverse())
         {
-            result.OldReading = TryParseDecimal(invoiceLineMatch.Groups[1].Value);
-            result.NewReading = TryParseDecimal(invoiceLineMatch.Groups[2].Value);
-            result.LeviedAmount = TryParseDecimal(invoiceLineMatch.Groups[3].Value);
-            return result;
+            var oldReading = TryParseDecimal(invoiceLineMatch.Groups[1].Value);
+            var newReading = TryParseDecimal(invoiceLineMatch.Groups[2].Value);
+            var amount = TryParseInvoiceMeterAmount(invoiceLineMatch.Groups[3].Value, oldReading, newReading);
+
+            if (amount.HasValue)
+            {
+                result.OldReading = oldReading;
+                result.NewReading = newReading;
+                result.LeviedAmount = amount;
+                return result;
+            }
         }
 
         var oldMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?old\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
@@ -924,6 +931,23 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         result.LeviedAmount = TryParseDecimal(leviedMatch.Groups[2].Value);
 
         return result;
+    }
+
+    private static decimal? TryParseInvoiceMeterAmount(string usageAndAmountText, decimal? oldReading, decimal? newReading)
+    {
+        var compactText = Regex.Replace(usageAndAmountText, @"[\s,]", string.Empty);
+        if (oldReading.HasValue && newReading.HasValue)
+        {
+            var expectedUsage = newReading.Value - oldReading.Value;
+            var expectedUsageText = expectedUsage.ToString("0.###", CultureInfo.InvariantCulture);
+            if (compactText.StartsWith(expectedUsageText, StringComparison.OrdinalIgnoreCase))
+            {
+                compactText = compactText[expectedUsageText.Length..];
+            }
+        }
+
+        var amountMatch = Regex.Match(compactText, @"^(\d+\.\d{2})");
+        return TryParseDecimal(amountMatch.Groups[1].Value);
     }
 
     private static AccountChargeResult ParseAccountChargeByKeyword(string text, string keywordPattern)
