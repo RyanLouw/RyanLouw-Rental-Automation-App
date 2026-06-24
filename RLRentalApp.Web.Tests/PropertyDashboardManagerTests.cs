@@ -177,6 +177,62 @@ public class PropertyDashboardManagerTests
         Assert.Equal(11000m, payment.Amount);
     }
 
+
+    [Fact]
+    public void ParseMeterReadingByType_StillParsesOriginalMeterReadingsSection()
+    {
+        const string statementText = "METER READINGS ELECTRICITY 109307.000 109569.000 I 262.000 804.83 WATER 2822.000 2833.000 I 11.000 378.95 ACCOUNT DETAILS";
+
+        var electricity = InvokeParseMeterReadingByType(statementText, "ELECTRICITY");
+        var water = InvokeParseMeterReadingByType(statementText, "WATER");
+
+        Assert.Equal(109307m, GetNullableDecimal(electricity, "OldReading"));
+        Assert.Equal(109569m, GetNullableDecimal(electricity, "NewReading"));
+        Assert.Equal(804.83m, GetNullableDecimal(electricity, "LeviedAmount"));
+        Assert.Equal(2822m, GetNullableDecimal(water, "OldReading"));
+        Assert.Equal(2833m, GetNullableDecimal(water, "NewReading"));
+        Assert.Equal(378.95m, GetNullableDecimal(water, "LeviedAmount"));
+    }
+
+    [Fact]
+    public void ParseMeterReadingByType_ParsesLatestCompressedInvoiceMeterLines()
+    {
+        const string statementText = "2026-05-01Invoice INV02597 (Line 1)Water (2026-03-01 to 2026-04-01) - Previous:2822, Current: 2833 - Usage: 11378.9505 423.21" +
+            "2026-05-01Invoice INV02597 (Line 2)Electricity (2026-03-01 to 2026-04-01) - Previous:109307, Current: 109569 - Usage: 262804.8306 228.04" +
+            "2026-06-01Invoice INV02669 (Line 3)Water (2026-04-01 to 2026-05-01) - Previous:2833, Current: 2845 - Usage: 12418.20010 343.09" +
+            "2026-06-01Invoice INV02669 (Line 4)Electricity (2026-04-01 to 2026-05-01) - Previous:109569, Current: 109938 - Usage: 3691133.52011 476.61";
+
+        var electricity = InvokeParseMeterReadingByType(statementText, "ELECTRICITY");
+        var water = InvokeParseMeterReadingByType(statementText, "WATER");
+
+        Assert.Equal(109569m, GetNullableDecimal(electricity, "OldReading"));
+        Assert.Equal(109938m, GetNullableDecimal(electricity, "NewReading"));
+        Assert.Equal(1133.52m, GetNullableDecimal(electricity, "LeviedAmount"));
+        Assert.Equal(2833m, GetNullableDecimal(water, "OldReading"));
+        Assert.Equal(2845m, GetNullableDecimal(water, "NewReading"));
+        Assert.Equal(418.20m, GetNullableDecimal(water, "LeviedAmount"));
+    }
+
+    private static object InvokeParseMeterReadingByType(string statementText, string meterType)
+    {
+        var parseMethod = typeof(PropertyDashboardManager).GetMethod("ParseMeterReadingByType", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(parseMethod);
+        var result = parseMethod!.Invoke(null, [statementText, meterType]);
+
+        Assert.NotNull(result);
+        return result!;
+    }
+
+    private static decimal? GetNullableDecimal(object source, string propertyName)
+    {
+        var property = source.GetType().GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        Assert.NotNull(property);
+        var value = property!.GetValue(source);
+        return value is null ? null : Assert.IsType<decimal>(value);
+    }
+
     private sealed class FakePropertyDashboardDataAccess : IPropertyDashboardDataAccess
     {
         public PropertyOptionVm? Property { get; set; }

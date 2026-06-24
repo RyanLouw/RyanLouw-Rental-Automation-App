@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Linq;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
 
 namespace RLRentalApp.Web.Managers;
 
@@ -726,7 +727,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
-    public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file)
+    public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file, string? password = null)
     {
         if (file is null || file.Length == 0)
         {
@@ -739,7 +740,19 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         await using var stream = file.OpenReadStream();
-        var text = ExtractPdfText(stream);
+        string text;
+        try
+        {
+            text = ExtractPdfText(stream, password);
+        }
+        catch (Exception ex) when (IsPdfPasswordFailure(ex))
+        {
+            var message = string.IsNullOrWhiteSpace(password)
+                ? "This PDF is password protected. Enter the PDF password and try again."
+                : "Could not open the PDF with that password. Check the password and try again.";
+
+            return new ServicePdfParseResultVm { Success = false, ErrorMessage = message };
+        }
 
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -779,10 +792,15 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         });
     }
 
-    private static string ExtractPdfText(Stream stream)
+    private static string ExtractPdfText(Stream stream, string? password = null)
     {
         var builder = new StringBuilder();
-        using var document = PdfDocument.Open(stream);
+        var options = string.IsNullOrWhiteSpace(password)
+            ? null
+            : new ParsingOptions { Password = password.Trim() };
+        using var document = options is null
+            ? PdfDocument.Open(stream)
+            : PdfDocument.Open(stream, options);
 
         foreach (var page in document.GetPages())
         {
@@ -790,6 +808,14 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         return builder.ToString();
+    }
+
+    private static bool IsPdfPasswordFailure(Exception ex)
+    {
+        var message = ex.Message ?? string.Empty;
+        return message.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("encrypt", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("decrypt", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ElectricityParseVm ParseElectricity(string text)
@@ -877,6 +903,25 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return result;
         }
 
+        var invoiceLineMatches = Regex.Matches(
+            text,
+            $@"(?is)\b{meterType}\b[\s\S]{{0,180}}?Previous\s*:\s*(\d+(?:\.\d+)?)\s*,\s*Current\s*:\s*(\d+(?:\.\d+)?)[\s\S]{{0,80}}?Usage\s*:\s*([0-9][0-9\s,.]{{0,50}})");
+
+        foreach (var invoiceLineMatch in invoiceLineMatches.Cast<Match>().Reverse())
+        {
+            var oldReading = TryParseDecimal(invoiceLineMatch.Groups[1].Value);
+            var newReading = TryParseDecimal(invoiceLineMatch.Groups[2].Value);
+            var amount = TryParseInvoiceMeterAmount(invoiceLineMatch.Groups[3].Value, oldReading, newReading);
+
+            if (amount.HasValue)
+            {
+                result.OldReading = oldReading;
+                result.NewReading = newReading;
+                result.LeviedAmount = amount;
+                return result;
+            }
+        }
+
         var oldMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?old\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
         var newMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?new\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
         var leviedMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,200}}?(levied\s*amount|amount\s*incl\s*vat|amount)\s*[:\-]?\s*(?:R)?\s*([\d,]+(?:\.\d{{1,2}})?)");
@@ -886,6 +931,23 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         result.LeviedAmount = TryParseDecimal(leviedMatch.Groups[2].Value);
 
         return result;
+    }
+
+    private static decimal? TryParseInvoiceMeterAmount(string usageAndAmountText, decimal? oldReading, decimal? newReading)
+    {
+        var compactText = Regex.Replace(usageAndAmountText, @"[\s,]", string.Empty);
+        if (oldReading.HasValue && newReading.HasValue)
+        {
+            var expectedUsage = newReading.Value - oldReading.Value;
+            var expectedUsageText = expectedUsage.ToString("0.###", CultureInfo.InvariantCulture);
+            if (compactText.StartsWith(expectedUsageText, StringComparison.OrdinalIgnoreCase))
+            {
+                compactText = compactText[expectedUsageText.Length..];
+            }
+        }
+
+        var amountMatch = Regex.Match(compactText, @"^(\d+\.\d{2})");
+        return TryParseDecimal(amountMatch.Groups[1].Value);
     }
 
     private static AccountChargeResult ParseAccountChargeByKeyword(string text, string keywordPattern)
