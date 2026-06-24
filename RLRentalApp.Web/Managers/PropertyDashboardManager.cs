@@ -903,6 +903,18 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return result;
         }
 
+        var invoiceLineMatch = Regex.Match(
+            text,
+            $@"(?is)\b{meterType}\b[^\r\n]*(?:\r?\n[^\r\n]*){{0,2}}?Previous\s*:\s*(\d+(?:\.\d+)?)\s*,\s*Current\s*:\s*(\d+(?:\.\d+)?)[\s\S]{{0,120}}?Usage\s*:\s*\d+(?:\.\d+)?\s+([\d,]+\.\d{{2}})\s+0\s+[\d\s,]+\.\d{{2}}");
+
+        if (invoiceLineMatch.Success)
+        {
+            result.OldReading = TryParseDecimal(invoiceLineMatch.Groups[1].Value);
+            result.NewReading = TryParseDecimal(invoiceLineMatch.Groups[2].Value);
+            result.LeviedAmount = TryParseDecimal(invoiceLineMatch.Groups[3].Value);
+            return result;
+        }
+
         var oldMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?old\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
         var newMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?new\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
         var leviedMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,200}}?(levied\s*amount|amount\s*incl\s*vat|amount)\s*[:\-]?\s*(?:R)?\s*([\d,]+(?:\.\d{{1,2}})?)");
