@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Linq;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
 
 namespace RLRentalApp.Web.Managers;
 
@@ -726,7 +727,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
-    public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file)
+    public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file, string? password = null)
     {
         if (file is null || file.Length == 0)
         {
@@ -739,7 +740,19 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         await using var stream = file.OpenReadStream();
-        var text = ExtractPdfText(stream);
+        string text;
+        try
+        {
+            text = ExtractPdfText(stream, password);
+        }
+        catch (Exception ex) when (IsPdfPasswordFailure(ex))
+        {
+            var message = string.IsNullOrWhiteSpace(password)
+                ? "This PDF is password protected. Enter the PDF password and try again."
+                : "Could not open the PDF with that password. Check the password and try again.";
+
+            return new ServicePdfParseResultVm { Success = false, ErrorMessage = message };
+        }
 
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -779,10 +792,15 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         });
     }
 
-    private static string ExtractPdfText(Stream stream)
+    private static string ExtractPdfText(Stream stream, string? password = null)
     {
         var builder = new StringBuilder();
-        using var document = PdfDocument.Open(stream);
+        var options = string.IsNullOrWhiteSpace(password)
+            ? null
+            : new ParsingOptions { Password = password.Trim() };
+        using var document = options is null
+            ? PdfDocument.Open(stream)
+            : PdfDocument.Open(stream, options);
 
         foreach (var page in document.GetPages())
         {
@@ -790,6 +808,14 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         return builder.ToString();
+    }
+
+    private static bool IsPdfPasswordFailure(Exception ex)
+    {
+        var message = ex.Message ?? string.Empty;
+        return message.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("encrypt", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("decrypt", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ElectricityParseVm ParseElectricity(string text)

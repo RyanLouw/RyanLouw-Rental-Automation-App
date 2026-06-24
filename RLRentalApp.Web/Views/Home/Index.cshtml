@@ -147,6 +147,11 @@
                     <label for="servicePdfFile" class="form-label">Services PDF</label>
                     <input class="form-control" type="file" id="servicePdfFile" accept="application/pdf,.pdf" />
                 </div>
+                <div class="mb-3">
+                    <label for="servicePdfPassword" class="form-label">PDF password (if needed)</label>
+                    <input class="form-control" type="password" id="servicePdfPassword" autocomplete="off" placeholder="Leave blank unless the PDF asks for a password" />
+                    <div class="form-text">Some water/electricity PDFs are protected. Enter that PDF password here before parsing.</div>
+                </div>
                 <button class="btn btn-primary" type="button" id="parseServicePdfBtn">Parse PDF</button>
 
                 <hr />
@@ -360,6 +365,7 @@
             const switchPropertyBtn = document.getElementById('switchPropertyBtn');
             const parseServicePdfBtn = document.getElementById('parseServicePdfBtn');
             const servicePdfFile = document.getElementById('servicePdfFile');
+            const servicePdfPassword = document.getElementById('servicePdfPassword');
             const servicePdfError = document.getElementById('servicePdfError');
             const servicePdfResults = document.getElementById('servicePdfResults');
             const electricityOldReading = document.getElementById('electricityOldReading');
@@ -574,6 +580,9 @@
 
                 const formData = new FormData();
                 formData.append('pdfFile', file);
+                if (servicePdfPassword?.value) {
+                    formData.append('pdfPassword', servicePdfPassword.value);
+                }
 
                 const response = await fetch('/Home/ParseServicePdf', {
                     method: 'POST',

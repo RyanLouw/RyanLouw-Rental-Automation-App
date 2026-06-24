@@ -77,9 +77,9 @@ public class HomeController : Controller
 
 
     [HttpPost]
-    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile)
+    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile, string? pdfPassword)
     {
-        var result = await _propertyDashboardManager.ParseServicePdfAsync(pdfFile);
+        var result = await _propertyDashboardManager.ParseServicePdfAsync(pdfFile, pdfPassword);
 
         if (!result.Success)
         {
