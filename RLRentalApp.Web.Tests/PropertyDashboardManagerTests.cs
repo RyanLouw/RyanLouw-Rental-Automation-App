@@ -207,6 +207,43 @@ public class PropertyDashboardManagerTests
     }
 
     [Fact]
+    public async Task SavePaymentsAsync_DoesNotApplyLateCharges_WhenPaymentIsOnOrBeforeFourth()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 21, TenantId = 22, TenantName = "Wayne", TenantEmail = "wayne@example.com", StartDate = new DateTime(2024, 1, 1) },
+            LatePaymentCharges =
+            [
+                new LatePaymentChargeDataModel
+                {
+                    LeaseId = 21,
+                    TenantId = 22,
+                    TenantName = "Wayne",
+                    TenantEmail = "wayne@example.com",
+                    PaidOn = new DateTime(2026, 6, 1),
+                    InterestAmount = 385.95m,
+                    CurrentBalance = 19154.73m,
+                    InterestDescription = "Should not be used"
+                }
+            ]
+        };
+        var emailService = new FakeEmailService();
+        var sut = new PropertyDashboardManager(dataAccess, emailService);
+
+        var result = await sut.SavePaymentsAsync(new SavePaymentsRequestVm
+        {
+            PropertyId = 9,
+            Payments = [new PaymentCandidateVm { PaidOn = new DateTime(2026, 6, 1), Amount = 9000m, Description = "Payment received, thank you" }]
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(0, dataAccess.ApplyLatePaymentChargesCallCount);
+        Assert.Equal(0, emailService.SendCount);
+        Assert.Contains("Added late interest for 0 late payment(s)", result.Message);
+    }
+
+
+    [Fact]
     public void ParsePaymentRows_ParsesAfrikaansMonthStatementDates()
     {
         const string statementText = "Staatdatum : 9 Mei 2026 Transaksies in RAND (ZAR) 02 MeiDebiet Order Krediet Investecpbsbusiso Ngcobo11,000.00Kt105,683.94Kt";
@@ -302,6 +339,7 @@ public class PropertyDashboardManagerTests
         public Dictionary<DateTime, List<StatementEntryDataModel>> MonthEntriesByMonth { get; } = new();
         public List<DateTime> RequestedStatementMonths { get; } = new();
         public List<LatePaymentChargeDataModel> LatePaymentCharges { get; set; } = [];
+        public int ApplyLatePaymentChargesCallCount { get; private set; }
 
         public Task<List<PropertyOptionVm>> LoadPropertiesAsync() => Task.FromResult(new List<PropertyOptionVm>());
         public Task<PropertyOptionVm?> LoadPropertyAsync(int propertyId) => Task.FromResult(Property);
@@ -322,9 +360,13 @@ public class PropertyDashboardManagerTests
         public Task<UpdateStatementEntryResultVm> UpdateStatementEntryAsync(int leaseId, long statementEntryId, DateTime entryDate, decimal amount, string description) => throw new NotImplementedException();
         public Task<int> InsertServiceChargesAsync(int leaseId, List<ServiceChargeInsertDataModel> charges) => throw new NotImplementedException();
         public Task<int> UpsertRentRateAsync(int leaseId, DateTime effectiveFrom, decimal amount, string notes) => throw new NotImplementedException();
-        public Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount) => throw new NotImplementedException();
+        public Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount) => Task.FromResult(false);
         public Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments) => Task.FromResult(payments.Count);
-        public Task<List<LatePaymentChargeDataModel>> ApplyLatePaymentChargesAsync(int leaseId, List<PaymentInsertDataModel> payments) => Task.FromResult(LatePaymentCharges);
+        public Task<List<LatePaymentChargeDataModel>> ApplyLatePaymentChargesAsync(int leaseId, List<PaymentInsertDataModel> payments)
+        {
+            ApplyLatePaymentChargesCallCount++;
+            return Task.FromResult(LatePaymentCharges);
+        }
     }
 
     private sealed class FakeEmailService : IEmailService

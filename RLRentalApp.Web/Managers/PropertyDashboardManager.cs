@@ -637,8 +637,11 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var inserted = await _dataAccess.InsertPaymentsAsync(leaseId, toInsert);
-        var lateCharges = inserted > 0
-            ? await _dataAccess.ApplyLatePaymentChargesAsync(leaseId, toInsert)
+        var lateChargeCandidates = toInsert
+            .Where(x => x.PaidOn.Day > 4)
+            .ToList();
+        var lateCharges = inserted > 0 && lateChargeCandidates.Count > 0
+            ? await _dataAccess.ApplyLatePaymentChargesAsync(leaseId, lateChargeCandidates)
             : [];
 
         foreach (var charge in lateCharges)
