@@ -1154,7 +1154,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 continue;
             }
 
-            var amount = TryParseDecimal(amountMatch.Groups[1].Value);
+            var amount = ParsePaymentAmount(forwardWindow, amountMatch);
             if (!amount.HasValue || amount.Value <= 0)
             {
                 continue;
@@ -1174,6 +1174,54 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             .OrderBy(x => x.PaidOn)
             .ThenBy(x => x.Amount)
             .ToList();
+    }
+
+
+    private static decimal? ParsePaymentAmount(string forwardWindow, Match amountMatch)
+    {
+        var amountText = amountMatch.Groups[1].Value;
+        var amount = TryParseDecimal(amountText);
+        if (!amount.HasValue)
+        {
+            return null;
+        }
+
+        if (ShouldTrimReferenceDigitBeforeAmount(forwardWindow, amountMatch, amount.Value, out var trimmedAmountText))
+        {
+            var trimmedAmount = TryParseDecimal(trimmedAmountText);
+            if (trimmedAmount.HasValue)
+            {
+                return trimmedAmount;
+            }
+        }
+
+        return amount;
+    }
+
+    private static bool ShouldTrimReferenceDigitBeforeAmount(string forwardWindow, Match amountMatch, decimal amount, out string trimmedAmountText)
+    {
+        trimmedAmountText = string.Empty;
+
+        if (amountMatch.Index <= 0 || amount < 25000m)
+        {
+            return false;
+        }
+
+        var previousCharacter = forwardWindow[amountMatch.Index - 1];
+        if (!char.IsLetterOrDigit(previousCharacter))
+        {
+            return false;
+        }
+
+        var value = amountMatch.Groups[1].Value;
+        var commaIndex = value.IndexOf(',');
+        if (commaIndex != 2)
+        {
+            return false;
+        }
+
+        trimmedAmountText = value[1..];
+        return true;
     }
 
     private static string BuildLooseDescriptionPattern(string description)

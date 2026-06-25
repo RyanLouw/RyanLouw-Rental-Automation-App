@@ -222,6 +222,21 @@ public class PropertyDashboardManagerTests
 
 
     [Fact]
+    public void ParsePaymentRows_DoesNotIncludeTrailingReferenceDigitInAmount()
+    {
+        const string statementText = "Tak NommerRekeningnommerDatumDDA Q7/94/SO/KM/KM/PA/P6/A6/PX/YFN855624994202312026/06/10FNB FUSION PRIVATE WEALTH ACCBladsy 1van 2Leweringswyse F1 R06NS/10/WV/DDA Q7855101493XSTZFN0:62499420231BBST142 071562 MNR HEIN R LOUW9 WATERBERG STR EXT 6NOORDHEUWEL1739Nie VerskafBank BTW 01 Jun Rtc Krediet W I Cornish - Rent 161Aa980C49,000.00Kt 80,040.54Kt";
+        var parseMethod = typeof(PropertyDashboardManager).GetMethod("ParsePaymentRows", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(parseMethod);
+        var payments = Assert.IsType<List<PaymentCandidateVm>>(parseMethod!.Invoke(null, [statementText, "Rtc Krediet W I Cornish - Rent"]));
+
+        var payment = Assert.Single(payments);
+        Assert.Equal(new DateTime(2026, 6, 1), payment.PaidOn);
+        Assert.Equal(9000m, payment.Amount);
+    }
+
+
+    [Fact]
     public void ParseMeterReadingByType_StillParsesOriginalMeterReadingsSection()
     {
         const string statementText = "METER READINGS ELECTRICITY 109307.000 109569.000 I 262.000 804.83 WATER 2822.000 2833.000 I 11.000 378.95 ACCOUNT DETAILS";

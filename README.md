@@ -210,6 +210,55 @@ Also note: when pasting the app password, remove spaces shown in Google's UI.
 - Before sending, the dashboard shows an email preview modal with the statement table and totals.
 
 
+## Automatic late-payment interest and demand emails
+
+Late-payment interest is not added by a scheduled background job. It is added immediately when you save newly detected payments from the dashboard bank-statement payment workflow. This applies to both the selected-property save and the all-renter payment save, because both use the same save-payment path.
+
+### When late interest is added
+
+The app adds late interest only after a payment is successfully saved as a new payment row. Duplicate payments are skipped first, so skipped duplicates do not create another interest charge or another email.
+
+For each saved payment, late interest is added when all of these are true:
+
+- The payment amount is more than zero.
+- The payment date is after the 4th day of that same month. For example, a payment dated the 5th or later can be charged interest; a payment dated the 1st through the 4th will not be charged late interest.
+- The tenant still had an outstanding balance before that payment was applied.
+- The app can match the saved payment back to its database payment row.
+- A late-interest or late-payment-letter row has not already been added for that same payment.
+
+### How the interest and fee are calculated
+
+The due date used by the calculation is the 4th of the payment month. The number of late days is the payment date minus that 4th-day due date.
+
+- If the late payment settles the full amount owed, the app adds only the late interest:
+
+  ```text
+  balance owed before payment x days late / 365 x 23%
+  ```
+
+- If the late payment does not settle the full amount owed, the app adds:
+
+  ```text
+  balance owed before payment x days late / 365 x 23%
+  + outstanding balance after payment x 30 / 365 x 23%
+  + R200 late payment letter fee
+  ```
+
+The statement description stores the maths that was used, so the tenant statement shows how the interest was calculated. The R200 late-payment-letter fee is only added when the account is still not fully paid after the payment.
+
+### When late-payment emails are sent
+
+The late-rent demand email is sent immediately after the late interest has been added, during the same save-payment action. The email is sent only when the tenant has an email address saved. If sending the email fails, the payment and late charges stay saved; the app does not roll back the payment just because the email could not be sent.
+
+The email subject is:
+
+```text
+Late rent - demand for payment - <payment date>
+```
+
+The email body includes the interest calculation, the interest amount, the optional R200 late-payment-letter line, the total late charges added, and the current balance that must be paid immediately.
+
+
 ## Safer secret storage (recommended)
 
 Use one of these two approaches so passwords are never committed:
