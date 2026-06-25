@@ -121,7 +121,11 @@
                         <label class="form-label" for="paymentNotesInput">Notes (optional)</label>
                         <input type="text" class="form-control" id="paymentNotesInput" maxlength="400" />
                     </div>
-                    <button class="btn btn-success" type="button" id="savePaymentsBtn">Save payments</button>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-warning" type="button" id="checkLateInterestBtn">Check if interest is needed</button>
+                        <button class="btn btn-success" type="button" id="savePaymentsBtn">Save payments</button>
+                    </div>
+                    <div id="lateInterestCheckMsg" class="alert mt-3 d-none"></div>
                     <div id="savePaymentsMsg" class="alert mt-3 d-none"></div>
 
                     <details>
@@ -401,6 +405,8 @@
             const paymentResults = document.getElementById('paymentResults');
             const paymentTableBody = document.getElementById('paymentTableBody');
             const paymentNotesInput = document.getElementById('paymentNotesInput');
+            const checkLateInterestBtn = document.getElementById('checkLateInterestBtn');
+            const lateInterestCheckMsg = document.getElementById('lateInterestCheckMsg');
             const savePaymentsBtn = document.getElementById('savePaymentsBtn');
             const savePaymentsMsg = document.getElementById('savePaymentsMsg');
             const paymentPdfRawText = document.getElementById('paymentPdfRawText');
@@ -710,6 +716,7 @@
                 paymentPdfError?.classList.add('d-none');
                 paymentResults?.classList.add('d-none');
                 savePaymentsMsg?.classList.add('d-none');
+                lateInterestCheckMsg?.classList.add('d-none');
                 renterPaymentMatches = [];
 
                 const file = paymentPdfFile?.files?.[0];
@@ -752,6 +759,7 @@
                 paymentPdfError?.classList.add('d-none');
                 paymentResults?.classList.add('d-none');
                 savePaymentsMsg?.classList.add('d-none');
+                lateInterestCheckMsg?.classList.add('d-none');
 
                 const file = paymentPdfFile?.files?.[0];
                 if (!file) {
@@ -787,8 +795,40 @@
                 paymentResults?.classList.remove('d-none');
             });
 
+
+            checkLateInterestBtn?.addEventListener('click', () => {
+                savePaymentsMsg?.classList.add('d-none');
+
+                if (!lateInterestCheckMsg) {
+                    return;
+                }
+
+                if (!parsedPayments.length) {
+                    lateInterestCheckMsg.className = 'alert alert-info mt-3';
+                    lateInterestCheckMsg.textContent = 'No detected payment rows to check yet. First search the bank statement PDF.';
+                    lateInterestCheckMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const lateCandidates = parsedPayments
+                    .filter(payment => new Date(payment.paidOn).getDate() > 4)
+                    .map(payment => `${new Date(payment.paidOn).toLocaleDateString()} ${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`);
+
+                if (!lateCandidates.length) {
+                    lateInterestCheckMsg.className = 'alert alert-success mt-3';
+                    lateInterestCheckMsg.textContent = 'No automatic late interest should be added: every detected payment is dated on or before the 4th.';
+                    lateInterestCheckMsg.classList.remove('d-none');
+                    return;
+                }
+
+                lateInterestCheckMsg.className = 'alert alert-warning mt-3';
+                lateInterestCheckMsg.textContent = `Late-interest check: ${lateCandidates.length} payment(s) are dated after the 4th and will be checked when you save payments: ${lateCandidates.join(', ')}. Interest and the R200 late-payment letter are only added if the tenant still had an outstanding balance and the payment was not already saved.`;
+                lateInterestCheckMsg.classList.remove('d-none');
+            });
+
             savePaymentsBtn?.addEventListener('click', async () => {
                 savePaymentsMsg?.classList.add('d-none');
+                lateInterestCheckMsg?.classList.add('d-none');
 
                 if (!selectedPropertyId) {
                     return;
