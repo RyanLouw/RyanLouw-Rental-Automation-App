@@ -620,14 +620,80 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             request.AddLetterFee,
             request.Notes);
 
+        var emailAttempted = false;
+        if (added > 0 && request.AddLetterFee && !string.IsNullOrWhiteSpace(activeLease.TenantEmail))
+        {
+            var status = await GetPropertyStatusAsync(request.PropertyId);
+            emailAttempted = true;
+            await SendManualLatePaymentNoticeAsync(
+                activeLease.TenantName,
+                activeLease.TenantEmail,
+                chargeDate,
+                request.InterestAmount,
+                request.AddLetterFee ? 200m : 0m,
+                status?.CurrentBalance ?? 0m,
+                request.Notes);
+        }
+
         return new ManualLateChargeResultVm
         {
             Success = added > 0,
             AddedCount = added,
             Message = added > 0
-                ? $"Added {added} late charge row(s) to the statement."
+                ? $"Added {added} late charge row(s) to the statement.{(emailAttempted ? " Sent the late payment letter email." : string.Empty)}"
                 : "No late charge rows were added."
         };
+    }
+
+
+    private async Task SendManualLatePaymentNoticeAsync(
+        string tenantName,
+        string tenantEmail,
+        DateTime chargeDate,
+        decimal interestAmount,
+        decimal letterAmount,
+        decimal currentBalance,
+        string notes)
+    {
+        if (string.IsNullOrWhiteSpace(tenantEmail))
+        {
+            return;
+        }
+
+        var subject = $"Late rent - demand for payment - {chargeDate:dd MMMM yyyy}";
+        var body = BuildManualLatePaymentNoticeBody(tenantName, chargeDate, interestAmount, letterAmount, currentBalance, notes);
+
+        try
+        {
+            await _emailService.SendEmailAsync(tenantEmail.Trim(), subject, body);
+        }
+        catch
+        {
+            // Manual late-charge saving must not fail because the late-payment notice email could not be sent.
+        }
+    }
+
+    private static string BuildManualLatePaymentNoticeBody(string tenantName, DateTime chargeDate, decimal interestAmount, decimal letterAmount, decimal currentBalance, string notes)
+    {
+        var interestLine = interestAmount > 0
+            ? $"Interest added: {FormatMoney(interestAmount)}\n"
+            : string.Empty;
+        var letterLine = letterAmount > 0
+            ? $"Late payment letter: {FormatMoney(letterAmount)}\n"
+            : string.Empty;
+        var notesLine = string.IsNullOrWhiteSpace(notes)
+            ? string.Empty
+            : $"Description: {notes.Trim()}\n";
+
+        return $"Dear {tenantName}\n\n" +
+               $"Late rent - demand for payment\n\n" +
+               $"Your rent has not been received as of {chargeDate:dd MMMM yyyy}. As a result and according to our lease agreement, a late charge has been added to your total balance.\n\n" +
+               notesLine +
+               interestLine +
+               letterLine +
+               $"Total late charges added: {FormatMoney(interestAmount + letterAmount)}\n\n" +
+               $"Your current balance is {FormatMoney(currentBalance)}. THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY. This is a serious matter and your urgent attention is required. Failure to act promptly may lead to eviction proceedings. If such is sought you may be liable / responsible for additional charges, such as, but not limited to attorney fees and your credit rating could be affected. Please contact me as soon as you receive this notice.\n\n" +
+               $"Thank you in advance for your prompt attention to this matter. Feel free to contact me with any questions or concerns.";
     }
 
     private async Task<SavePaymentsResultVm> SavePaymentsForLeaseAsync(int leaseId, List<PaymentCandidateVm> payments, string notes, string defaultNotes)

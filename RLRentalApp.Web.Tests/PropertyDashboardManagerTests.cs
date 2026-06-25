@@ -244,6 +244,37 @@ public class PropertyDashboardManagerTests
 
 
     [Fact]
+    public async Task SaveManualLateChargeAsync_SendsLateLetterEmail_WhenLetterFeeAdded()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            Property = new PropertyOptionVm { Id = 9, Name = "House", AddressLine1 = "1 Main", IsActive = true },
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 21, TenantId = 22, TenantName = "Wayne", TenantEmail = "wayne@example.com", StartDate = new DateTime(2024, 1, 1) },
+            OpeningOutstanding = 10000m,
+            Snapshot = new StatementSnapshotDataModel { AmountThroughMonth = 200m }
+        };
+        var emailService = new FakeEmailService();
+        var sut = new PropertyDashboardManager(dataAccess, emailService);
+
+        var result = await sut.SaveManualLateChargeAsync(new ManualLateChargeRequestVm
+        {
+            PropertyId = 9,
+            ChargeDate = new DateTime(2026, 6, 10),
+            InterestAmount = 101.78m,
+            AddLetterFee = true,
+            Notes = "Manual late rent interest"
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(1, emailService.SendCount);
+        Assert.Equal("wayne@example.com", emailService.LastToEmail);
+        Assert.Contains("Late rent - demand for payment", emailService.LastSubject);
+        Assert.Contains("Late payment letter: R 200.00", emailService.LastBody);
+        Assert.Contains("THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY", emailService.LastBody);
+    }
+
+
+    [Fact]
     public void ParsePaymentRows_ParsesAfrikaansMonthStatementDates()
     {
         const string statementText = "Staatdatum : 9 Mei 2026 Transaksies in RAND (ZAR) 02 MeiDebiet Order Krediet Investecpbsbusiso Ngcobo11,000.00Kt105,683.94Kt";
