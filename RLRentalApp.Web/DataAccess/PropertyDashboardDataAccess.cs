@@ -744,6 +744,50 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         await UpsertStatementSdtEntryAsync(connection, leaseId, entryDate, entryType, description, amount, sourceTable, sourceId);
     }
 
+
+    public async Task<int> InsertManualLateChargesAsync(int leaseId, DateTime chargeDate, decimal interestAmount, bool addLetterFee, string notes)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var inserted = 0;
+        var cleanNotes = string.IsNullOrWhiteSpace(notes) ? "Manual late rent charge" : notes.Trim();
+        var sourceId = BuildManualLateChargeSourceId(leaseId, chargeDate.Date);
+
+        if (interestAmount > 0)
+        {
+            await UpsertStatementSdtEntryAsync(
+                connection,
+                leaseId,
+                chargeDate.Date,
+                "Interest",
+                cleanNotes,
+                RoundMoney(interestAmount),
+                "manual_late_interest",
+                sourceId);
+            inserted++;
+        }
+
+        if (addLetterFee)
+        {
+            await UpsertStatementSdtEntryAsync(
+                connection,
+                leaseId,
+                chargeDate.Date,
+                "Fee",
+                "Late payment letter",
+                200m,
+                "manual_late_payment_letter",
+                sourceId);
+            inserted++;
+        }
+
+        return inserted;
+    }
+
+    private static long BuildManualLateChargeSourceId(int leaseId, DateTime chargeDate)
+        => (leaseId * 100000000L) + (chargeDate.Year * 10000L) + (chargeDate.Month * 100L) + chargeDate.Day;
+
     public async Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments)
     {
         if (payments.Count == 0)

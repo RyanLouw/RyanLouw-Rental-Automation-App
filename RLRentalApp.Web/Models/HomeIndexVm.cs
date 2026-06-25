@@ -34,6 +34,23 @@ public class PropertyStatusVm
     public decimal CurrentBalance { get; set; }
 }
 
+
+public class ManualLateChargeRequestVm
+{
+    public int PropertyId { get; set; }
+    public DateTime ChargeDate { get; set; }
+    public decimal InterestAmount { get; set; }
+    public bool AddLetterFee { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class ManualLateChargeResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int AddedCount { get; set; }
+}
+
 public class SendTenantEmailRequestVm
 {
     public int PropertyId { get; set; }

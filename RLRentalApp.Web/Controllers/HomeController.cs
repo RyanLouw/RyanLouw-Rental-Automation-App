@@ -160,6 +160,21 @@ public class HomeController : Controller
     }
 
 
+
+    [HttpPost]
+    public async Task<IActionResult> SaveManualLateCharge([FromBody] ManualLateChargeRequestVm request)
+    {
+        var result = await _propertyDashboardManager.SaveManualLateChargeAsync(request);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
+
     [HttpPost]
     public async Task<IActionResult> SendTenantEmail([FromBody] SendTenantEmailRequestVm request)
     {

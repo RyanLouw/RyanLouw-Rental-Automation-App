@@ -36,6 +36,7 @@
         <h2 class="h5">Next Steps</h2>
         <div class="d-flex flex-wrap gap-2 mt-3">
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#didPayModal">Did they pay?</button>
+            <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#lateChargeModal">Late rent / interest</button>
             <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addServicesModal">Add services</button>
             <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addRentModal">Add rent</button>
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sendEmailModal">Send email</button>
@@ -70,6 +71,42 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary" id="confirmPropertyBtn" disabled>Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="lateChargeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Late rent / interest</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Use this when the renter did not pay, or when you want to add a late-rent interest/letter charge without saving a new payment first.</p>
+                <button class="btn btn-outline-warning mb-3" type="button" id="checkLateInterestBtn">Check if interest is needed</button>
+                <div id="lateInterestCheckMsg" class="alert d-none"></div>
+                <div class="mb-3">
+                    <label class="form-label" for="lateChargeDateInput">Charge date</label>
+                    <input class="form-control" type="date" id="lateChargeDateInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="manualLateInterestAmountInput">Interest amount</label>
+                    <input class="form-control" type="number" min="0" step="0.01" id="manualLateInterestAmountInput" />
+                    <div class="form-text">The check button can estimate this from the current balance and days after the 4th. You can change it before saving.</div>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="manualLateLetterFeeInput" />
+                    <label class="form-check-label" for="manualLateLetterFeeInput">Add R200 late payment letter fee</label>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="manualLateChargeNotesInput">Description / notes</label>
+                    <input class="form-control" id="manualLateChargeNotesInput" maxlength="300" value="Manual late rent interest" />
+                </div>
+                <button class="btn btn-warning" type="button" id="saveManualLateChargeBtn">Add late charges to statement</button>
+                <div id="manualLateChargeMsg" class="alert mt-3 d-none"></div>
             </div>
         </div>
     </div>
@@ -121,11 +158,7 @@
                         <label class="form-label" for="paymentNotesInput">Notes (optional)</label>
                         <input type="text" class="form-control" id="paymentNotesInput" maxlength="400" />
                     </div>
-                    <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-outline-warning" type="button" id="checkLateInterestBtn">Check if interest is needed</button>
-                        <button class="btn btn-success" type="button" id="savePaymentsBtn">Save payments</button>
-                    </div>
-                    <div id="lateInterestCheckMsg" class="alert mt-3 d-none"></div>
+                    <button class="btn btn-success" type="button" id="savePaymentsBtn">Save payments</button>
                     <div id="savePaymentsMsg" class="alert mt-3 d-none"></div>
 
                     <details>
@@ -407,6 +440,12 @@
             const paymentNotesInput = document.getElementById('paymentNotesInput');
             const checkLateInterestBtn = document.getElementById('checkLateInterestBtn');
             const lateInterestCheckMsg = document.getElementById('lateInterestCheckMsg');
+            const lateChargeDateInput = document.getElementById('lateChargeDateInput');
+            const manualLateInterestAmountInput = document.getElementById('manualLateInterestAmountInput');
+            const manualLateLetterFeeInput = document.getElementById('manualLateLetterFeeInput');
+            const manualLateChargeNotesInput = document.getElementById('manualLateChargeNotesInput');
+            const saveManualLateChargeBtn = document.getElementById('saveManualLateChargeBtn');
+            const manualLateChargeMsg = document.getElementById('manualLateChargeMsg');
             const savePaymentsBtn = document.getElementById('savePaymentsBtn');
             const savePaymentsMsg = document.getElementById('savePaymentsMsg');
             const paymentPdfRawText = document.getElementById('paymentPdfRawText');
@@ -422,6 +461,7 @@
             const sendTenantEmailMsg = document.getElementById('sendTenantEmailMsg');
 
             let selectedPropertyId = null;
+            let currentPropertyStatus = null;
 
             if (!pickerElement) {
                 return;
@@ -445,6 +485,11 @@
                 rentEffectiveMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             }
 
+            if (lateChargeDateInput) {
+                const now = new Date();
+                lateChargeDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            }
+
             propertySelect?.addEventListener('change', () => {
                 confirmButton.disabled = !propertySelect.value;
             });
@@ -461,6 +506,7 @@
 
                 selectedPropertyId = propertyId;
                 const status = await response.json();
+                currentPropertyStatus = status;
 
                 if (rentAmountInput && status.latestRent !== null && status.latestRent !== undefined) {
                     rentAmountInput.value = status.latestRent;
@@ -797,33 +843,91 @@
 
 
             checkLateInterestBtn?.addEventListener('click', () => {
-                savePaymentsMsg?.classList.add('d-none');
+                manualLateChargeMsg?.classList.add('d-none');
 
                 if (!lateInterestCheckMsg) {
                     return;
                 }
 
-                if (!parsedPayments.length) {
-                    lateInterestCheckMsg.className = 'alert alert-info mt-3';
-                    lateInterestCheckMsg.textContent = 'No detected payment rows to check yet. First search the bank statement PDF.';
+                if (!currentPropertyStatus) {
+                    lateInterestCheckMsg.className = 'alert alert-info';
+                    lateInterestCheckMsg.textContent = 'Choose a property first so the app can check the current balance.';
                     lateInterestCheckMsg.classList.remove('d-none');
                     return;
                 }
 
-                const lateCandidates = parsedPayments
-                    .filter(payment => new Date(payment.paidOn).getDate() > 4)
-                    .map(payment => `${new Date(payment.paidOn).toLocaleDateString()} ${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}`);
+                const chargeDate = lateChargeDateInput?.value ? new Date(`${lateChargeDateInput.value}T00:00:00`) : new Date();
+                const dueDate = new Date(chargeDate.getFullYear(), chargeDate.getMonth(), 4);
+                const daysLate = Math.floor((chargeDate - dueDate) / 86400000);
+                const currentBalance = Number(currentPropertyStatus.currentBalance || 0);
 
-                if (!lateCandidates.length) {
-                    lateInterestCheckMsg.className = 'alert alert-success mt-3';
-                    lateInterestCheckMsg.textContent = 'No automatic late interest should be added: every detected payment is dated on or before the 4th.';
+                if (daysLate <= 0) {
+                    lateInterestCheckMsg.className = 'alert alert-success';
+                    lateInterestCheckMsg.textContent = 'No late interest is needed yet: the selected charge date is on or before the 4th.';
                     lateInterestCheckMsg.classList.remove('d-none');
                     return;
                 }
 
-                lateInterestCheckMsg.className = 'alert alert-warning mt-3';
-                lateInterestCheckMsg.textContent = `Late-interest check: ${lateCandidates.length} payment(s) are dated after the 4th and will be checked when you save payments: ${lateCandidates.join(', ')}. Interest and the R200 late-payment letter are only added if the tenant still had an outstanding balance and the payment was not already saved.`;
+                if (currentBalance <= 0) {
+                    lateInterestCheckMsg.className = 'alert alert-success';
+                    lateInterestCheckMsg.textContent = 'No late interest is needed because this renter does not currently have an outstanding balance.';
+                    lateInterestCheckMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const estimatedInterest = Math.round((currentBalance * daysLate / 365 * 0.23) * 100) / 100;
+                if (manualLateInterestAmountInput) {
+                    manualLateInterestAmountInput.value = estimatedInterest.toFixed(2);
+                }
+                if (manualLateLetterFeeInput) {
+                    manualLateLetterFeeInput.checked = true;
+                }
+
+                lateInterestCheckMsg.className = 'alert alert-warning';
+                lateInterestCheckMsg.textContent = `Late interest may be needed: current balance ${money(currentBalance)}, ${daysLate} day(s) after the 4th, estimated interest ${money(estimatedInterest)}. The R200 late payment letter fee has been selected; adjust the amount or untick it before saving if needed.`;
                 lateInterestCheckMsg.classList.remove('d-none');
+            });
+
+            saveManualLateChargeBtn?.addEventListener('click', async () => {
+                lateInterestCheckMsg?.classList.add('d-none');
+
+                if (!manualLateChargeMsg || !selectedPropertyId) {
+                    return;
+                }
+
+                const interestAmount = manualLateInterestAmountInput?.value ? Number(manualLateInterestAmountInput.value) : 0;
+                const addLetterFee = Boolean(manualLateLetterFeeInput?.checked);
+                if ((!interestAmount || interestAmount <= 0) && !addLetterFee) {
+                    manualLateChargeMsg.className = 'alert alert-danger mt-3';
+                    manualLateChargeMsg.textContent = 'Enter an interest amount or tick the R200 late payment letter fee.';
+                    manualLateChargeMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const response = await fetch('/Home/SaveManualLateCharge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        propertyId: Number(selectedPropertyId),
+                        chargeDate: lateChargeDateInput?.value || new Date().toISOString().slice(0, 10),
+                        interestAmount,
+                        addLetterFee,
+                        notes: manualLateChargeNotesInput?.value || 'Manual late rent interest'
+                    })
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    manualLateChargeMsg.className = 'alert alert-danger mt-3';
+                    manualLateChargeMsg.textContent = payload.message || 'Could not add late charges.';
+                    manualLateChargeMsg.classList.remove('d-none');
+                    return;
+                }
+
+                manualLateChargeMsg.className = 'alert alert-success mt-3';
+                manualLateChargeMsg.textContent = payload.message || 'Late charges added.';
+                manualLateChargeMsg.classList.remove('d-none');
+                await loadProperty(selectedPropertyId, false);
             });
 
             savePaymentsBtn?.addEventListener('click', async () => {

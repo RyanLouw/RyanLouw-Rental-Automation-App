@@ -598,6 +598,38 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
+
+    public async Task<ManualLateChargeResultVm> SaveManualLateChargeAsync(ManualLateChargeRequestVm request)
+    {
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new ManualLateChargeResultVm { Success = false, Message = "No active lease found for selected property." };
+        }
+
+        if (request.InterestAmount <= 0 && !request.AddLetterFee)
+        {
+            return new ManualLateChargeResultVm { Success = false, Message = "Enter an interest amount or choose the R200 late payment letter fee." };
+        }
+
+        var chargeDate = request.ChargeDate == default ? DateTime.UtcNow.Date : request.ChargeDate.Date;
+        var added = await _dataAccess.InsertManualLateChargesAsync(
+            activeLease.LeaseId,
+            chargeDate,
+            request.InterestAmount,
+            request.AddLetterFee,
+            request.Notes);
+
+        return new ManualLateChargeResultVm
+        {
+            Success = added > 0,
+            AddedCount = added,
+            Message = added > 0
+                ? $"Added {added} late charge row(s) to the statement."
+                : "No late charge rows were added."
+        };
+    }
+
     private async Task<SavePaymentsResultVm> SavePaymentsForLeaseAsync(int leaseId, List<PaymentCandidateVm> payments, string notes, string defaultNotes)
     {
         var cleanedPayments = payments

@@ -367,6 +367,9 @@ public class PropertyDashboardManagerTests
             ApplyLatePaymentChargesCallCount++;
             return Task.FromResult(LatePaymentCharges);
         }
+
+        public Task<int> InsertManualLateChargesAsync(int leaseId, DateTime chargeDate, decimal interestAmount, bool addLetterFee, string notes)
+            => Task.FromResult((interestAmount > 0 ? 1 : 0) + (addLetterFee ? 1 : 0));
     }
 
     private sealed class FakeEmailService : IEmailService
