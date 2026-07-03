@@ -598,6 +598,104 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
+
+    public async Task<ManualLateChargeResultVm> SaveManualLateChargeAsync(ManualLateChargeRequestVm request)
+    {
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new ManualLateChargeResultVm { Success = false, Message = "No active lease found for selected property." };
+        }
+
+        if (request.InterestAmount <= 0 && !request.AddLetterFee)
+        {
+            return new ManualLateChargeResultVm { Success = false, Message = "Enter an interest amount or choose the R200 late payment letter fee." };
+        }
+
+        var chargeDate = request.ChargeDate == default ? DateTime.UtcNow.Date : request.ChargeDate.Date;
+        var added = await _dataAccess.InsertManualLateChargesAsync(
+            activeLease.LeaseId,
+            chargeDate,
+            request.InterestAmount,
+            request.AddLetterFee,
+            request.Notes);
+
+        var emailAttempted = false;
+        if (added > 0 && request.AddLetterFee && !string.IsNullOrWhiteSpace(activeLease.TenantEmail))
+        {
+            var status = await GetPropertyStatusAsync(request.PropertyId);
+            emailAttempted = true;
+            await SendManualLatePaymentNoticeAsync(
+                activeLease.TenantName,
+                activeLease.TenantEmail,
+                chargeDate,
+                request.InterestAmount,
+                request.AddLetterFee ? 200m : 0m,
+                status?.CurrentBalance ?? 0m,
+                request.Notes);
+        }
+
+        return new ManualLateChargeResultVm
+        {
+            Success = added > 0,
+            AddedCount = added,
+            Message = added > 0
+                ? $"Added {added} late charge row(s) to the statement.{(emailAttempted ? " Sent the late payment letter email." : string.Empty)}"
+                : "No late charge rows were added."
+        };
+    }
+
+
+    private async Task SendManualLatePaymentNoticeAsync(
+        string tenantName,
+        string tenantEmail,
+        DateTime chargeDate,
+        decimal interestAmount,
+        decimal letterAmount,
+        decimal currentBalance,
+        string notes)
+    {
+        if (string.IsNullOrWhiteSpace(tenantEmail))
+        {
+            return;
+        }
+
+        var subject = $"Late rent - demand for payment - {chargeDate:dd MMMM yyyy}";
+        var body = BuildManualLatePaymentNoticeBody(tenantName, chargeDate, interestAmount, letterAmount, currentBalance, notes);
+
+        try
+        {
+            await _emailService.SendEmailAsync(tenantEmail.Trim(), subject, body);
+        }
+        catch
+        {
+            // Manual late-charge saving must not fail because the late-payment notice email could not be sent.
+        }
+    }
+
+    private static string BuildManualLatePaymentNoticeBody(string tenantName, DateTime chargeDate, decimal interestAmount, decimal letterAmount, decimal currentBalance, string notes)
+    {
+        var interestLine = interestAmount > 0
+            ? $"Interest added: {FormatMoney(interestAmount)}\n"
+            : string.Empty;
+        var letterLine = letterAmount > 0
+            ? $"Late payment letter: {FormatMoney(letterAmount)}\n"
+            : string.Empty;
+        var notesLine = string.IsNullOrWhiteSpace(notes)
+            ? string.Empty
+            : $"Description: {notes.Trim()}\n";
+
+        return $"Dear {tenantName}\n\n" +
+               $"Late rent - demand for payment\n\n" +
+               $"Your rent has not been received as of {chargeDate:dd MMMM yyyy}. As a result and according to our lease agreement, a late charge has been added to your total balance.\n\n" +
+               notesLine +
+               interestLine +
+               letterLine +
+               $"Total late charges added: {FormatMoney(interestAmount + letterAmount)}\n\n" +
+               $"Your current balance is {FormatMoney(currentBalance)}. THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY. This is a serious matter and your urgent attention is required. Failure to act promptly may lead to eviction proceedings. If such is sought you may be liable / responsible for additional charges, such as, but not limited to attorney fees and your credit rating could be affected. Please contact me as soon as you receive this notice.\n\n" +
+               $"Thank you in advance for your prompt attention to this matter. Feel free to contact me with any questions or concerns.";
+    }
+
     private async Task<SavePaymentsResultVm> SavePaymentsForLeaseAsync(int leaseId, List<PaymentCandidateVm> payments, string notes, string defaultNotes)
     {
         var cleanedPayments = payments
@@ -637,6 +735,18 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var inserted = await _dataAccess.InsertPaymentsAsync(leaseId, toInsert);
+        var lateChargeCandidates = toInsert
+            .Where(x => x.PaidOn.Day > 4)
+            .ToList();
+        var lateCharges = inserted > 0 && lateChargeCandidates.Count > 0
+            ? await _dataAccess.ApplyLatePaymentChargesAsync(leaseId, lateChargeCandidates)
+            : [];
+
+        foreach (var charge in lateCharges)
+        {
+            await SendLatePaymentNoticeAsync(charge);
+        }
+
         var savedPayments = toInsert
             .Select(x => new PaymentCandidateVm
             {
@@ -653,9 +763,47 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             SkippedDuplicates = skippedDuplicates,
             SavedPayments = savedPayments,
             Message = inserted > 0
-                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s)."
+                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s). Added late interest for {lateCharges.Count} late payment(s)."
                 : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."
         };
+    }
+
+    private async Task SendLatePaymentNoticeAsync(LatePaymentChargeDataModel charge)
+    {
+        if (string.IsNullOrWhiteSpace(charge.TenantEmail))
+        {
+            return;
+        }
+
+        var addedTotal = charge.InterestAmount + charge.LetterAmount;
+        var subject = $"Late rent - demand for payment - {charge.PaidOn:dd MMMM yyyy}";
+        var body = BuildLatePaymentNoticeBody(charge, addedTotal);
+
+        try
+        {
+            await _emailService.SendEmailAsync(charge.TenantEmail.Trim(), subject, body);
+        }
+        catch
+        {
+            // Payment saving must not fail because the late-payment notice email could not be sent.
+        }
+    }
+
+    private static string BuildLatePaymentNoticeBody(LatePaymentChargeDataModel charge, decimal addedTotal)
+    {
+        var letterLine = charge.LetterAmount > 0
+            ? $"\nLate payment letter: {FormatMoney(charge.LetterAmount)}"
+            : string.Empty;
+
+        return $"Dear {charge.TenantName}\n\n" +
+               $"Late rent - demand for payment\n\n" +
+               $"Your payment was received after the 4th of the month. As a result and according to our lease agreement, a late charge has been added to your total balance.\n\n" +
+               $"Interest calculation: {charge.InterestDescription}\n" +
+               $"Interest added: {FormatMoney(charge.InterestAmount)}{letterLine}\n" +
+               $"Total late charges added: {FormatMoney(addedTotal)}\n\n" +
+               $"Your current balance is {FormatMoney(charge.CurrentBalance)}. THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY. This is a serious matter and your urgent attention is required. Failure to act promptly may lead to eviction proceedings. If such is sought you may be liable / responsible for additional charges, such as, but not limited to attorney fees and your credit rating could be affected. Please contact me as soon as you receive this notice.\n\n" +
+               $"This is also a friendly reminder that your rent has not been received on time and is due. If this was an oversight, please send your payment immediately in order to avoid further late charges. Remember that paying your rent on time is of great importance, and the rent must be received by me on the due date in order to be considered on time.\n\n" +
+               $"Thank you in advance for your prompt attention to this matter. Feel free to contact me with any questions or concerns.";
     }
 
     public async Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains)
@@ -1107,7 +1255,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 continue;
             }
 
-            var amount = TryParseDecimal(amountMatch.Groups[1].Value);
+            var amount = ParsePaymentAmount(forwardWindow, amountMatch);
             if (!amount.HasValue || amount.Value <= 0)
             {
                 continue;
@@ -1127,6 +1275,54 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             .OrderBy(x => x.PaidOn)
             .ThenBy(x => x.Amount)
             .ToList();
+    }
+
+
+    private static decimal? ParsePaymentAmount(string forwardWindow, Match amountMatch)
+    {
+        var amountText = amountMatch.Groups[1].Value;
+        var amount = TryParseDecimal(amountText);
+        if (!amount.HasValue)
+        {
+            return null;
+        }
+
+        if (ShouldTrimReferenceDigitBeforeAmount(forwardWindow, amountMatch, amount.Value, out var trimmedAmountText))
+        {
+            var trimmedAmount = TryParseDecimal(trimmedAmountText);
+            if (trimmedAmount.HasValue)
+            {
+                return trimmedAmount;
+            }
+        }
+
+        return amount;
+    }
+
+    private static bool ShouldTrimReferenceDigitBeforeAmount(string forwardWindow, Match amountMatch, decimal amount, out string trimmedAmountText)
+    {
+        trimmedAmountText = string.Empty;
+
+        if (amountMatch.Index <= 0 || amount < 25000m)
+        {
+            return false;
+        }
+
+        var previousCharacter = forwardWindow[amountMatch.Index - 1];
+        if (!char.IsLetterOrDigit(previousCharacter))
+        {
+            return false;
+        }
+
+        var value = amountMatch.Groups[1].Value;
+        var commaIndex = value.IndexOf(',');
+        if (commaIndex != 2)
+        {
+            return false;
+        }
+
+        trimmedAmountText = value[1..];
+        return true;
     }
 
     private static string BuildLooseDescriptionPattern(string description)

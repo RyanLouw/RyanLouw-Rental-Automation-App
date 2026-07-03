@@ -34,6 +34,23 @@ public class PropertyStatusVm
     public decimal CurrentBalance { get; set; }
 }
 
+
+public class ManualLateChargeRequestVm
+{
+    public int PropertyId { get; set; }
+    public DateTime ChargeDate { get; set; }
+    public decimal InterestAmount { get; set; }
+    public bool AddLetterFee { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class ManualLateChargeResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int AddedCount { get; set; }
+}
+
 public class SendTenantEmailRequestVm
 {
     public int PropertyId { get; set; }
@@ -171,6 +188,23 @@ public class SavePaymentsResultVm
     public int SkippedDuplicates { get; set; }
     public List<PaymentCandidateVm> SavedPayments { get; set; } = [];
     public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
+}
+
+public class LatePaymentChargeDataModel
+{
+    public int LeaseId { get; set; }
+    public int TenantId { get; set; }
+    public string TenantName { get; set; } = string.Empty;
+    public string TenantEmail { get; set; } = string.Empty;
+    public DateTime PaidOn { get; set; }
+    public decimal PaymentAmount { get; set; }
+    public decimal BalanceBeforePayment { get; set; }
+    public decimal BalanceAfterPayment { get; set; }
+    public int DaysLate { get; set; }
+    public decimal InterestAmount { get; set; }
+    public decimal LetterAmount { get; set; }
+    public decimal CurrentBalance { get; set; }
+    public string InterestDescription { get; set; } = string.Empty;
 }
 
 public class RenterPaymentMatchVm

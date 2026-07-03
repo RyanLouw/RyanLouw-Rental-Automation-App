@@ -163,6 +163,117 @@ public class PropertyDashboardManagerTests
     }
 
 
+
+    [Fact]
+    public async Task SavePaymentsAsync_SendsLateNoticeEmail_WhenLateInterestWasAdded()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 21, TenantId = 22, TenantName = "Wayne", TenantEmail = "wayne@example.com", StartDate = new DateTime(2024, 1, 1) },
+            LatePaymentCharges =
+            [
+                new LatePaymentChargeDataModel
+                {
+                    LeaseId = 21,
+                    TenantId = 22,
+                    TenantName = "Wayne",
+                    TenantEmail = "wayne@example.com",
+                    PaidOn = new DateTime(2026, 6, 10),
+                    BalanceBeforePayment = 10000m,
+                    BalanceAfterPayment = 1000m,
+                    DaysLate = 6,
+                    InterestAmount = 101.78m,
+                    LetterAmount = 200m,
+                    CurrentBalance = 1301.78m,
+                    InterestDescription = "Late payment interest: R 10,000.00 x 6/365 x 23% = R 37.81; outstanding after payment R 1,000.00 x 30/365 x 23% = R 18.90"
+                }
+            ]
+        };
+        var emailService = new FakeEmailService();
+        var sut = new PropertyDashboardManager(dataAccess, emailService);
+
+        var result = await sut.SavePaymentsAsync(new SavePaymentsRequestVm
+        {
+            PropertyId = 9,
+            Payments = [new PaymentCandidateVm { PaidOn = new DateTime(2026, 6, 10), Amount = 9000m, Description = "Rent payment" }]
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(1, emailService.SendCount);
+        Assert.Equal("wayne@example.com", emailService.LastToEmail);
+        Assert.Contains("Late rent - demand for payment", emailService.LastSubject);
+        Assert.Contains("THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY", emailService.LastBody);
+        Assert.Contains("Late payment letter: R 200.00", emailService.LastBody);
+    }
+
+    [Fact]
+    public async Task SavePaymentsAsync_DoesNotApplyLateCharges_WhenPaymentIsOnOrBeforeFourth()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 21, TenantId = 22, TenantName = "Wayne", TenantEmail = "wayne@example.com", StartDate = new DateTime(2024, 1, 1) },
+            LatePaymentCharges =
+            [
+                new LatePaymentChargeDataModel
+                {
+                    LeaseId = 21,
+                    TenantId = 22,
+                    TenantName = "Wayne",
+                    TenantEmail = "wayne@example.com",
+                    PaidOn = new DateTime(2026, 6, 1),
+                    InterestAmount = 385.95m,
+                    CurrentBalance = 19154.73m,
+                    InterestDescription = "Should not be used"
+                }
+            ]
+        };
+        var emailService = new FakeEmailService();
+        var sut = new PropertyDashboardManager(dataAccess, emailService);
+
+        var result = await sut.SavePaymentsAsync(new SavePaymentsRequestVm
+        {
+            PropertyId = 9,
+            Payments = [new PaymentCandidateVm { PaidOn = new DateTime(2026, 6, 1), Amount = 9000m, Description = "Payment received, thank you" }]
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(0, dataAccess.ApplyLatePaymentChargesCallCount);
+        Assert.Equal(0, emailService.SendCount);
+        Assert.Contains("Added late interest for 0 late payment(s)", result.Message);
+    }
+
+
+    [Fact]
+    public async Task SaveManualLateChargeAsync_SendsLateLetterEmail_WhenLetterFeeAdded()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            Property = new PropertyOptionVm { Id = 9, Name = "House", AddressLine1 = "1 Main", IsActive = true },
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 21, TenantId = 22, TenantName = "Wayne", TenantEmail = "wayne@example.com", StartDate = new DateTime(2024, 1, 1) },
+            OpeningOutstanding = 10000m,
+            Snapshot = new StatementSnapshotDataModel { AmountThroughMonth = 200m }
+        };
+        var emailService = new FakeEmailService();
+        var sut = new PropertyDashboardManager(dataAccess, emailService);
+
+        var result = await sut.SaveManualLateChargeAsync(new ManualLateChargeRequestVm
+        {
+            PropertyId = 9,
+            ChargeDate = new DateTime(2026, 6, 10),
+            InterestAmount = 101.78m,
+            AddLetterFee = true,
+            Notes = "Manual late rent interest"
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(1, emailService.SendCount);
+        Assert.Equal("wayne@example.com", emailService.LastToEmail);
+        Assert.Contains("Late rent - demand for payment", emailService.LastSubject);
+        Assert.Contains("Late payment letter: R 200.00", emailService.LastBody);
+        Assert.Contains("THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY", emailService.LastBody);
+    }
+
+
     [Fact]
     public void ParsePaymentRows_ParsesAfrikaansMonthStatementDates()
     {
@@ -175,6 +286,21 @@ public class PropertyDashboardManagerTests
         var payment = Assert.Single(payments);
         Assert.Equal(new DateTime(2026, 5, 2), payment.PaidOn);
         Assert.Equal(11000m, payment.Amount);
+    }
+
+
+    [Fact]
+    public void ParsePaymentRows_DoesNotIncludeTrailingReferenceDigitInAmount()
+    {
+        const string statementText = "Tak NommerRekeningnommerDatumDDA Q7/94/SO/KM/KM/PA/P6/A6/PX/YFN855624994202312026/06/10FNB FUSION PRIVATE WEALTH ACCBladsy 1van 2Leweringswyse F1 R06NS/10/WV/DDA Q7855101493XSTZFN0:62499420231BBST142 071562 MNR HEIN R LOUW9 WATERBERG STR EXT 6NOORDHEUWEL1739Nie VerskafBank BTW 01 Jun Rtc Krediet W I Cornish - Rent 161Aa980C49,000.00Kt 80,040.54Kt";
+        var parseMethod = typeof(PropertyDashboardManager).GetMethod("ParsePaymentRows", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(parseMethod);
+        var payments = Assert.IsType<List<PaymentCandidateVm>>(parseMethod!.Invoke(null, [statementText, "Rtc Krediet W I Cornish - Rent"]));
+
+        var payment = Assert.Single(payments);
+        Assert.Equal(new DateTime(2026, 6, 1), payment.PaidOn);
+        Assert.Equal(9000m, payment.Amount);
     }
 
 
@@ -243,6 +369,8 @@ public class PropertyDashboardManagerTests
         public decimal AmountBeforeDate { get; set; }
         public Dictionary<DateTime, List<StatementEntryDataModel>> MonthEntriesByMonth { get; } = new();
         public List<DateTime> RequestedStatementMonths { get; } = new();
+        public List<LatePaymentChargeDataModel> LatePaymentCharges { get; set; } = [];
+        public int ApplyLatePaymentChargesCallCount { get; private set; }
 
         public Task<List<PropertyOptionVm>> LoadPropertiesAsync() => Task.FromResult(new List<PropertyOptionVm>());
         public Task<PropertyOptionVm?> LoadPropertyAsync(int propertyId) => Task.FromResult(Property);
@@ -263,8 +391,16 @@ public class PropertyDashboardManagerTests
         public Task<UpdateStatementEntryResultVm> UpdateStatementEntryAsync(int leaseId, long statementEntryId, DateTime entryDate, decimal amount, string description) => throw new NotImplementedException();
         public Task<int> InsertServiceChargesAsync(int leaseId, List<ServiceChargeInsertDataModel> charges) => throw new NotImplementedException();
         public Task<int> UpsertRentRateAsync(int leaseId, DateTime effectiveFrom, decimal amount, string notes) => throw new NotImplementedException();
-        public Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount) => throw new NotImplementedException();
-        public Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments) => throw new NotImplementedException();
+        public Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount) => Task.FromResult(false);
+        public Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments) => Task.FromResult(payments.Count);
+        public Task<List<LatePaymentChargeDataModel>> ApplyLatePaymentChargesAsync(int leaseId, List<PaymentInsertDataModel> payments)
+        {
+            ApplyLatePaymentChargesCallCount++;
+            return Task.FromResult(LatePaymentCharges);
+        }
+
+        public Task<int> InsertManualLateChargesAsync(int leaseId, DateTime chargeDate, decimal interestAmount, bool addLetterFee, string notes)
+            => Task.FromResult((interestAmount > 0 ? 1 : 0) + (addLetterFee ? 1 : 0));
     }
 
     private sealed class FakeEmailService : IEmailService
