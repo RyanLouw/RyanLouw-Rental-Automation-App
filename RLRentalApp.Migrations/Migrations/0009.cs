@@ -13,6 +13,6 @@ public class _0009_ClearRentalDataForRealStart : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0009.sql");
+        Execute.Script(@"Migrations/Scripts/0009.sql");
     }
 }

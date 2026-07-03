@@ -13,6 +13,6 @@ public class _0006_AddTenantPaymentReference : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0006.sql");
+        Execute.Script(@"Migrations/Scripts/0006.sql");
     }
 }

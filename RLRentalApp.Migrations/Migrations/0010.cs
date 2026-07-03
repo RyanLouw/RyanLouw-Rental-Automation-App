@@ -13,6 +13,6 @@ public class _0010_AddManualStatementEntry : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0010.sql");
+        Execute.Script(@"Migrations/Scripts/0010.sql");
     }
 }
