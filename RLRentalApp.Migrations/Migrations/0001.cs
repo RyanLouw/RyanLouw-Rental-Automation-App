@@ -1,4 +1,4 @@
-﻿using FluentMigrator;
+using FluentMigrator;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -19,7 +19,7 @@ public class _0001_Schema01 : Migration
     {
   
         
-        Execute.Script(@"Migrations\Scripts\0001.sql");
+        Execute.Script(@"Migrations/Scripts/0001.sql");
 
     }
 }

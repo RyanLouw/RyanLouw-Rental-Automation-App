@@ -1,4 +1,4 @@
-﻿using FluentMigrator;
+using FluentMigrator;
 
 namespace Database.Migrations;
 
@@ -13,6 +13,6 @@ public class _0002_AddTenantOutstandingBalance : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0002.sql");
+        Execute.Script(@"Migrations/Scripts/0002.sql");
     }
 }

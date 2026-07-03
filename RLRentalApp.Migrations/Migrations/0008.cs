@@ -13,6 +13,6 @@ public class _0008_SeedPaymentMatchingDemoProperties : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0008.sql");
+        Execute.Script(@"Migrations/Scripts/0008.sql");
     }
 }

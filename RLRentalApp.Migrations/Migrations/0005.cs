@@ -13,6 +13,6 @@ public class _0005_AddTenantDepositHeld : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0005.sql");
+        Execute.Script(@"Migrations/Scripts/0005.sql");
     }
 }
