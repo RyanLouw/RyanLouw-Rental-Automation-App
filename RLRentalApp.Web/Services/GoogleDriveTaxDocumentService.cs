@@ -1,3 +1,4 @@
+using Google;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
@@ -68,7 +69,9 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
         }
 
         var driveService = CreateDriveService();
-        await driveService.Files.Delete(fileId).ExecuteAsync(cancellationToken);
+        var deleteRequest = driveService.Files.Delete(fileId);
+        deleteRequest.SupportsAllDrives = true;
+        await deleteRequest.ExecuteAsync(cancellationToken);
     }
 
     private DriveService CreateDriveService()
@@ -87,6 +90,8 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
     private static async Task<string> GetOrCreateFolderAsync(DriveService driveService, string parentId, string folderName, CancellationToken cancellationToken)
     {
         var listRequest = driveService.Files.List();
+        listRequest.SupportsAllDrives = true;
+        listRequest.IncludeItemsFromAllDrives = true;
         listRequest.Q = $"mimeType = '{FolderMimeType}' and name = '{EscapeDriveQueryValue(folderName)}' and '{EscapeDriveQueryValue(parentId)}' in parents and trashed = false";
         listRequest.Fields = "files(id, name)";
         listRequest.PageSize = 1;
@@ -106,6 +111,7 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
         };
 
         var createRequest = driveService.Files.Create(folderMetadata);
+        createRequest.SupportsAllDrives = true;
         createRequest.Fields = "id";
         var createdFolder = await createRequest.ExecuteAsync(cancellationToken);
         return createdFolder.Id;
@@ -121,6 +127,7 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
 
         await using var stream = file.OpenReadStream();
         var uploadRequest = driveService.Files.Create(fileMetadata, stream, file.ContentType ?? "application/octet-stream");
+        uploadRequest.SupportsAllDrives = true;
         uploadRequest.Fields = "id, name, webViewLink";
 
         await uploadRequest.UploadAsync(cancellationToken);

@@ -1,3 +1,4 @@
+using Google;
 using Microsoft.AspNetCore.Http;
 using QuestPDF.Infrastructure;
 using QuestPDF.Helpers;
@@ -72,7 +73,19 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             transactionMonth.Year.ToString(CultureInfo.InvariantCulture),
             transactionMonth.Month.ToString("00", CultureInfo.InvariantCulture)
         };
-        var uploadResult = await _googleDriveTaxDocumentService.UploadAsync(proofFile, folderPath);
+        GoogleDriveUploadResult uploadResult;
+        try
+        {
+            uploadResult = await _googleDriveTaxDocumentService.UploadAsync(proofFile, folderPath);
+        }
+        catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return new SaveTaxTransactionResultVm
+            {
+                Success = false,
+                Message = "Google Drive could not find the configured RootFolderId, or the service account does not have access to it. Check GoogleDrive:RootFolderId and share that Drive folder with the service account email as Editor."
+            };
+        }
 
         var saved = await _dataAccess.InsertTaxTransactionAsync(new TaxTransactionInsertDataModel
         {
@@ -107,7 +120,14 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         if (deleteProofFile)
         {
-            await _googleDriveTaxDocumentService.DeleteAsync(taxTransaction.ProofDriveFileId);
+            try
+            {
+                await _googleDriveTaxDocumentService.DeleteAsync(taxTransaction.ProofDriveFileId);
+            }
+            catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // If the proof file was already removed from Drive, still allow the test row cleanup.
+            }
         }
 
         var deleted = await _dataAccess.DeleteTaxTransactionAsync(taxTransactionId);
