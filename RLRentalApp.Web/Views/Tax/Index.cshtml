@@ -78,6 +78,7 @@
                             <th class="text-end">KREDIT</th>
                             <th class="text-end">DEBIT</th>
                             <th>Proof</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody id="taxRowsTableBody"></tbody>
@@ -87,6 +88,7 @@
                             <td class="text-end" id="taxTotalKredit">-</td>
                             <td class="text-end" id="taxTotalDebit">-</td>
                             <td id="taxNetTotal">-</td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -124,7 +126,7 @@
             const renderTaxRows = async () => {
                 const response = await fetch(`/Tax/Transactions?year=${taxYearInput.value}`);
                 if (!response.ok) {
-                    taxRowsTableBody.innerHTML = '<tr><td colspan="6" class="text-danger">Could not load tax rows.</td></tr>';
+                    taxRowsTableBody.innerHTML = '<tr><td colspan="7" class="text-danger">Could not load tax rows.</td></tr>';
                     return;
                 }
 
@@ -137,6 +139,7 @@
                         <td class="text-end">${row.entryKind === 'KREDIT' ? money(row.amount) : '-'}</td>
                         <td class="text-end">${row.entryKind === 'DEBIT' ? money(row.amount) : '-'}</td>
                         <td><a href="${row.proofDriveLink}" target="_blank" rel="noopener">${row.proofFileName || 'Open proof'}</a></td>
+                        <td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-delete-tax-id="${row.id}">Delete test row</button></td>
                     </tr>
                 `).join('');
                 taxTotalKredit.textContent = money(payload.totalKredit);
@@ -164,6 +167,38 @@
                     taxAmountInput.value = '';
                     taxDescriptionInput.value = '';
                     taxProofFileInput.value = '';
+                    await renderTaxRows();
+                }
+            });
+
+
+            taxRowsTableBody.addEventListener('click', async (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
+
+                const deleteButton = target.closest('button[data-delete-tax-id]');
+                if (!deleteButton) {
+                    return;
+                }
+
+                const taxTransactionId = deleteButton.getAttribute('data-delete-tax-id');
+                if (!taxTransactionId || !confirm('Delete this tax row and its proof file from Google Drive?')) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('taxTransactionId', taxTransactionId);
+                formData.append('deleteProofFile', 'true');
+
+                const response = await fetch('/Tax/DeleteTransaction', { method: 'POST', body: formData });
+                const payload = await response.json();
+                taxSaveMsg.className = response.ok ? 'alert alert-success mt-3' : 'alert alert-danger mt-3';
+                taxSaveMsg.textContent = payload.message || (response.ok ? 'Deleted.' : 'Could not delete tax row.');
+                taxSaveMsg.classList.remove('d-none');
+
+                if (response.ok) {
                     await renderTaxRows();
                 }
             });

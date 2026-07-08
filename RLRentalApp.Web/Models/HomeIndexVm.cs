@@ -284,3 +284,9 @@ public class SaveTaxTransactionResultVm
     public string Message { get; set; } = string.Empty;
     public TaxTransactionVm? Transaction { get; set; }
 }
+
+public class DeleteTaxTransactionResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+}

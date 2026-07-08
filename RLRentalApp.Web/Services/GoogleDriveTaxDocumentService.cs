@@ -49,6 +49,28 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
         };
     }
 
+
+    public async Task DeleteAsync(string fileId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(fileId))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.ServiceAccountKeyPath))
+        {
+            throw new InvalidOperationException("GoogleDrive:ServiceAccountKeyPath is required for Drive API deletes.");
+        }
+
+        if (!System.IO.File.Exists(_options.ServiceAccountKeyPath))
+        {
+            throw new InvalidOperationException($"Google Drive service account key was not found at '{_options.ServiceAccountKeyPath}'.");
+        }
+
+        var driveService = CreateDriveService();
+        await driveService.Files.Delete(fileId).ExecuteAsync(cancellationToken);
+    }
+
     private DriveService CreateDriveService()
     {
         var credential = GoogleCredential

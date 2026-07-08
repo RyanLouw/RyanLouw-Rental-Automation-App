@@ -928,6 +928,36 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return result;
     }
 
+
+    public async Task<TaxTransactionDataModel?> LoadTaxTransactionAsync(long taxTransactionId)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT tt.id,
+                   tt.property_id,
+                   p.name,
+                   tt.transaction_date,
+                   tt.entry_kind,
+                   tt.amount,
+                   tt.description,
+                   tt.proof_file_name,
+                   tt.proof_drive_file_id,
+                   tt.proof_drive_link,
+                   tt.drive_folder_path
+            FROM tax_transaction tt
+            INNER JOIN property p ON p.id = tt.property_id
+            WHERE tt.id = @taxTransactionId
+            LIMIT 1;";
+
+        AddParameter(cmd, "@taxTransactionId", taxTransactionId);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ReadTaxTransaction(reader) : null;
+    }
+
     public async Task<TaxTransactionDataModel> InsertTaxTransactionAsync(TaxTransactionInsertDataModel transaction)
     {
         var connection = _authDbContext.Database.GetDbConnection();
@@ -982,6 +1012,21 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             ProofDriveLink = transaction.ProofDriveLink,
             DriveFolderPath = transaction.DriveFolderPath
         };
+    }
+
+
+    public async Task<bool> DeleteTaxTransactionAsync(long taxTransactionId)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            DELETE FROM tax_transaction
+            WHERE id = @taxTransactionId;";
+
+        AddParameter(cmd, "@taxTransactionId", taxTransactionId);
+        return await cmd.ExecuteNonQueryAsync() > 0;
     }
 
     private static TaxTransactionDataModel ReadTaxTransaction(DbDataReader reader)

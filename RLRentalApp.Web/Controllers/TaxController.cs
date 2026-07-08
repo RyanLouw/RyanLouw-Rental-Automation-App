@@ -39,4 +39,17 @@ public class TaxController : Controller
 
         return Json(result);
     }
+
+    [HttpPost]
+    public async Task<IActionResult> DeleteTransaction(long taxTransactionId, bool deleteProofFile = true)
+    {
+        var result = await _propertyDashboardManager.DeleteTaxTransactionAsync(taxTransactionId, deleteProofFile);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
 }

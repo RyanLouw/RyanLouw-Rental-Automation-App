@@ -5,6 +5,7 @@ namespace RLRentalApp.Web.Services;
 public interface IGoogleDriveTaxDocumentService
 {
     Task<GoogleDriveUploadResult> UploadAsync(IFormFile file, IReadOnlyList<string> folderPathParts, CancellationToken cancellationToken = default);
+    Task DeleteAsync(string fileId, CancellationToken cancellationToken = default);
 }
 
 public sealed class GoogleDriveUploadResult

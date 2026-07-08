@@ -96,6 +96,30 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
+
+    public async Task<DeleteTaxTransactionResultVm> DeleteTaxTransactionAsync(long taxTransactionId, bool deleteProofFile)
+    {
+        var taxTransaction = await _dataAccess.LoadTaxTransactionAsync(taxTransactionId);
+        if (taxTransaction is null)
+        {
+            return new DeleteTaxTransactionResultVm { Success = false, Message = "Tax row was not found." };
+        }
+
+        if (deleteProofFile)
+        {
+            await _googleDriveTaxDocumentService.DeleteAsync(taxTransaction.ProofDriveFileId);
+        }
+
+        var deleted = await _dataAccess.DeleteTaxTransactionAsync(taxTransactionId);
+        return new DeleteTaxTransactionResultVm
+        {
+            Success = deleted,
+            Message = deleted
+                ? deleteProofFile ? "Tax row and Google Drive proof were deleted." : "Tax row was deleted. The Google Drive proof was kept."
+                : "Tax row could not be deleted."
+        };
+    }
+
     private static TaxTransactionVm MapTaxTransaction(TaxTransactionDataModel row)
     {
         return new TaxTransactionVm

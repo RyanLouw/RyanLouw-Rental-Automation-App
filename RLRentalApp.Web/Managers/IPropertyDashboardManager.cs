@@ -20,4 +20,5 @@ public interface IPropertyDashboardManager
     Task<SendTenantEmailResultVm> SendTenantEmailAsync(SendTenantEmailRequestVm request);
     Task<TaxTransactionsVm> GetTaxTransactionsAsync(int? year = null);
     Task<SaveTaxTransactionResultVm> SaveTaxTransactionAsync(IFormFile? proofFile, int propertyId, DateTime transactionDate, string entryKind, decimal amount, string description);
+    Task<DeleteTaxTransactionResultVm> DeleteTaxTransactionAsync(long taxTransactionId, bool deleteProofFile);
 }
