@@ -97,6 +97,11 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
             throw new InvalidOperationException($"The configured ID points to '{folder.Name}', but it is not a Google Drive folder.");
         }
 
+        if (string.IsNullOrWhiteSpace(folder.DriveId))
+        {
+            throw new InvalidOperationException("The configured RootFolderId is in a personal My Drive folder. Service accounts do not have Google Drive storage quota, so the tax proof folder must be inside a Google Shared Drive, or the app must be changed to use user OAuth instead of a service account.");
+        }
+
         return new GoogleDriveFolderTestResult
         {
             FolderId = folder.Id,
@@ -188,6 +193,13 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
         var uploadProgress = await uploadRequest.UploadAsync(cancellationToken);
         if (uploadProgress.Status != UploadStatus.Completed)
         {
+            if (uploadProgress.Exception is GoogleApiException googleApiException &&
+                googleApiException.HttpStatusCode == System.Net.HttpStatusCode.Forbidden &&
+                googleApiException.Message.Contains("Service Accounts do not have storage quota", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Google Drive upload failed because service accounts do not have storage quota in personal My Drive folders. Move/create the tax proof root folder inside a Google Shared Drive and set GoogleDrive:RootFolderId to that Shared Drive folder ID, or switch this app to user OAuth.", googleApiException);
+            }
+
             throw new InvalidOperationException($"Google Drive upload did not complete. Status: {uploadProgress.Status}. {uploadProgress.Exception?.Message ?? string.Empty}", uploadProgress.Exception);
         }
 
