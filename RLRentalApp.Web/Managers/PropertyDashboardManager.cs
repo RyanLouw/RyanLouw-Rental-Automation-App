@@ -28,70 +28,97 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
-    public async Task<TaxDashboardVm> GetTaxDashboardAsync(int? year = null)
+    public async Task<TaxTransactionsVm> GetTaxTransactionsAsync(int? year = null)
     {
         var taxYear = year ?? DateTime.UtcNow.Year;
-        var rows = await _dataAccess.LoadTaxPropertySummariesAsync(taxYear);
-        var properties = rows.Select(x => new TaxPropertySummaryVm
-        {
-            PropertyId = x.PropertyId,
-            PropertyName = x.PropertyName,
-            Income = x.Income,
-            Expenses = x.Expenses
-        }).ToList();
+        var rows = await _dataAccess.LoadTaxTransactionsAsync(taxYear);
 
-        return new TaxDashboardVm
+        return new TaxTransactionsVm
         {
             Year = taxYear,
-            Properties = properties,
-            TotalIncome = properties.Sum(x => x.Income),
-            TotalExpenses = properties.Sum(x => x.Expenses)
+            Transactions = rows.Select(MapTaxTransaction).ToList()
         };
     }
 
-    public async Task<TaxDocumentUploadResultVm> SaveBankStatementAsync(IFormFile? file, int year, int month)
+    public async Task<SaveTaxTransactionResultVm> SaveTaxTransactionAsync(IFormFile? proofFile, int propertyId, DateTime transactionDate, string entryKind, decimal amount, string description)
     {
-        if (month is < 1 or > 12)
+        if (proofFile is null || proofFile.Length == 0)
         {
-            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a valid statement month." };
+            return new SaveTaxTransactionResultVm { Success = false, Message = "Upload the proof document, image, or PDF." };
         }
 
-        return await SaveTaxDocumentAsync(file, "BankStatemenst", year.ToString(CultureInfo.InvariantCulture), month.ToString("00", CultureInfo.InvariantCulture));
-    }
-
-    public async Task<TaxDocumentUploadResultVm> SaveExpenseDocumentAsync(IFormFile? file, int propertyId, int year, int month)
-    {
-        if (month is < 1 or > 12)
+        var normalizedKind = NormalizeTaxEntryKind(entryKind);
+        if (normalizedKind is null)
         {
-            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a valid expense month." };
+            return new SaveTaxTransactionResultVm { Success = false, Message = "Choose KREDIT for money in or DEBIT for money out." };
+        }
+
+        if (amount <= 0)
+        {
+            return new SaveTaxTransactionResultVm { Success = false, Message = "Enter an amount greater than zero." };
         }
 
         var property = await _dataAccess.LoadPropertyAsync(propertyId);
         if (property is null)
         {
-            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a valid property." };
+            return new SaveTaxTransactionResultVm { Success = false, Message = "Choose a valid property." };
         }
 
-        return await SaveTaxDocumentAsync(file, "ExpenceDoc", SanitizePathPart(property.Name), year.ToString(CultureInfo.InvariantCulture), month.ToString("00", CultureInfo.InvariantCulture));
-    }
-
-    private async Task<TaxDocumentUploadResultVm> SaveTaxDocumentAsync(IFormFile? file, params string[] pathParts)
-    {
-        if (file is null || file.Length == 0)
+        var transactionMonth = transactionDate == default ? DateTime.UtcNow.Date : transactionDate.Date;
+        var folderPath = new[]
         {
-            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a document to upload." };
-        }
+            "ExpenceDoc",
+            SanitizePathPart(property.Name),
+            transactionMonth.Year.ToString(CultureInfo.InvariantCulture),
+            transactionMonth.Month.ToString("00", CultureInfo.InvariantCulture)
+        };
+        var uploadResult = await _googleDriveTaxDocumentService.UploadAsync(proofFile, folderPath);
 
-        var uploadResult = await _googleDriveTaxDocumentService.UploadAsync(file, pathParts);
+        var saved = await _dataAccess.InsertTaxTransactionAsync(new TaxTransactionInsertDataModel
+        {
+            PropertyId = propertyId,
+            TransactionDate = transactionMonth,
+            EntryKind = normalizedKind,
+            Amount = amount,
+            Description = string.IsNullOrWhiteSpace(description) ? "Tax transaction" : description.Trim(),
+            ProofFileName = uploadResult.FileName,
+            ProofDriveFileId = uploadResult.FileId,
+            ProofDriveLink = uploadResult.WebViewLink,
+            DriveFolderPath = uploadResult.FolderPath
+        });
+        saved.PropertyName = property.Name;
 
-        return new TaxDocumentUploadResultVm
+        return new SaveTaxTransactionResultVm
         {
             Success = true,
-            Message = "Document uploaded to Google Drive.",
-            SavedPath = string.IsNullOrWhiteSpace(uploadResult.WebViewLink)
-                ? $"Google Drive: {uploadResult.FolderPath} / {uploadResult.FileName}"
-                : uploadResult.WebViewLink
+            Message = "Tax row saved and proof uploaded to Google Drive.",
+            Transaction = MapTaxTransaction(saved)
         };
+    }
+
+    private static TaxTransactionVm MapTaxTransaction(TaxTransactionDataModel row)
+    {
+        return new TaxTransactionVm
+        {
+            Id = row.Id,
+            PropertyId = row.PropertyId,
+            PropertyName = row.PropertyName,
+            TransactionDate = row.TransactionDate,
+            EntryKind = row.EntryKind,
+            Amount = row.Amount,
+            Description = row.Description,
+            ProofFileName = row.ProofFileName,
+            ProofDriveLink = row.ProofDriveLink,
+            DriveFolderPath = row.DriveFolderPath
+        };
+    }
+
+    private static string? NormalizeTaxEntryKind(string entryKind)
+    {
+        var normalized = entryKind.Trim().ToUpperInvariant();
+        return normalized is "KREDIT" or "CREDIT" ? "KREDIT"
+            : normalized is "DEBIT" ? "DEBIT"
+            : null;
     }
 
     private static string SanitizePathPart(string value)
@@ -99,6 +126,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         var sanitized = value.Replace('/', '-').Replace('\\', '-').Trim();
         return string.IsNullOrWhiteSpace(sanitized) ? "UnknownProperty" : sanitized;
     }
+
 
     private static string BuildFullAddress(PropertyOptionVm property)
     {

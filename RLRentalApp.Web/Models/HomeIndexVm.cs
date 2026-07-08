@@ -255,27 +255,32 @@ public class UpdateStatementEntryResultVm
 }
 
 
-public class TaxDashboardVm
+public class TaxTransactionsVm
 {
     public int Year { get; set; }
-    public List<TaxPropertySummaryVm> Properties { get; set; } = [];
-    public decimal TotalIncome { get; set; }
-    public decimal TotalExpenses { get; set; }
-    public decimal NetTotal => TotalIncome - TotalExpenses;
+    public List<TaxTransactionVm> Transactions { get; set; } = [];
+    public decimal TotalKredit => Transactions.Where(x => x.EntryKind == "KREDIT").Sum(x => x.Amount);
+    public decimal TotalDebit => Transactions.Where(x => x.EntryKind == "DEBIT").Sum(x => x.Amount);
+    public decimal Net => TotalKredit - TotalDebit;
 }
 
-public class TaxPropertySummaryVm
+public class TaxTransactionVm
 {
+    public long Id { get; set; }
     public int PropertyId { get; set; }
     public string PropertyName { get; set; } = string.Empty;
-    public decimal Income { get; set; }
-    public decimal Expenses { get; set; }
-    public decimal Net => Income - Expenses;
+    public DateTime TransactionDate { get; set; }
+    public string EntryKind { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string ProofFileName { get; set; } = string.Empty;
+    public string ProofDriveLink { get; set; } = string.Empty;
+    public string DriveFolderPath { get; set; } = string.Empty;
 }
 
-public class TaxDocumentUploadResultVm
+public class SaveTaxTransactionResultVm
 {
     public bool Success { get; set; }
     public string Message { get; set; } = string.Empty;
-    public string SavedPath { get; set; } = string.Empty;
+    public TaxTransactionVm? Transaction { get; set; }
 }

@@ -20,5 +20,6 @@ public interface IPropertyDashboardDataAccess
     Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments);
     Task<List<LatePaymentChargeDataModel>> ApplyLatePaymentChargesAsync(int leaseId, List<PaymentInsertDataModel> payments);
     Task<int> InsertManualLateChargesAsync(int leaseId, DateTime chargeDate, decimal interestAmount, bool addLetterFee, string notes);
-    Task<List<TaxPropertySummaryDataModel>> LoadTaxPropertySummariesAsync(int year);
+    Task<List<TaxTransactionDataModel>> LoadTaxTransactionsAsync(int year);
+    Task<TaxTransactionDataModel> InsertTaxTransactionAsync(TaxTransactionInsertDataModel transaction);
 }

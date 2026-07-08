@@ -22,28 +22,16 @@ public class TaxController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Summary(int? year)
+    public async Task<IActionResult> Transactions(int? year)
     {
-        var vm = await _propertyDashboardManager.GetTaxDashboardAsync(year);
+        var vm = await _propertyDashboardManager.GetTaxTransactionsAsync(year);
         return Json(vm);
     }
 
     [HttpPost]
-    public async Task<IActionResult> SaveBankStatement(IFormFile? document, int year, int month)
+    public async Task<IActionResult> SaveTransaction(IFormFile? proofFile, int propertyId, DateTime transactionDate, string entryKind, decimal amount, string description)
     {
-        var result = await _propertyDashboardManager.SaveBankStatementAsync(document, year, month);
-        if (!result.Success)
-        {
-            return BadRequest(result);
-        }
-
-        return Json(result);
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> SaveExpenseDocument(IFormFile? document, int propertyId, int year, int month)
-    {
-        var result = await _propertyDashboardManager.SaveExpenseDocumentAsync(document, propertyId, year, month);
+        var result = await _propertyDashboardManager.SaveTaxTransactionAsync(proofFile, propertyId, transactionDate, entryKind, amount, description);
         if (!result.Success)
         {
             return BadRequest(result);

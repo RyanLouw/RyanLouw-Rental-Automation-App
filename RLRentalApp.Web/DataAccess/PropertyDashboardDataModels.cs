@@ -59,10 +59,30 @@ public sealed class ActiveLeasePaymentMatchDataModel
 }
 
 
-public sealed class TaxPropertySummaryDataModel
+public sealed class TaxTransactionDataModel
 {
+    public long Id { get; set; }
     public int PropertyId { get; set; }
     public string PropertyName { get; set; } = string.Empty;
-    public decimal Income { get; set; }
-    public decimal Expenses { get; set; }
+    public DateTime TransactionDate { get; set; }
+    public string EntryKind { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string ProofFileName { get; set; } = string.Empty;
+    public string ProofDriveFileId { get; set; } = string.Empty;
+    public string ProofDriveLink { get; set; } = string.Empty;
+    public string DriveFolderPath { get; set; } = string.Empty;
+}
+
+public sealed class TaxTransactionInsertDataModel
+{
+    public int PropertyId { get; set; }
+    public DateTime TransactionDate { get; set; }
+    public string EntryKind { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string ProofFileName { get; set; } = string.Empty;
+    public string ProofDriveFileId { get; set; } = string.Empty;
+    public string ProofDriveLink { get; set; } = string.Empty;
+    public string DriveFolderPath { get; set; } = string.Empty;
 }

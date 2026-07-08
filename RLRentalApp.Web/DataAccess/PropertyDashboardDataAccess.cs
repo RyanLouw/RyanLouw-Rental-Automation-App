@@ -888,7 +888,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
     }
 
 
-    public async Task<List<TaxPropertySummaryDataModel>> LoadTaxPropertySummariesAsync(int year)
+    public async Task<List<TaxTransactionDataModel>> LoadTaxTransactionsAsync(int year)
     {
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
@@ -898,36 +898,110 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT p.id,
+            SELECT tt.id,
+                   tt.property_id,
                    p.name,
-                   COALESCE(SUM(CASE WHEN s.amount < 0 THEN ABS(s.amount) ELSE 0 END), 0) AS income,
-                   COALESCE(SUM(CASE WHEN s.amount > 0 THEN s.amount ELSE 0 END), 0) AS expenses
-            FROM property p
-            LEFT JOIN lease l ON l.property_id = p.id
-            LEFT JOIN statement_sdt s ON s.lease_id = l.id
-                AND s.entry_date >= @yearStart
-                AND s.entry_date < @nextYearStart
-            GROUP BY p.id, p.name
-            ORDER BY p.name;";
+                   tt.transaction_date,
+                   tt.entry_kind,
+                   tt.amount,
+                   tt.description,
+                   tt.proof_file_name,
+                   tt.proof_drive_file_id,
+                   tt.proof_drive_link,
+                   tt.drive_folder_path
+            FROM tax_transaction tt
+            INNER JOIN property p ON p.id = tt.property_id
+            WHERE tt.transaction_date >= @yearStart
+              AND tt.transaction_date < @nextYearStart
+            ORDER BY tt.transaction_date DESC, tt.id DESC;";
 
         AddParameter(cmd, "@yearStart", yearStart.Date);
         AddParameter(cmd, "@nextYearStart", nextYearStart.Date);
 
-        var result = new List<TaxPropertySummaryDataModel>();
+        var result = new List<TaxTransactionDataModel>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            result.Add(new TaxPropertySummaryDataModel
-            {
-                PropertyId = reader.GetInt32(0),
-                PropertyName = reader.GetString(1),
-                Income = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2),
-                Expenses = reader.IsDBNull(3) ? 0m : reader.GetDecimal(3)
-            });
+            result.Add(ReadTaxTransaction(reader));
         }
 
         return result;
     }
+
+    public async Task<TaxTransactionDataModel> InsertTaxTransactionAsync(TaxTransactionInsertDataModel transaction)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO tax_transaction (
+                property_id,
+                transaction_date,
+                entry_kind,
+                amount,
+                description,
+                proof_file_name,
+                proof_drive_file_id,
+                proof_drive_link,
+                drive_folder_path)
+            VALUES (
+                @propertyId,
+                @transactionDate,
+                @entryKind,
+                @amount,
+                @description,
+                @proofFileName,
+                @proofDriveFileId,
+                @proofDriveLink,
+                @driveFolderPath)
+            RETURNING id;";
+
+        AddParameter(cmd, "@propertyId", transaction.PropertyId);
+        AddParameter(cmd, "@transactionDate", transaction.TransactionDate.Date);
+        AddParameter(cmd, "@entryKind", transaction.EntryKind);
+        AddParameter(cmd, "@amount", transaction.Amount);
+        AddParameter(cmd, "@description", transaction.Description);
+        AddParameter(cmd, "@proofFileName", transaction.ProofFileName);
+        AddParameter(cmd, "@proofDriveFileId", transaction.ProofDriveFileId);
+        AddParameter(cmd, "@proofDriveLink", transaction.ProofDriveLink);
+        AddParameter(cmd, "@driveFolderPath", transaction.DriveFolderPath);
+
+        var insertedId = await cmd.ExecuteScalarAsync();
+        return new TaxTransactionDataModel
+        {
+            Id = Convert.ToInt64(insertedId),
+            PropertyId = transaction.PropertyId,
+            PropertyName = string.Empty,
+            TransactionDate = transaction.TransactionDate.Date,
+            EntryKind = transaction.EntryKind,
+            Amount = transaction.Amount,
+            Description = transaction.Description,
+            ProofFileName = transaction.ProofFileName,
+            ProofDriveFileId = transaction.ProofDriveFileId,
+            ProofDriveLink = transaction.ProofDriveLink,
+            DriveFolderPath = transaction.DriveFolderPath
+        };
+    }
+
+    private static TaxTransactionDataModel ReadTaxTransaction(DbDataReader reader)
+    {
+        return new TaxTransactionDataModel
+        {
+            Id = reader.GetInt64(0),
+            PropertyId = reader.GetInt32(1),
+            PropertyName = reader.GetString(2),
+            TransactionDate = reader.GetDateTime(3),
+            EntryKind = reader.GetString(4),
+            Amount = reader.GetDecimal(5),
+            Description = reader.GetString(6),
+            ProofFileName = reader.GetString(7),
+            ProofDriveFileId = reader.GetString(8),
+            ProofDriveLink = reader.GetString(9),
+            DriveFolderPath = reader.GetString(10)
+        };
+    }
+
 
     private static void AddParameter(DbCommand cmd, string name, object? value)
     {

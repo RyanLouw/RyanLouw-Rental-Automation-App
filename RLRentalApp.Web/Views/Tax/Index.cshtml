@@ -6,58 +6,90 @@
 
 <div class="container py-4 tax-dashboard">
     <h1 class="mb-3">Tax</h1>
-    <p class="text-muted mb-4">Use this tab for yearly tax prep: review income and expenses per property, save monthly bank statements, and upload expense documents to Google Drive through the Drive API.</p>
+    <p class="text-muted mb-4">Step one: capture tax money in/out rows and upload the proof document to Google Drive.</p>
 
     <section class="card shadow-sm mb-4">
         <div class="card-body">
-            <h2 class="h5">Yearly income and expenses</h2>
-            <div class="row g-3 mb-4">
-                <div class="col-md-3">
-                    <label class="form-label" for="taxYearInput">Tax year</label>
-                    <input class="form-control" type="number" id="taxYearInput" min="2000" max="2100" />
+            <h2 class="h5">Add expense / tax row</h2>
+            <p class="text-muted">Use <strong>DEBIT</strong> for money out/expenses and <strong>KREDIT</strong> for money in. The proof can be an image, document, or PDF.</p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="taxPropertySelect">Property</label>
+                    <select class="form-select" id="taxPropertySelect">
+                        @foreach (var property in Model.Properties)
+                        {
+                            <option value="@property.Id">@property.Name</option>
+                        }
+                    </select>
                 </div>
-                <div class="col-md-3 align-self-end">
-                    <button class="btn btn-outline-primary" type="button" id="loadTaxSummaryBtn">Load summary</button>
+                <div class="col-md-2">
+                    <label class="form-label" for="taxDateInput">Date</label>
+                    <input class="form-control" type="date" id="taxDateInput" />
                 </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-striped">
-                    <thead><tr><th>Property</th><th class="text-end">Income</th><th class="text-end">Expenses</th><th class="text-end">Net</th></tr></thead>
-                    <tbody id="taxSummaryTableBody"></tbody>
-                    <tfoot><tr class="fw-bold"><td>Total</td><td class="text-end" id="taxTotalIncome">-</td><td class="text-end" id="taxTotalExpenses">-</td><td class="text-end" id="taxNetTotal">-</td></tr></tfoot>
-                </table>
+                <div class="col-md-2">
+                    <label class="form-label" for="taxKindSelect">Kredit / Debit</label>
+                    <select class="form-select" id="taxKindSelect">
+                        <option value="DEBIT">DEBIT - money out</option>
+                        <option value="KREDIT">KREDIT - money in</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="taxAmountInput">Amount</label>
+                    <input class="form-control" type="number" min="0" step="0.01" id="taxAmountInput" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label" for="taxDescriptionInput">Description</label>
+                    <input class="form-control" type="text" id="taxDescriptionInput" maxlength="300" placeholder="Example: Plumbing repair, insurance, rental income" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="taxProofFileInput">Proof file</label>
+                    <input class="form-control" type="file" id="taxProofFileInput" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" />
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-success" type="button" id="saveTaxTransactionBtn">Save tax row and upload proof</button>
+                    <div id="taxSaveMsg" class="alert mt-3 d-none"></div>
+                </div>
             </div>
         </div>
     </section>
 
     <section class="card shadow-sm">
         <div class="card-body">
-            <h2 class="h5">Google Drive tax documents</h2>
-            <p class="text-muted">Documents are uploaded through the Google Drive API using BankStatemenst / Year / Month / File and ExpenceDoc / PropertyName / Year / Month / File.</p>
-            <div class="row g-4">
-                <div class="col-lg-6">
-                    <h3 class="h6">Save monthly bank statement</h3>
-                    <div class="mb-2"><label class="form-label" for="bankStatementMonthInput">Month</label><input class="form-control" type="month" id="bankStatementMonthInput" /></div>
-                    <div class="mb-2"><label class="form-label" for="bankStatementFileInput">File</label><input class="form-control" type="file" id="bankStatementFileInput" /></div>
-                    <button class="btn btn-success" type="button" id="saveBankStatementBtn">Save bank statement</button>
-                    <div id="bankStatementMsg" class="alert mt-3 d-none"></div>
+            <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+                <div>
+                    <h2 class="h5 mb-1">Tax table</h2>
+                    <p class="text-muted mb-0">Each row links back to its proof in Google Drive.</p>
                 </div>
-                <div class="col-lg-6">
-                    <h3 class="h6">Save expense document</h3>
-                    <div class="mb-2">
-                        <label class="form-label" for="expenseDocPropertySelect">Property</label>
-                        <select class="form-select" id="expenseDocPropertySelect">
-                            @foreach (var property in Model.Properties)
-                            {
-                                <option value="@property.Id">@property.Name</option>
-                            }
-                        </select>
+                <div class="d-flex align-items-end gap-2">
+                    <div>
+                        <label class="form-label" for="taxYearInput">Year</label>
+                        <input class="form-control" type="number" id="taxYearInput" min="2000" max="2100" />
                     </div>
-                    <div class="mb-2"><label class="form-label" for="expenseDocMonthInput">Month</label><input class="form-control" type="month" id="expenseDocMonthInput" /></div>
-                    <div class="mb-2"><label class="form-label" for="expenseDocFileInput">File</label><input class="form-control" type="file" id="expenseDocFileInput" /></div>
-                    <button class="btn btn-success" type="button" id="saveExpenseDocBtn">Save expense document</button>
-                    <div id="expenseDocMsg" class="alert mt-3 d-none"></div>
+                    <button class="btn btn-outline-primary" type="button" id="loadTaxRowsBtn">Reload</button>
                 </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Property</th>
+                            <th>Description</th>
+                            <th class="text-end">KREDIT</th>
+                            <th class="text-end">DEBIT</th>
+                            <th>Proof</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taxRowsTableBody"></tbody>
+                    <tfoot>
+                        <tr class="fw-bold">
+                            <td colspan="3">Total</td>
+                            <td class="text-end" id="taxTotalKredit">-</td>
+                            <td class="text-end" id="taxTotalDebit">-</td>
+                            <td id="taxNetTotal">-</td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         </div>
     </section>
@@ -66,79 +98,78 @@
 @section Scripts {
     <script>
         (() => {
+            const taxPropertySelect = document.getElementById('taxPropertySelect');
+            const taxDateInput = document.getElementById('taxDateInput');
+            const taxKindSelect = document.getElementById('taxKindSelect');
+            const taxAmountInput = document.getElementById('taxAmountInput');
+            const taxDescriptionInput = document.getElementById('taxDescriptionInput');
+            const taxProofFileInput = document.getElementById('taxProofFileInput');
+            const saveTaxTransactionBtn = document.getElementById('saveTaxTransactionBtn');
+            const taxSaveMsg = document.getElementById('taxSaveMsg');
             const taxYearInput = document.getElementById('taxYearInput');
-            const loadTaxSummaryBtn = document.getElementById('loadTaxSummaryBtn');
-            const taxSummaryTableBody = document.getElementById('taxSummaryTableBody');
-            const taxTotalIncome = document.getElementById('taxTotalIncome');
-            const taxTotalExpenses = document.getElementById('taxTotalExpenses');
+            const loadTaxRowsBtn = document.getElementById('loadTaxRowsBtn');
+            const taxRowsTableBody = document.getElementById('taxRowsTableBody');
+            const taxTotalKredit = document.getElementById('taxTotalKredit');
+            const taxTotalDebit = document.getElementById('taxTotalDebit');
             const taxNetTotal = document.getElementById('taxNetTotal');
-            const bankStatementMonthInput = document.getElementById('bankStatementMonthInput');
-            const bankStatementFileInput = document.getElementById('bankStatementFileInput');
-            const saveBankStatementBtn = document.getElementById('saveBankStatementBtn');
-            const bankStatementMsg = document.getElementById('bankStatementMsg');
-            const expenseDocPropertySelect = document.getElementById('expenseDocPropertySelect');
-            const expenseDocMonthInput = document.getElementById('expenseDocMonthInput');
-            const expenseDocFileInput = document.getElementById('expenseDocFileInput');
-            const saveExpenseDocBtn = document.getElementById('saveExpenseDocBtn');
-            const expenseDocMsg = document.getElementById('expenseDocMsg');
 
             const money = value => value !== null && value !== undefined
                 ? Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })
                 : '-';
-            const currentMonthValue = () => {
-                const now = new Date();
-                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            };
 
-            taxYearInput.value = new Date().getFullYear();
-            bankStatementMonthInput.value = currentMonthValue();
-            expenseDocMonthInput.value = currentMonthValue();
+            const today = new Date();
+            taxDateInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            taxYearInput.value = today.getFullYear();
 
-            const renderTaxDashboard = async () => {
-                const response = await fetch(`/Tax/Summary?year=${taxYearInput.value}`);
+            const renderTaxRows = async () => {
+                const response = await fetch(`/Tax/Transactions?year=${taxYearInput.value}`);
                 if (!response.ok) {
-                    taxSummaryTableBody.innerHTML = '<tr><td colspan="4" class="text-danger">Could not load tax summary.</td></tr>';
+                    taxRowsTableBody.innerHTML = '<tr><td colspan="6" class="text-danger">Could not load tax rows.</td></tr>';
                     return;
                 }
 
                 const payload = await response.json();
-                taxSummaryTableBody.innerHTML = (payload.properties || []).map(row => `
-                    <tr><td>${row.propertyName}</td><td class="text-end">${money(row.income)}</td><td class="text-end">${money(row.expenses)}</td><td class="text-end">${money(row.net)}</td></tr>
+                taxRowsTableBody.innerHTML = (payload.transactions || []).map(row => `
+                    <tr>
+                        <td>${new Date(row.transactionDate).toLocaleDateString()}</td>
+                        <td>${row.propertyName}</td>
+                        <td>${row.description}</td>
+                        <td class="text-end">${row.entryKind === 'KREDIT' ? money(row.amount) : '-'}</td>
+                        <td class="text-end">${row.entryKind === 'DEBIT' ? money(row.amount) : '-'}</td>
+                        <td><a href="${row.proofDriveLink}" target="_blank" rel="noopener">${row.proofFileName || 'Open proof'}</a></td>
+                    </tr>
                 `).join('');
-                taxTotalIncome.textContent = money(payload.totalIncome);
-                taxTotalExpenses.textContent = money(payload.totalExpenses);
-                taxNetTotal.textContent = money(payload.netTotal);
+                taxTotalKredit.textContent = money(payload.totalKredit);
+                taxTotalDebit.textContent = money(payload.totalDebit);
+                taxNetTotal.textContent = `Net: ${money(payload.net)}`;
             };
 
-            const postTaxDocument = async (url, formData, messageElement) => {
-                messageElement.classList.add('d-none');
-                const response = await fetch(url, { method: 'POST', body: formData });
+            saveTaxTransactionBtn.addEventListener('click', async () => {
+                taxSaveMsg.classList.add('d-none');
+                const formData = new FormData();
+                formData.append('propertyId', taxPropertySelect.value || '');
+                formData.append('transactionDate', taxDateInput.value || '');
+                formData.append('entryKind', taxKindSelect.value || 'DEBIT');
+                formData.append('amount', taxAmountInput.value || '');
+                formData.append('description', taxDescriptionInput.value || '');
+                if (taxProofFileInput.files?.[0]) formData.append('proofFile', taxProofFileInput.files[0]);
+
+                const response = await fetch('/Tax/SaveTransaction', { method: 'POST', body: formData });
                 const payload = await response.json();
-                messageElement.className = response.ok ? 'alert alert-success mt-3' : 'alert alert-danger mt-3';
-                messageElement.textContent = response.ok ? `${payload.message} ${payload.savedPath}` : (payload.message || 'Could not save document.');
-                messageElement.classList.remove('d-none');
-            };
+                taxSaveMsg.className = response.ok ? 'alert alert-success mt-3' : 'alert alert-danger mt-3';
+                taxSaveMsg.textContent = payload.message || (response.ok ? 'Saved.' : 'Could not save tax row.');
+                taxSaveMsg.classList.remove('d-none');
 
-            loadTaxSummaryBtn.addEventListener('click', renderTaxDashboard);
-            saveBankStatementBtn.addEventListener('click', async () => {
-                const [year, month] = (bankStatementMonthInput.value || '').split('-');
-                const formData = new FormData();
-                formData.append('year', year || '');
-                formData.append('month', month || '');
-                if (bankStatementFileInput.files?.[0]) formData.append('document', bankStatementFileInput.files[0]);
-                await postTaxDocument('/Tax/SaveBankStatement', formData, bankStatementMsg);
-            });
-            saveExpenseDocBtn.addEventListener('click', async () => {
-                const [year, month] = (expenseDocMonthInput.value || '').split('-');
-                const formData = new FormData();
-                formData.append('propertyId', expenseDocPropertySelect.value || '');
-                formData.append('year', year || '');
-                formData.append('month', month || '');
-                if (expenseDocFileInput.files?.[0]) formData.append('document', expenseDocFileInput.files[0]);
-                await postTaxDocument('/Tax/SaveExpenseDocument', formData, expenseDocMsg);
+                if (response.ok) {
+                    taxAmountInput.value = '';
+                    taxDescriptionInput.value = '';
+                    taxProofFileInput.value = '';
+                    await renderTaxRows();
+                }
             });
 
-            renderTaxDashboard();
+            loadTaxRowsBtn.addEventListener('click', renderTaxRows);
+            renderTaxRows();
         })();
     </script>
 }
