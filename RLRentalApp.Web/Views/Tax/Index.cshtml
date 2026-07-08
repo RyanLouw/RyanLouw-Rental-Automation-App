@@ -1,0 +1,144 @@
+@model RLRentalApp.Models.HomeIndexVm
+
+@{
+    ViewData["Title"] = "Tax";
+}
+
+<div class="container py-4 tax-dashboard">
+    <h1 class="mb-3">Tax</h1>
+    <p class="text-muted mb-4">Use this tab for yearly tax prep: review income and expenses per property, save monthly bank statements, and upload expense documents to Google Drive through the Drive API.</p>
+
+    <section class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="h5">Yearly income and expenses</h2>
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <label class="form-label" for="taxYearInput">Tax year</label>
+                    <input class="form-control" type="number" id="taxYearInput" min="2000" max="2100" />
+                </div>
+                <div class="col-md-3 align-self-end">
+                    <button class="btn btn-outline-primary" type="button" id="loadTaxSummaryBtn">Load summary</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead><tr><th>Property</th><th class="text-end">Income</th><th class="text-end">Expenses</th><th class="text-end">Net</th></tr></thead>
+                    <tbody id="taxSummaryTableBody"></tbody>
+                    <tfoot><tr class="fw-bold"><td>Total</td><td class="text-end" id="taxTotalIncome">-</td><td class="text-end" id="taxTotalExpenses">-</td><td class="text-end" id="taxNetTotal">-</td></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="card shadow-sm">
+        <div class="card-body">
+            <h2 class="h5">Google Drive tax documents</h2>
+            <p class="text-muted">Documents are uploaded through the Google Drive API using BankStatemenst / Year / Month / File and ExpenceDoc / PropertyName / Year / Month / File.</p>
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h3 class="h6">Save monthly bank statement</h3>
+                    <div class="mb-2"><label class="form-label" for="bankStatementMonthInput">Month</label><input class="form-control" type="month" id="bankStatementMonthInput" /></div>
+                    <div class="mb-2"><label class="form-label" for="bankStatementFileInput">File</label><input class="form-control" type="file" id="bankStatementFileInput" /></div>
+                    <button class="btn btn-success" type="button" id="saveBankStatementBtn">Save bank statement</button>
+                    <div id="bankStatementMsg" class="alert mt-3 d-none"></div>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Save expense document</h3>
+                    <div class="mb-2">
+                        <label class="form-label" for="expenseDocPropertySelect">Property</label>
+                        <select class="form-select" id="expenseDocPropertySelect">
+                            @foreach (var property in Model.Properties)
+                            {
+                                <option value="@property.Id">@property.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-2"><label class="form-label" for="expenseDocMonthInput">Month</label><input class="form-control" type="month" id="expenseDocMonthInput" /></div>
+                    <div class="mb-2"><label class="form-label" for="expenseDocFileInput">File</label><input class="form-control" type="file" id="expenseDocFileInput" /></div>
+                    <button class="btn btn-success" type="button" id="saveExpenseDocBtn">Save expense document</button>
+                    <div id="expenseDocMsg" class="alert mt-3 d-none"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const taxYearInput = document.getElementById('taxYearInput');
+            const loadTaxSummaryBtn = document.getElementById('loadTaxSummaryBtn');
+            const taxSummaryTableBody = document.getElementById('taxSummaryTableBody');
+            const taxTotalIncome = document.getElementById('taxTotalIncome');
+            const taxTotalExpenses = document.getElementById('taxTotalExpenses');
+            const taxNetTotal = document.getElementById('taxNetTotal');
+            const bankStatementMonthInput = document.getElementById('bankStatementMonthInput');
+            const bankStatementFileInput = document.getElementById('bankStatementFileInput');
+            const saveBankStatementBtn = document.getElementById('saveBankStatementBtn');
+            const bankStatementMsg = document.getElementById('bankStatementMsg');
+            const expenseDocPropertySelect = document.getElementById('expenseDocPropertySelect');
+            const expenseDocMonthInput = document.getElementById('expenseDocMonthInput');
+            const expenseDocFileInput = document.getElementById('expenseDocFileInput');
+            const saveExpenseDocBtn = document.getElementById('saveExpenseDocBtn');
+            const expenseDocMsg = document.getElementById('expenseDocMsg');
+
+            const money = value => value !== null && value !== undefined
+                ? Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })
+                : '-';
+            const currentMonthValue = () => {
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            };
+
+            taxYearInput.value = new Date().getFullYear();
+            bankStatementMonthInput.value = currentMonthValue();
+            expenseDocMonthInput.value = currentMonthValue();
+
+            const renderTaxDashboard = async () => {
+                const response = await fetch(`/Tax/Summary?year=${taxYearInput.value}`);
+                if (!response.ok) {
+                    taxSummaryTableBody.innerHTML = '<tr><td colspan="4" class="text-danger">Could not load tax summary.</td></tr>';
+                    return;
+                }
+
+                const payload = await response.json();
+                taxSummaryTableBody.innerHTML = (payload.properties || []).map(row => `
+                    <tr><td>${row.propertyName}</td><td class="text-end">${money(row.income)}</td><td class="text-end">${money(row.expenses)}</td><td class="text-end">${money(row.net)}</td></tr>
+                `).join('');
+                taxTotalIncome.textContent = money(payload.totalIncome);
+                taxTotalExpenses.textContent = money(payload.totalExpenses);
+                taxNetTotal.textContent = money(payload.netTotal);
+            };
+
+            const postTaxDocument = async (url, formData, messageElement) => {
+                messageElement.classList.add('d-none');
+                const response = await fetch(url, { method: 'POST', body: formData });
+                const payload = await response.json();
+                messageElement.className = response.ok ? 'alert alert-success mt-3' : 'alert alert-danger mt-3';
+                messageElement.textContent = response.ok ? `${payload.message} ${payload.savedPath}` : (payload.message || 'Could not save document.');
+                messageElement.classList.remove('d-none');
+            };
+
+            loadTaxSummaryBtn.addEventListener('click', renderTaxDashboard);
+            saveBankStatementBtn.addEventListener('click', async () => {
+                const [year, month] = (bankStatementMonthInput.value || '').split('-');
+                const formData = new FormData();
+                formData.append('year', year || '');
+                formData.append('month', month || '');
+                if (bankStatementFileInput.files?.[0]) formData.append('document', bankStatementFileInput.files[0]);
+                await postTaxDocument('/Tax/SaveBankStatement', formData, bankStatementMsg);
+            });
+            saveExpenseDocBtn.addEventListener('click', async () => {
+                const [year, month] = (expenseDocMonthInput.value || '').split('-');
+                const formData = new FormData();
+                formData.append('propertyId', expenseDocPropertySelect.value || '');
+                formData.append('year', year || '');
+                formData.append('month', month || '');
+                if (expenseDocFileInput.files?.[0]) formData.append('document', expenseDocFileInput.files[0]);
+                await postTaxDocument('/Tax/SaveExpenseDocument', formData, expenseDocMsg);
+            });
+
+            renderTaxDashboard();
+        })();
+    </script>
+}

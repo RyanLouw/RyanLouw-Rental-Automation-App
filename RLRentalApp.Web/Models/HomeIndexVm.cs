@@ -253,3 +253,29 @@ public class UpdateStatementEntryResultVm
     public bool Success { get; set; }
     public string Message { get; set; } = string.Empty;
 }
+
+
+public class TaxDashboardVm
+{
+    public int Year { get; set; }
+    public List<TaxPropertySummaryVm> Properties { get; set; } = [];
+    public decimal TotalIncome { get; set; }
+    public decimal TotalExpenses { get; set; }
+    public decimal NetTotal => TotalIncome - TotalExpenses;
+}
+
+public class TaxPropertySummaryVm
+{
+    public int PropertyId { get; set; }
+    public string PropertyName { get; set; } = string.Empty;
+    public decimal Income { get; set; }
+    public decimal Expenses { get; set; }
+    public decimal Net => Income - Expenses;
+}
+
+public class TaxDocumentUploadResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string SavedPath { get; set; } = string.Empty;
+}

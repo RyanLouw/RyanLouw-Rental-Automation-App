@@ -202,6 +202,7 @@ public class HomeController : Controller
         return Json(result);
     }
 
+
     public IActionResult Privacy()
     {
         return View();

@@ -18,4 +18,7 @@ public interface IPropertyDashboardManager
     Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request);
     Task<ManualLateChargeResultVm> SaveManualLateChargeAsync(ManualLateChargeRequestVm request);
     Task<SendTenantEmailResultVm> SendTenantEmailAsync(SendTenantEmailRequestVm request);
+    Task<TaxDashboardVm> GetTaxDashboardAsync(int? year = null);
+    Task<TaxDocumentUploadResultVm> SaveBankStatementAsync(IFormFile? file, int year, int month);
+    Task<TaxDocumentUploadResultVm> SaveExpenseDocumentAsync(IFormFile? file, int propertyId, int year, int month);
 }

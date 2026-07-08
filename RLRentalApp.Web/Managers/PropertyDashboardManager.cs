@@ -18,11 +18,86 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 {
     private readonly IPropertyDashboardDataAccess _dataAccess;
     private readonly IEmailService _emailService;
+    private readonly IGoogleDriveTaxDocumentService _googleDriveTaxDocumentService;
 
-    public PropertyDashboardManager(IPropertyDashboardDataAccess dataAccess, IEmailService emailService)
+    public PropertyDashboardManager(IPropertyDashboardDataAccess dataAccess, IEmailService emailService, IGoogleDriveTaxDocumentService googleDriveTaxDocumentService)
     {
         _dataAccess = dataAccess;
         _emailService = emailService;
+        _googleDriveTaxDocumentService = googleDriveTaxDocumentService;
+    }
+
+
+    public async Task<TaxDashboardVm> GetTaxDashboardAsync(int? year = null)
+    {
+        var taxYear = year ?? DateTime.UtcNow.Year;
+        var rows = await _dataAccess.LoadTaxPropertySummariesAsync(taxYear);
+        var properties = rows.Select(x => new TaxPropertySummaryVm
+        {
+            PropertyId = x.PropertyId,
+            PropertyName = x.PropertyName,
+            Income = x.Income,
+            Expenses = x.Expenses
+        }).ToList();
+
+        return new TaxDashboardVm
+        {
+            Year = taxYear,
+            Properties = properties,
+            TotalIncome = properties.Sum(x => x.Income),
+            TotalExpenses = properties.Sum(x => x.Expenses)
+        };
+    }
+
+    public async Task<TaxDocumentUploadResultVm> SaveBankStatementAsync(IFormFile? file, int year, int month)
+    {
+        if (month is < 1 or > 12)
+        {
+            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a valid statement month." };
+        }
+
+        return await SaveTaxDocumentAsync(file, "BankStatemenst", year.ToString(CultureInfo.InvariantCulture), month.ToString("00", CultureInfo.InvariantCulture));
+    }
+
+    public async Task<TaxDocumentUploadResultVm> SaveExpenseDocumentAsync(IFormFile? file, int propertyId, int year, int month)
+    {
+        if (month is < 1 or > 12)
+        {
+            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a valid expense month." };
+        }
+
+        var property = await _dataAccess.LoadPropertyAsync(propertyId);
+        if (property is null)
+        {
+            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a valid property." };
+        }
+
+        return await SaveTaxDocumentAsync(file, "ExpenceDoc", SanitizePathPart(property.Name), year.ToString(CultureInfo.InvariantCulture), month.ToString("00", CultureInfo.InvariantCulture));
+    }
+
+    private async Task<TaxDocumentUploadResultVm> SaveTaxDocumentAsync(IFormFile? file, params string[] pathParts)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return new TaxDocumentUploadResultVm { Success = false, Message = "Choose a document to upload." };
+        }
+
+        var uploadResult = await _googleDriveTaxDocumentService.UploadAsync(file, pathParts);
+
+        return new TaxDocumentUploadResultVm
+        {
+            Success = true,
+            Message = "Document uploaded to Google Drive.",
+            SavedPath = string.IsNullOrWhiteSpace(uploadResult.WebViewLink)
+                ? $"Google Drive: {uploadResult.FolderPath} / {uploadResult.FileName}"
+                : uploadResult.WebViewLink
+        };
+    }
+
+    private static string SanitizePathPart(string value)
+    {
+        var sanitized = value.Replace('/', '-').Replace('\\', '-').Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? "UnknownProperty" : sanitized;
     }
 
     private static string BuildFullAddress(PropertyOptionVm property)

@@ -57,3 +57,12 @@ public sealed class ActiveLeasePaymentMatchDataModel
     public decimal CurrentMonthServiceTotal { get; set; }
     public decimal? ExpectedMonthlyTotal => LatestRent.HasValue ? LatestRent.Value + CurrentMonthServiceTotal : null;
 }
+
+
+public sealed class TaxPropertySummaryDataModel
+{
+    public int PropertyId { get; set; }
+    public string PropertyName { get; set; } = string.Empty;
+    public decimal Income { get; set; }
+    public decimal Expenses { get; set; }
+}

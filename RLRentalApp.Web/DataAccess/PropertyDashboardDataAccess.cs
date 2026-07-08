@@ -887,6 +887,48 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return value is bool exists && exists;
     }
 
+
+    public async Task<List<TaxPropertySummaryDataModel>> LoadTaxPropertySummariesAsync(int year)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var yearStart = new DateTime(year, 1, 1);
+        var nextYearStart = yearStart.AddYears(1);
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT p.id,
+                   p.name,
+                   COALESCE(SUM(CASE WHEN s.amount < 0 THEN ABS(s.amount) ELSE 0 END), 0) AS income,
+                   COALESCE(SUM(CASE WHEN s.amount > 0 THEN s.amount ELSE 0 END), 0) AS expenses
+            FROM property p
+            LEFT JOIN lease l ON l.property_id = p.id
+            LEFT JOIN statement_sdt s ON s.lease_id = l.id
+                AND s.entry_date >= @yearStart
+                AND s.entry_date < @nextYearStart
+            GROUP BY p.id, p.name
+            ORDER BY p.name;";
+
+        AddParameter(cmd, "@yearStart", yearStart.Date);
+        AddParameter(cmd, "@nextYearStart", nextYearStart.Date);
+
+        var result = new List<TaxPropertySummaryDataModel>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            result.Add(new TaxPropertySummaryDataModel
+            {
+                PropertyId = reader.GetInt32(0),
+                PropertyName = reader.GetString(1),
+                Income = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2),
+                Expenses = reader.IsDBNull(3) ? 0m : reader.GetDecimal(3)
+            });
+        }
+
+        return result;
+    }
+
     private static void AddParameter(DbCommand cmd, string name, object? value)
     {
         var parameter = cmd.CreateParameter();

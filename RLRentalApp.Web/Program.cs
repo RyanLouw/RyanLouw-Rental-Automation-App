@@ -29,7 +29,9 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
 
 builder.Services.AddScoped<IPropertyDashboardDataAccess, PropertyDashboardDataAccess>();
 builder.Services.Configure<GmailSmtpOptions>(builder.Configuration.GetSection(GmailSmtpOptions.SectionName));
+builder.Services.Configure<GoogleDriveOptions>(builder.Configuration.GetSection(GoogleDriveOptions.SectionName));
 builder.Services.AddScoped<IEmailService, GmailEmailService>();
+builder.Services.AddScoped<IGoogleDriveTaxDocumentService, GoogleDriveTaxDocumentService>();
 builder.Services.AddScoped<IPropertyDashboardManager, PropertyDashboardManager>();
 
 // Identity services
