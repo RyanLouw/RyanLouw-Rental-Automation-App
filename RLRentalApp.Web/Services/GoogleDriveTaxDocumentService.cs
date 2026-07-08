@@ -4,6 +4,7 @@ using Google.Apis.Drive.v3;
 using Google.Apis.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 using DriveFile = Google.Apis.Drive.v3.Data.File;
 
 namespace RLRentalApp.Web.Services;
@@ -51,6 +52,20 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
     }
 
 
+
+
+    public string GetConfiguredServiceAccountEmail()
+    {
+        if (string.IsNullOrWhiteSpace(_options.ServiceAccountKeyPath) || !System.IO.File.Exists(_options.ServiceAccountKeyPath))
+        {
+            return string.Empty;
+        }
+
+        using var keyDocument = JsonDocument.Parse(System.IO.File.ReadAllText(_options.ServiceAccountKeyPath));
+        return keyDocument.RootElement.TryGetProperty("client_email", out var clientEmail)
+            ? clientEmail.GetString() ?? string.Empty
+            : string.Empty;
+    }
 
     public async Task<GoogleDriveFolderTestResult> TestFolderAsync(CancellationToken cancellationToken = default)
     {

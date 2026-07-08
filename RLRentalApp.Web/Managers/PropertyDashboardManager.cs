@@ -58,7 +58,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return new GoogleDriveConnectionTestResultVm
             {
                 Success = false,
-                Message = "Google Drive could not find the configured RootFolderId, or the service account does not have access to it. Check GoogleDrive:RootFolderId and share that Drive folder with the service account email as Editor."
+                Message = BuildGoogleDriveFolderAccessMessage()
             };
         }
         catch (Exception ex) when (ex is InvalidOperationException or GoogleApiException)
@@ -125,7 +125,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return new SaveTaxTransactionResultVm
             {
                 Success = false,
-                Message = "Google Drive could not find the configured RootFolderId, or the service account does not have access to it. Check GoogleDrive:RootFolderId and share that Drive folder with the service account email as Editor."
+                Message = BuildGoogleDriveFolderAccessMessage()
             };
         }
 
@@ -180,6 +180,17 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 ? deleteProofFile ? "Tax row and Google Drive proof were deleted." : "Tax row was deleted. The Google Drive proof was kept."
                 : "Tax row could not be deleted."
         };
+    }
+
+
+    private string BuildGoogleDriveFolderAccessMessage()
+    {
+        var serviceAccountEmail = _googleDriveTaxDocumentService.GetConfiguredServiceAccountEmail();
+        var shareInstruction = string.IsNullOrWhiteSpace(serviceAccountEmail)
+            ? "share that Drive folder with the service account email as Editor"
+            : $"share that Drive folder with {serviceAccountEmail} as Editor";
+
+        return $"Google Drive could not find the configured RootFolderId, or the service account does not have access to it. Check GoogleDrive:RootFolderId and {shareInstruction}.";
     }
 
     private static TaxTransactionVm MapTaxTransaction(TaxTransactionDataModel row)
