@@ -21,6 +21,19 @@ public class TaxController : Controller
         return View(vm);
     }
 
+
+    [HttpGet]
+    public async Task<IActionResult> TestGoogleDriveConnection()
+    {
+        var result = await _propertyDashboardManager.TestGoogleDriveConnectionAsync();
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Json(result);
+    }
+
     [HttpGet]
     public async Task<IActionResult> Transactions(int? year)
     {

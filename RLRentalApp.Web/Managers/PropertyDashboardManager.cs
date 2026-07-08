@@ -29,6 +29,48 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
+
+    public async Task<GoogleDriveConnectionTestResultVm> TestGoogleDriveConnectionAsync()
+    {
+        try
+        {
+            var result = await _googleDriveTaxDocumentService.TestFolderAsync();
+            return new GoogleDriveConnectionTestResultVm
+            {
+                Success = true,
+                Message = "Google Drive connection successful.",
+                FolderId = result.FolderId,
+                FolderName = result.FolderName,
+                MimeType = result.MimeType,
+                SharedDriveId = result.SharedDriveId
+            };
+        }
+        catch (FileNotFoundException ex)
+        {
+            return new GoogleDriveConnectionTestResultVm
+            {
+                Success = false,
+                Message = $"Google Drive service-account key was not found: {ex.FileName}"
+            };
+        }
+        catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return new GoogleDriveConnectionTestResultVm
+            {
+                Success = false,
+                Message = "Google Drive could not find the configured RootFolderId, or the service account does not have access to it. Check GoogleDrive:RootFolderId and share that Drive folder with the service account email as Editor."
+            };
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or GoogleApiException)
+        {
+            return new GoogleDriveConnectionTestResultVm
+            {
+                Success = false,
+                Message = ex.Message
+            };
+        }
+    }
+
     public async Task<TaxTransactionsVm> GetTaxTransactionsAsync(int? year = null)
     {
         var taxYear = year ?? DateTime.UtcNow.Year;

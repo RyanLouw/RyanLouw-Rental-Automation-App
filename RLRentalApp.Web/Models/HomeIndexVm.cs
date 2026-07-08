@@ -290,3 +290,14 @@ public class DeleteTaxTransactionResultVm
     public bool Success { get; set; }
     public string Message { get; set; } = string.Empty;
 }
+
+
+public class GoogleDriveConnectionTestResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string FolderId { get; set; } = string.Empty;
+    public string FolderName { get; set; } = string.Empty;
+    public string MimeType { get; set; } = string.Empty;
+    public string SharedDriveId { get; set; } = string.Empty;
+}

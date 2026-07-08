@@ -51,6 +51,45 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
     }
 
 
+
+    public async Task<GoogleDriveFolderTestResult> TestFolderAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_options.ServiceAccountKeyPath))
+        {
+            throw new InvalidOperationException("GoogleDrive:ServiceAccountKeyPath is required for Drive API connection testing.");
+        }
+
+        if (!System.IO.File.Exists(_options.ServiceAccountKeyPath))
+        {
+            throw new FileNotFoundException("The Google service-account key was not found.", _options.ServiceAccountKeyPath);
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.RootFolderId))
+        {
+            throw new InvalidOperationException("GoogleDrive:RootFolderId is required for Drive API connection testing.");
+        }
+
+        var driveService = CreateDriveService();
+        var request = driveService.Files.Get(_options.RootFolderId);
+        request.Fields = "id,name,mimeType,parents,driveId,capabilities";
+        request.SupportsAllDrives = true;
+
+        var folder = await request.ExecuteAsync(cancellationToken);
+        const string expectedFolderMimeType = "application/vnd.google-apps.folder";
+        if (!string.Equals(folder.MimeType, expectedFolderMimeType, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"The configured ID points to '{folder.Name}', but it is not a Google Drive folder.");
+        }
+
+        return new GoogleDriveFolderTestResult
+        {
+            FolderId = folder.Id,
+            FolderName = folder.Name,
+            MimeType = folder.MimeType,
+            SharedDriveId = folder.DriveId ?? "Not a Shared Drive"
+        };
+    }
+
     public async Task DeleteAsync(string fileId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(fileId))

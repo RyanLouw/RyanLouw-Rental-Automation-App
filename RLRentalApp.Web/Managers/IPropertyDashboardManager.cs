@@ -19,6 +19,7 @@ public interface IPropertyDashboardManager
     Task<ManualLateChargeResultVm> SaveManualLateChargeAsync(ManualLateChargeRequestVm request);
     Task<SendTenantEmailResultVm> SendTenantEmailAsync(SendTenantEmailRequestVm request);
     Task<TaxTransactionsVm> GetTaxTransactionsAsync(int? year = null);
+    Task<GoogleDriveConnectionTestResultVm> TestGoogleDriveConnectionAsync();
     Task<SaveTaxTransactionResultVm> SaveTaxTransactionAsync(IFormFile? proofFile, int propertyId, DateTime transactionDate, string entryKind, decimal amount, string description);
     Task<DeleteTaxTransactionResultVm> DeleteTaxTransactionAsync(long taxTransactionId, bool deleteProofFile);
 }

@@ -10,6 +10,19 @@
 
     <section class="card shadow-sm mb-4">
         <div class="card-body">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h2 class="h5 mb-1">Google Drive connection</h2>
+                    <p class="text-muted mb-0">Test the configured service-account key and RootFolderId before uploading proof files.</p>
+                </div>
+                <button class="btn btn-outline-primary" type="button" id="testGoogleDriveBtn">Test Google Drive</button>
+            </div>
+            <div id="googleDriveTestMsg" class="alert mt-3 d-none"></div>
+        </div>
+    </section>
+
+    <section class="card shadow-sm mb-4">
+        <div class="card-body">
             <h2 class="h5">Add expense / tax row</h2>
             <p class="text-muted">Use <strong>DEBIT</strong> for money out/expenses and <strong>KREDIT</strong> for money in. The proof can be an image, document, or PDF.</p>
             <div class="row g-3">
@@ -100,6 +113,8 @@
 @section Scripts {
     <script>
         (() => {
+            const testGoogleDriveBtn = document.getElementById('testGoogleDriveBtn');
+            const googleDriveTestMsg = document.getElementById('googleDriveTestMsg');
             const taxPropertySelect = document.getElementById('taxPropertySelect');
             const taxDateInput = document.getElementById('taxDateInput');
             const taxKindSelect = document.getElementById('taxKindSelect');
@@ -146,6 +161,18 @@
                 taxTotalDebit.textContent = money(payload.totalDebit);
                 taxNetTotal.textContent = `Net: ${money(payload.net)}`;
             };
+
+
+            testGoogleDriveBtn.addEventListener('click', async () => {
+                googleDriveTestMsg.classList.add('d-none');
+                const response = await fetch('/Tax/TestGoogleDriveConnection');
+                const payload = await response.json();
+                googleDriveTestMsg.className = response.ok ? 'alert alert-success mt-3' : 'alert alert-danger mt-3';
+                googleDriveTestMsg.textContent = response.ok
+                    ? `${payload.message} Folder: ${payload.folderName} (${payload.folderId}). Shared Drive: ${payload.sharedDriveId || 'Not a Shared Drive'}.`
+                    : (payload.message || 'Google Drive connection failed.');
+                googleDriveTestMsg.classList.remove('d-none');
+            });
 
             saveTaxTransactionBtn.addEventListener('click', async () => {
                 taxSaveMsg.classList.add('d-none');
