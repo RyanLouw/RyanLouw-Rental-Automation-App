@@ -2,6 +2,7 @@ using Google;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
+using Google.Apis.Upload;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -184,8 +185,14 @@ public class GoogleDriveTaxDocumentService : IGoogleDriveTaxDocumentService
         uploadRequest.SupportsAllDrives = true;
         uploadRequest.Fields = "id, name, webViewLink";
 
-        await uploadRequest.UploadAsync(cancellationToken);
-        return uploadRequest.ResponseBody;
+        var uploadProgress = await uploadRequest.UploadAsync(cancellationToken);
+        if (uploadProgress.Status != UploadStatus.Completed)
+        {
+            throw new InvalidOperationException($"Google Drive upload did not complete. Status: {uploadProgress.Status}. {uploadProgress.Exception?.Message ?? string.Empty}", uploadProgress.Exception);
+        }
+
+        return uploadRequest.ResponseBody
+            ?? throw new InvalidOperationException("Google Drive upload completed but did not return uploaded file details.");
     }
 
     private static string SanitizeDriveName(string value)

@@ -128,6 +128,14 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 Message = BuildGoogleDriveFolderAccessMessage()
             };
         }
+        catch (Exception ex) when (ex is InvalidOperationException or GoogleApiException)
+        {
+            return new SaveTaxTransactionResultVm
+            {
+                Success = false,
+                Message = $"Google Drive upload failed: {ex.Message}"
+            };
+        }
 
         var saved = await _dataAccess.InsertTaxTransactionAsync(new TaxTransactionInsertDataModel
         {
