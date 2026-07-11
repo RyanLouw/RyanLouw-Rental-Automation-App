@@ -475,6 +475,45 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
+    public async Task<SaveTaxEntriesResultVm> SaveTaxEntriesAsync(SaveTaxEntriesRequestVm request)
+    {
+        var property = await _dataAccess.LoadPropertyAsync(request.PropertyId);
+        if (property is null)
+        {
+            return new SaveTaxEntriesResultVm
+            {
+                Success = false,
+                Message = "Property not found."
+            };
+        }
+
+        var entries = new List<PropertyTaxEntryInsertDataModel>();
+        var entryDate = request.EntryDate == default ? DateTime.Today : request.EntryDate;
+
+        AddTaxExpense(entries, request.PropertyId, entryDate, "Basic electricity", request.BasicElectricityAmount, request.Notes);
+        AddTaxExpense(entries, request.PropertyId, entryDate, "Basic water", request.BasicWaterAmount, request.Notes);
+        AddTaxExpense(entries, request.PropertyId, entryDate, "Property tax", request.PropertyTaxAmount, request.Notes);
+
+        if (entries.Count == 0)
+        {
+            return new SaveTaxEntriesResultVm
+            {
+                Success = false,
+                Message = "Please capture at least one tax amount."
+            };
+        }
+
+        var inserted = await _dataAccess.InsertPropertyTaxEntriesAsync(entries);
+
+        return new SaveTaxEntriesResultVm
+        {
+            Success = inserted > 0,
+            AddedCount = inserted,
+            Message = inserted > 0 ? $"Saved {inserted} tax entr{(inserted == 1 ? "y" : "ies")}." : "No tax entries were saved."
+        };
+    }
+
+
     public async Task<SendTenantEmailResultVm> SendTenantEmailAsync(SendTenantEmailRequestVm request)
     {
         var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
@@ -924,6 +963,39 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
+    public async Task<TaxPdfParseResultVm> ParseTaxPdfAsync(IFormFile? file, string? password = null)
+    {
+        var serviceResult = await ParseServicePdfAsync(file, password);
+        if (!serviceResult.Success)
+        {
+            return new TaxPdfParseResultVm
+            {
+                Success = false,
+                ErrorMessage = serviceResult.ErrorMessage
+            };
+        }
+
+        await using var stream = file!.OpenReadStream();
+        var text = ExtractPdfText(stream, password);
+        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC");
+        var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC");
+        var propertyTax = ParseTaxCharge(text, "PROPERTY\\s+TAX|PROPERTY\\s+RATES|ASSESSMENT\\s+RATES|MUNICIPAL\\s+RATES");
+
+        return new TaxPdfParseResultVm
+        {
+            Success = true,
+            Electricity = serviceResult.Electricity,
+            Water = serviceResult.Water,
+            Sewerage = serviceResult.Sewerage,
+            Refuse = serviceResult.Refuse,
+            RawTextPreview = serviceResult.RawTextPreview,
+            BasicElectricityAmount = basicElectricity.Amount,
+            BasicWaterAmount = basicWater.Amount,
+            PropertyTaxAmount = propertyTax.Amount
+        };
+    }
+
+
     private static void AddCharge(List<ServiceChargeInsertDataModel> charges, string serviceType, decimal? amount, DateTime billingPeriod, string notes)
     {
         if (!amount.HasValue || amount.Value <= 0)
@@ -939,6 +1011,27 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Notes = string.IsNullOrWhiteSpace(notes) ? "Captured from dashboard" : notes
         });
     }
+
+    private static void AddTaxExpense(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, string description, decimal? amount, string notes)
+    {
+        if (!amount.HasValue || amount.Value <= 0)
+        {
+            return;
+        }
+
+        var entryDescription = string.IsNullOrWhiteSpace(notes)
+            ? description
+            : $"{description} - {notes}";
+
+        entries.Add(new PropertyTaxEntryInsertDataModel
+        {
+            PropertyId = propertyId,
+            EntryDate = entryDate.Date,
+            Description = entryDescription,
+            Amount = -Math.Abs(amount.Value)
+        });
+    }
+
 
     private static string ExtractPdfText(Stream stream, string? password = null)
     {
@@ -1159,6 +1252,12 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         return result;
+    }
+
+
+    private static AccountChargeResult ParseTaxCharge(string text, string keywordPattern)
+    {
+        return ParseAccountChargeByKeyword(text, keywordPattern);
     }
 
 

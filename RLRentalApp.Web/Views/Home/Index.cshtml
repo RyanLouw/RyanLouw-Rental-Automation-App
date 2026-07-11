@@ -38,6 +38,7 @@
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#didPayModal">Did they pay?</button>
             <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#lateChargeModal">Late rent / interest</button>
             <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addServicesModal">Add services</button>
+            <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#addTaxModal">Add tax</button>
             <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addRentModal">Add rent</button>
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sendEmailModal">Send email</button>
             <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#moreInfoModal">Any more info</button>
@@ -263,6 +264,71 @@
     </div>
 </div>
 
+
+<div class="modal fade" id="addTaxModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Add tax entries</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload the same property services PDF to extract owner/tax-only costs. These rows go to the property tax ledger only and will not appear on the tenant statement.</p>
+                <div class="mb-3">
+                    <label for="taxPdfFile" class="form-label">Services PDF</label>
+                    <input class="form-control" type="file" id="taxPdfFile" accept="application/pdf,.pdf" />
+                </div>
+                <div class="mb-3">
+                    <label for="taxPdfPassword" class="form-label">PDF password (if needed)</label>
+                    <input class="form-control" type="password" id="taxPdfPassword" autocomplete="off" placeholder="Leave blank unless the PDF asks for a password" />
+                </div>
+                <button class="btn btn-primary" type="button" id="parseTaxPdfBtn">Parse tax PDF</button>
+
+                <hr />
+                <h3 class="h6">Tax capture / edit</h3>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="taxEntryDateInput">Entry date</label>
+                        <input type="date" class="form-control" id="taxEntryDateInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicElectricityTaxAmountInput">Basic electricity</label>
+                        <input type="number" step="0.01" class="form-control" id="basicElectricityTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicWaterTaxAmountInput">Basic water</label>
+                        <input type="number" step="0.01" class="form-control" id="basicWaterTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyTaxAmountInput">Property tax</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyTaxAmountInput" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label" for="taxNotesInput">Notes</label>
+                        <input type="text" class="form-control" id="taxNotesInput" placeholder="Captured manually or from PDF" />
+                    </div>
+                </div>
+                <button class="btn btn-success mt-3" type="button" id="saveTaxEntriesBtn">Add tax entries</button>
+                <div id="saveTaxEntriesMsg" class="alert mt-3 d-none"></div>
+                <div id="taxPdfError" class="alert alert-danger mt-3 d-none"></div>
+
+                <div id="taxPdfResults" class="mt-3 d-none">
+                    <h3 class="h6">Extracted tax values</h3>
+                    <ul class="mb-3">
+                        <li>Basic electricity: <strong id="basicElectricityTaxAmount">-</strong></li>
+                        <li>Basic water: <strong id="basicWaterTaxAmount">-</strong></li>
+                        <li>Property tax: <strong id="propertyTaxAmount">-</strong></li>
+                    </ul>
+                    <details>
+                        <summary>Raw text preview</summary>
+                        <pre id="taxPdfRawText" class="small mt-2 mb-0"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="addRentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -426,6 +492,22 @@
             const servicesNotesInput = document.getElementById('servicesNotesInput');
             const saveServicesBtn = document.getElementById('saveServicesBtn');
             const saveServicesMsg = document.getElementById('saveServicesMsg');
+            const parseTaxPdfBtn = document.getElementById('parseTaxPdfBtn');
+            const taxPdfFile = document.getElementById('taxPdfFile');
+            const taxPdfPassword = document.getElementById('taxPdfPassword');
+            const taxPdfError = document.getElementById('taxPdfError');
+            const taxPdfResults = document.getElementById('taxPdfResults');
+            const taxEntryDateInput = document.getElementById('taxEntryDateInput');
+            const basicElectricityTaxAmountInput = document.getElementById('basicElectricityTaxAmountInput');
+            const basicWaterTaxAmountInput = document.getElementById('basicWaterTaxAmountInput');
+            const propertyTaxAmountInput = document.getElementById('propertyTaxAmountInput');
+            const taxNotesInput = document.getElementById('taxNotesInput');
+            const saveTaxEntriesBtn = document.getElementById('saveTaxEntriesBtn');
+            const saveTaxEntriesMsg = document.getElementById('saveTaxEntriesMsg');
+            const basicElectricityTaxAmount = document.getElementById('basicElectricityTaxAmount');
+            const basicWaterTaxAmount = document.getElementById('basicWaterTaxAmount');
+            const propertyTaxAmount = document.getElementById('propertyTaxAmount');
+            const taxPdfRawText = document.getElementById('taxPdfRawText');
             const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
             const rentAmountInput = document.getElementById('rentAmountInput');
             const rentNotesInput = document.getElementById('rentNotesInput');
@@ -488,6 +570,11 @@
             if (lateChargeDateInput) {
                 const now = new Date();
                 lateChargeDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            }
+
+            if (taxEntryDateInput) {
+                const now = new Date();
+                taxEntryDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             }
 
             propertySelect?.addEventListener('change', () => {
@@ -677,6 +764,98 @@
             });
 
 
+
+
+
+
+            parseTaxPdfBtn?.addEventListener('click', async () => {
+                taxPdfError?.classList.add('d-none');
+                taxPdfResults?.classList.add('d-none');
+                saveTaxEntriesMsg?.classList.add('d-none');
+
+                const file = taxPdfFile?.files?.[0];
+                if (!file) {
+                    if (taxPdfError) {
+                        taxPdfError.textContent = 'Please select a PDF first.';
+                        taxPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('pdfFile', file);
+                if (taxPdfPassword?.value) {
+                    formData.append('pdfPassword', taxPdfPassword.value);
+                }
+
+                const response = await fetch('/Home/ParseTaxPdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    if (taxPdfError) {
+                        taxPdfError.textContent = payload.errorMessage || 'Could not parse this PDF.';
+                        taxPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                basicElectricityTaxAmount.textContent = money(payload.basicElectricityAmount);
+                basicWaterTaxAmount.textContent = money(payload.basicWaterAmount);
+                propertyTaxAmount.textContent = money(payload.propertyTaxAmount);
+                taxPdfRawText.textContent = payload.rawTextPreview || '';
+
+                basicElectricityTaxAmountInput.value = payload.basicElectricityAmount ?? '';
+                basicWaterTaxAmountInput.value = payload.basicWaterAmount ?? '';
+                propertyTaxAmountInput.value = payload.propertyTaxAmount ?? '';
+                taxPdfResults?.classList.remove('d-none');
+            });
+
+            saveTaxEntriesBtn?.addEventListener('click', async () => {
+                saveTaxEntriesMsg?.classList.add('d-none');
+
+                if (!selectedPropertyId) {
+                    return;
+                }
+
+                if (!taxEntryDateInput?.value) {
+                    saveTaxEntriesMsg.className = 'alert alert-danger mt-3';
+                    saveTaxEntriesMsg.textContent = 'Please choose an entry date.';
+                    saveTaxEntriesMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const body = {
+                    propertyId: Number(selectedPropertyId),
+                    entryDate: taxEntryDateInput.value,
+                    basicElectricityAmount: basicElectricityTaxAmountInput.value ? Number(basicElectricityTaxAmountInput.value) : null,
+                    basicWaterAmount: basicWaterTaxAmountInput.value ? Number(basicWaterTaxAmountInput.value) : null,
+                    propertyTaxAmount: propertyTaxAmountInput.value ? Number(propertyTaxAmountInput.value) : null,
+                    notes: taxNotesInput.value || ''
+                };
+
+                const response = await fetch('/Home/SaveTaxEntries', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    saveTaxEntriesMsg.className = 'alert alert-danger mt-3';
+                    saveTaxEntriesMsg.textContent = payload.message || 'Could not save tax entries.';
+                    saveTaxEntriesMsg.classList.remove('d-none');
+                    return;
+                }
+
+                saveTaxEntriesMsg.className = 'alert alert-success mt-3';
+                saveTaxEntriesMsg.textContent = payload.message;
+                saveTaxEntriesMsg.classList.remove('d-none');
+            });
 
 
             let parsedPayments = [];

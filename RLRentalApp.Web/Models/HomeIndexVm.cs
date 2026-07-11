@@ -138,6 +138,31 @@ public class RefuseParseVm
 }
 
 
+
+public class TaxPdfParseResultVm : ServicePdfParseResultVm
+{
+    public decimal? BasicElectricityAmount { get; set; }
+    public decimal? BasicWaterAmount { get; set; }
+    public decimal? PropertyTaxAmount { get; set; }
+}
+
+public class SaveTaxEntriesRequestVm
+{
+    public int PropertyId { get; set; }
+    public DateTime EntryDate { get; set; }
+    public decimal? BasicElectricityAmount { get; set; }
+    public decimal? BasicWaterAmount { get; set; }
+    public decimal? PropertyTaxAmount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class SaveTaxEntriesResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int AddedCount { get; set; }
+}
+
 public class SaveServicesRequestVm
 {
     public int PropertyId { get; set; }

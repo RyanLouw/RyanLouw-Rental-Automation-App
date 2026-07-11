@@ -564,6 +564,45 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return inserted;
     }
 
+
+    public async Task<int> InsertPropertyTaxEntriesAsync(List<PropertyTaxEntryInsertDataModel> entries)
+    {
+        if (entries.Count == 0)
+        {
+            return 0;
+        }
+
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var inserted = 0;
+
+        foreach (var entry in entries)
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO property_tax_entry (property_id, entry_date, description, entry_type, amount)
+                VALUES (@propertyId, @entryDate, @description, @entryType, @amount)
+                RETURNING id;";
+
+            var amount = entry.Amount <= 0 ? entry.Amount : -entry.Amount;
+
+            AddParameter(cmd, "@propertyId", entry.PropertyId);
+            AddParameter(cmd, "@entryDate", entry.EntryDate.Date);
+            AddParameter(cmd, "@description", entry.Description);
+            AddParameter(cmd, "@entryType", amount >= 0 ? "Income" : "Expense");
+            AddParameter(cmd, "@amount", amount);
+
+            var insertedId = await cmd.ExecuteScalarAsync();
+            if (insertedId is not null && insertedId is not DBNull)
+            {
+                inserted += 1;
+            }
+        }
+
+        return inserted;
+    }
+
     public async Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount)
     {
         var connection = _authDbContext.Database.GetDbConnection();
