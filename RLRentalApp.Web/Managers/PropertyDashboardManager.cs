@@ -977,9 +977,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         await using var stream = file!.OpenReadStream();
         var text = ExtractPdfText(stream, password);
-        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC");
-        var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC");
-        var propertyTax = ParseTaxCharge(text, "PROPERTY\\s+TAX|PROPERTY\\s+RATES|ASSESSMENT\\s+RATES|MUNICIPAL\\s+RATES");
+        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC|DOMESTIC\\s+STANDARD\\s+BASIC\\s+CHARGE");
+        var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
+        var propertyTax = ParseTaxCharge(text, "PROPERTY\\s+TAX|PROPERTY\\s+RATES|PROPERTY\\s+RATES\\s+REBATE|ASSESSMENT\\s+RATES|MUNICIPAL\\s+RATES");
 
         return new TaxPdfParseResultVm
         {
@@ -1257,7 +1257,82 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static AccountChargeResult ParseTaxCharge(string text, string keywordPattern)
     {
-        return ParseAccountChargeByKeyword(text, keywordPattern);
+        var accountRowsResult = ParseTaxChargeFromAccountRows(text, keywordPattern);
+        return accountRowsResult.Amount.HasValue
+            ? accountRowsResult
+            : ParseAccountChargeByKeyword(text, keywordPattern);
+    }
+
+    private static AccountChargeResult ParseTaxChargeFromAccountRows(string text, string keywordPattern)
+    {
+        var result = new AccountChargeResult();
+        var accountSection = GetSection(text, "ACCOUNT DETAILS", "120+ DAYS");
+        if (string.IsNullOrWhiteSpace(accountSection))
+        {
+            return result;
+        }
+
+        var rowStarts = Regex.Matches(accountSection, @"\d{2}[\-/]\d{2}[\-/]\d{4}\d{4,8}")
+            .Cast<Match>()
+            .ToList();
+
+        decimal total = 0m;
+
+        for (var index = 0; index < rowStarts.Count; index++)
+        {
+            var rowStart = rowStarts[index];
+            var nextStart = index + 1 < rowStarts.Count ? rowStarts[index + 1].Index : accountSection.Length;
+            var row = accountSection[rowStart.Index..nextStart];
+
+            if (!Regex.IsMatch(row, keywordPattern, RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
+            var amount = ParseLastStatementMoneyValue(row);
+            if (!amount.HasValue)
+            {
+                continue;
+            }
+
+            total += amount.Value;
+
+            if (string.IsNullOrWhiteSpace(result.Date))
+            {
+                result.Date = rowStart.Value[..10];
+                result.Code = rowStart.Value[10..];
+            }
+        }
+
+        if (total != 0m)
+        {
+            result.Amount = total;
+        }
+
+        return result;
+    }
+
+    private static decimal? ParseLastStatementMoneyValue(string row)
+    {
+        var matches = Regex.Matches(row, @"\d+(?:,\d{3})*(?:\.\d{2})-?")
+            .Cast<Match>()
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        var token = matches[^1].Value;
+        var isNegative = token.EndsWith('-', StringComparison.Ordinal);
+        var amount = TryParseDecimal(isNegative ? token[..^1] : token);
+
+        if (!amount.HasValue)
+        {
+            return null;
+        }
+
+        return isNegative ? -amount.Value : amount.Value;
     }
 
 
