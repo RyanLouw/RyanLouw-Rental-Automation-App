@@ -1157,7 +1157,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             text,
             $@"(?is)\b{meterType}\b[\s\S]{{0,180}}?Previous\s*:\s*(\d+(?:\.\d+)?)\s*,\s*Current\s*:\s*(\d+(?:\.\d+)?)[\s\S]{{0,80}}?Usage\s*:\s*([0-9][0-9\s,.]{{0,50}})");
 
-        foreach (var invoiceLineMatch in invoiceLineMatches.Cast<Match>().Reverse())
+        foreach (var invoiceLineMatch in invoiceLineMatches.Cast<Match>())
         {
             var oldReading = TryParseDecimal(invoiceLineMatch.Groups[1].Value);
             var newReading = TryParseDecimal(invoiceLineMatch.Groups[2].Value);
@@ -1277,7 +1277,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     private static decimal? ParseBodyCorporateLineAmount(string text, string labelPattern, string? excludePattern = null)
     {
         var labelMatches = Regex.Matches(text, labelPattern, RegexOptions.IgnoreCase);
-        foreach (Match labelMatch in labelMatches.Cast<Match>().Reverse())
+        foreach (Match labelMatch in labelMatches.Cast<Match>())
         {
             var lineEndMatch = Regex.Match(text[labelMatch.Index..], @"(?=\d{4}-\d{2}-\d{2}(?:Invoice|Journal|STANDARD|Balance)|120\+ days|BANKING DETAILS|Total Due)", RegexOptions.IgnoreCase);
             var maxLength = lineEndMatch.Success && lineEndMatch.Index > 0
@@ -1290,7 +1290,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 continue;
             }
 
-            line = Regex.Replace(line, @"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}\b", string.Empty, RegexOptions.IgnoreCase);
+            line = Regex.Replace(line, @"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}", string.Empty, RegexOptions.IgnoreCase);
             var amountMatch = Regex.Match(line, @"\d+(?:\.\d{2})");
             var amount = TryParseDecimal(amountMatch.Value);
             if (amount.HasValue)
