@@ -438,16 +438,6 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     public async Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request)
     {
-        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
-        if (activeLease is null)
-        {
-            return new SaveServicesResultVm
-            {
-                Success = false,
-                Message = "No active lease found for the selected property."
-            };
-        }
-
         var charges = new List<ServiceChargeInsertDataModel>();
 
         AddCharge(charges, "Electricity", request.ElectricityAmount, request.BillingPeriod, request.Notes);
@@ -455,22 +445,53 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         AddCharge(charges, "Sanitation", request.SewerageAmount, request.BillingPeriod, request.Notes);
         AddCharge(charges, "Refuse", request.RefuseAmount, request.BillingPeriod, request.Notes);
 
-        if (charges.Count == 0)
+        var taxEntries = new List<PropertyTaxEntryInsertDataModel>();
+        AddTaxEntries(taxEntries, request.PropertyId, request.BillingPeriod, request, request.Notes);
+
+        if (charges.Count == 0 && taxEntries.Count == 0)
         {
             return new SaveServicesResultVm
             {
                 Success = false,
-                Message = "Please capture at least one service amount."
+                Message = "Please capture at least one service or tax amount."
             };
         }
 
-        var inserted = await _dataAccess.InsertServiceChargesAsync(activeLease.LeaseId, charges);
+        var insertedServices = 0;
+        if (charges.Count > 0)
+        {
+            var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+            if (activeLease is null)
+            {
+                return new SaveServicesResultVm
+                {
+                    Success = false,
+                    Message = "No active lease found for the selected property."
+                };
+            }
+
+            insertedServices = await _dataAccess.InsertServiceChargesAsync(activeLease.LeaseId, charges);
+        }
+
+        var insertedTaxEntries = taxEntries.Count > 0
+            ? await _dataAccess.InsertPropertyTaxEntriesAsync(taxEntries)
+            : 0;
+
+        var parts = new List<string>();
+        if (insertedServices > 0)
+        {
+            parts.Add($"saved {insertedServices} service charge(s)");
+        }
+        if (insertedTaxEntries > 0)
+        {
+            parts.Add($"saved {insertedTaxEntries} tax entr{(insertedTaxEntries == 1 ? "y" : "ies")}");
+        }
 
         return new SaveServicesResultVm
         {
-            Success = inserted > 0,
-            AddedCount = inserted,
-            Message = inserted > 0 ? $"Saved {inserted} service charge(s)." : "No service charges were saved."
+            Success = insertedServices > 0 || insertedTaxEntries > 0,
+            AddedCount = insertedServices + insertedTaxEntries,
+            Message = parts.Count > 0 ? $"Successfully {string.Join(" and ", parts)}." : "No service charges or tax entries were saved."
         };
     }
 
@@ -912,7 +933,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         var sewerage = ParseSewerage(text);
         var refuse = ParseRefuse(text);
 
-        return new ServicePdfParseResultVm
+        var result = new ServicePdfParseResultVm
         {
             Success = true,
             Electricity = electricity,
@@ -921,6 +942,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Refuse = refuse,
             RawTextPreview = text.Length > 4000 ? text[..4000] : text
         };
+
+        PopulateTaxParseValues(result, text);
+        return result;
     }
 
 
@@ -939,6 +963,84 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Notes = string.IsNullOrWhiteSpace(notes) ? "Captured from dashboard" : notes
         });
     }
+
+
+    private static void AddTaxEntries(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, SaveServicesRequestVm request, string notes)
+    {
+        AddTaxExpense(entries, propertyId, entryDate, "Basic electricity", request.BasicElectricityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Basic water", request.BasicWaterAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Basic sewerage", request.BasicSewerageAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Property Rates Residential", request.PropertyRatesResidentialAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate1Amount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate2Amount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Property Rates Residential REBATE", request.PropertyRatesResidentialRebateAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Levy", request.LevyAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, @"CSOS", request.CsosAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "HOA", request.HoaAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Levy Security Levy", request.LevySecurityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Communal electricity", request.CommunalElectricityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Communal water", request.CommunalWaterAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity demand charge", request.ElectricityDemandChargeAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity surcharge", request.ElectricitySurchargeAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity basic charge", request.ElectricityBasicChargeAmount, notes);
+    }
+
+    private static void PopulateTaxParseValues(ServicePdfParseResultVm result, string text)
+    {
+        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|BASIC\\s+ELEC");
+        var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
+        var basicSewerage = ParseTaxCharge(text, "BAS\\.?\\s*SEWERAGE|BASIC\\s+SEWERAGE|SEWERAGE\\s+BASIC");
+        var propertyRatesResidentialRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential(?!\\s+REBATE)");
+        var propertyRatesRebates = ParseTaxChargeValues(text, "PROPERTY\\s+RATES\\s+REBATE");
+        var propertyRatesResidentialRebateRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential\\s+REBATE");
+
+        result.BasicElectricityAmount = basicElectricity.Amount;
+        result.BasicWaterAmount = basicWater.Amount;
+        result.BasicSewerageAmount = basicSewerage.Amount;
+        result.PropertyRatesResidentialAmount = GetTaxValueOrNull(propertyRatesResidentialRows, 0);
+        result.PropertyRatesRebate1Amount = GetTaxValueOrNull(propertyRatesRebates, 0);
+        result.PropertyRatesRebate2Amount = GetTaxValueOrNull(propertyRatesRebates, 1);
+        result.PropertyRatesResidentialRebateAmount = GetTaxValueOrNull(propertyRatesResidentialRebateRows, 0);
+        result.LevyAmount = ParseBodyCorporateLineAmount(text, @"\bLevies\b|\bLevy\b", @"CSOS|HOA|Security")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"^(?!.*(CSOS|HOA|SECURITY)).*\bLEVY\b|MONTHLY\s+LEVY"), 0);
+        result.CsosAmount = ParseBodyCorporateLineAmount(text, @"CSOS")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"CSOS"), 0);
+        result.HoaAmount = ParseBodyCorporateLineAmount(text, @"\bHOA\b|HOME\s+OWNERS")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"\bHOA\b|HOME\s+OWNERS"), 0);
+        result.LevySecurityAmount = ParseBodyCorporateLineAmount(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY"), 0);
+        result.CommunalElectricityAmount = ParseBodyCorporateLineAmount(text, @"COMMUNAL\s+ELECTRICITY")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+ELECTRICITY"), 0);
+        result.CommunalWaterAmount = ParseBodyCorporateLineAmount(text, @"COMMUNAL\s+WATER")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+WATER"), 0);
+        result.ElectricityDemandChargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE"), 0);
+        result.ElectricitySurchargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE"), 0);
+        result.ElectricityBasicChargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE"), 0);
+    }
+
+    private static void AddTaxExpense(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, string description, decimal? amount, string notes)
+    {
+        if (!amount.HasValue || amount.Value <= 0)
+        {
+            return;
+        }
+
+        var entryDescription = string.IsNullOrWhiteSpace(notes)
+            ? description
+            : $"{description} - {notes}";
+
+        entries.Add(new PropertyTaxEntryInsertDataModel
+        {
+            PropertyId = propertyId,
+            EntryDate = entryDate.Date,
+            Description = entryDescription,
+            Amount = -Math.Abs(amount.Value)
+        });
+    }
+
 
     private static string ExtractPdfText(Stream stream, string? password = null)
     {
@@ -1005,7 +1107,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static SewerageParseVm ParseSewerage(string text)
     {
-        var sewerage = ParseAccountChargeByKeyword(text, "SEWERAGE|SEWER|SANITATION");
+        var sewerage = ParseAccountChargeByKeyword(text, "ADD\\.?\\s*SEWERAGE|ADDITIONAL\\s+SEWERAGE|SEWERAGE\\s+RESIDENTIAL");
 
         return new SewerageParseVm
         {
@@ -1036,7 +1138,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         var rowMatches = Regex.Matches(
             meterSection,
-            $@"(?is){meterType}\s*(\d+\.\d{{3}})\s*(\d+\.\d{{3}})\s*I?\s*(\d*\.\d{{3}})\s*([\d,]+\.\d{{2}})");
+            $@"(?is){meterType}\s*(\d+\.\d{{3}})\s*(\d+\.\d{{3}})\s*[A-Z]?\s*(\d*\.\d{{3}})\s*([\d,]+\.\d{{2}})");
 
         if (rowMatches.Count > 0)
         {
@@ -1055,7 +1157,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             text,
             $@"(?is)\b{meterType}\b[\s\S]{{0,180}}?Previous\s*:\s*(\d+(?:\.\d+)?)\s*,\s*Current\s*:\s*(\d+(?:\.\d+)?)[\s\S]{{0,80}}?Usage\s*:\s*([0-9][0-9\s,.]{{0,50}})");
 
-        foreach (var invoiceLineMatch in invoiceLineMatches.Cast<Match>().Reverse())
+        foreach (var invoiceLineMatch in invoiceLineMatches.Cast<Match>())
         {
             var oldReading = TryParseDecimal(invoiceLineMatch.Groups[1].Value);
             var newReading = TryParseDecimal(invoiceLineMatch.Groups[2].Value);
@@ -1159,6 +1261,148 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         return result;
+    }
+
+
+    private static AccountChargeResult ParseTaxCharge(string text, string keywordPattern)
+    {
+        var accountRowsResult = ParseTaxChargeFromAccountRows(text, keywordPattern);
+        return accountRowsResult.Amount.HasValue
+            ? accountRowsResult
+            : ParseAccountChargeByKeyword(text, keywordPattern);
+    }
+
+
+
+    private static decimal? ParseBodyCorporateLineAmount(string text, string labelPattern, string? excludePattern = null)
+    {
+        var labelMatches = Regex.Matches(text, labelPattern, RegexOptions.IgnoreCase);
+        foreach (Match labelMatch in labelMatches.Cast<Match>())
+        {
+            var lineEndMatch = Regex.Match(text[labelMatch.Index..], @"(?=\d{4}-\d{2}-\d{2}(?:Invoice|Journal|STANDARD|Balance)|120\+ days|BANKING DETAILS|Total Due)", RegexOptions.IgnoreCase);
+            var maxLength = lineEndMatch.Success && lineEndMatch.Index > 0
+                ? lineEndMatch.Index
+                : Math.Min(180, text.Length - labelMatch.Index);
+            var line = text.Substring(labelMatch.Index, maxLength);
+
+            if (!string.IsNullOrWhiteSpace(excludePattern) && Regex.IsMatch(line, excludePattern, RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
+            line = Regex.Replace(line, @"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}", string.Empty, RegexOptions.IgnoreCase);
+            var amountMatch = Regex.Match(line, @"\d+(?:\.\d{2})");
+            var amount = TryParseDecimal(amountMatch.Value);
+            if (amount.HasValue)
+            {
+                return amount.Value;
+            }
+        }
+
+        return null;
+    }
+
+    private static decimal? GetTaxValueOrNull(List<decimal> values, int index)
+    {
+        return index >= 0 && index < values.Count ? values[index] : null;
+    }
+
+    private static List<decimal> ParseTaxChargeValues(string text, string keywordPattern)
+    {
+        return ParseTaxChargeRows(text, keywordPattern)
+            .Select(row => ParseLastStatementMoneyValue(row.Row))
+            .Where(amount => amount.HasValue)
+            .Select(amount => Math.Abs(amount!.Value))
+            .ToList();
+    }
+
+    private static AccountChargeResult ParseTaxChargeFromAccountRows(string text, string keywordPattern)
+    {
+        var result = new AccountChargeResult();
+        var accountSection = GetSection(text, "ACCOUNT DETAILS", "120+ DAYS");
+        if (string.IsNullOrWhiteSpace(accountSection))
+        {
+            return result;
+        }
+
+        decimal total = 0m;
+
+        foreach (var row in ParseTaxChargeRows(text, keywordPattern))
+        {
+            var amount = ParseLastStatementMoneyValue(row.Row);
+            if (!amount.HasValue)
+            {
+                continue;
+            }
+
+            total += amount.Value;
+
+            if (string.IsNullOrWhiteSpace(result.Date))
+            {
+                result.Date = row.Date;
+                result.Code = row.Code;
+            }
+        }
+
+        if (total != 0m)
+        {
+            result.Amount = total;
+        }
+
+        return result;
+    }
+
+
+    private static List<(string Row, string Date, string Code)> ParseTaxChargeRows(string text, string keywordPattern)
+    {
+        var accountSection = GetSection(text, "ACCOUNT DETAILS", "120+ DAYS");
+        if (string.IsNullOrWhiteSpace(accountSection))
+        {
+            return [];
+        }
+
+        var rowStarts = Regex.Matches(accountSection, @"\d{2}[\-/]\d{2}[\-/]\d{4}\d{4,8}")
+            .Cast<Match>()
+            .ToList();
+
+        var rows = new List<(string Row, string Date, string Code)>();
+
+        for (var index = 0; index < rowStarts.Count; index++)
+        {
+            var rowStart = rowStarts[index];
+            var nextStart = index + 1 < rowStarts.Count ? rowStarts[index + 1].Index : accountSection.Length;
+            var row = accountSection[rowStart.Index..nextStart];
+
+            if (Regex.IsMatch(row, keywordPattern, RegexOptions.IgnoreCase))
+            {
+                rows.Add((row, rowStart.Value[..10], rowStart.Value[10..]));
+            }
+        }
+
+        return rows;
+    }
+
+    private static decimal? ParseLastStatementMoneyValue(string row)
+    {
+        var matches = Regex.Matches(row, @"\d+(?:,\d{3})*(?:\.\d{2})-?")
+            .Cast<Match>()
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        var token = matches[^1].Value;
+        var isNegative = token.EndsWith("-", StringComparison.Ordinal);
+        var amount = TryParseDecimal(isNegative ? token[..^1] : token);
+
+        if (!amount.HasValue)
+        {
+            return null;
+        }
+
+        return isNegative ? -amount.Value : amount.Value;
     }
 
 

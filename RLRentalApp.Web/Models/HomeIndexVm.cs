@@ -105,6 +105,22 @@ public class ServicePdfParseResultVm
     public WaterParseVm Water { get; set; } = new();
     public SewerageParseVm Sewerage { get; set; } = new();
     public RefuseParseVm Refuse { get; set; } = new();
+    public decimal? BasicElectricityAmount { get; set; }
+    public decimal? BasicWaterAmount { get; set; }
+    public decimal? BasicSewerageAmount { get; set; }
+    public decimal? PropertyRatesResidentialAmount { get; set; }
+    public decimal? PropertyRatesRebate1Amount { get; set; }
+    public decimal? PropertyRatesRebate2Amount { get; set; }
+    public decimal? PropertyRatesResidentialRebateAmount { get; set; }
+    public decimal? LevyAmount { get; set; }
+    public decimal? CsosAmount { get; set; }
+    public decimal? HoaAmount { get; set; }
+    public decimal? LevySecurityAmount { get; set; }
+    public decimal? CommunalElectricityAmount { get; set; }
+    public decimal? CommunalWaterAmount { get; set; }
+    public decimal? ElectricityDemandChargeAmount { get; set; }
+    public decimal? ElectricitySurchargeAmount { get; set; }
+    public decimal? ElectricityBasicChargeAmount { get; set; }
     public string RawTextPreview { get; set; } = string.Empty;
 }
 
@@ -138,6 +154,7 @@ public class RefuseParseVm
 }
 
 
+
 public class SaveServicesRequestVm
 {
     public int PropertyId { get; set; }
@@ -146,6 +163,22 @@ public class SaveServicesRequestVm
     public decimal? WaterAmount { get; set; }
     public decimal? SewerageAmount { get; set; }
     public decimal? RefuseAmount { get; set; }
+    public decimal? BasicElectricityAmount { get; set; }
+    public decimal? BasicWaterAmount { get; set; }
+    public decimal? BasicSewerageAmount { get; set; }
+    public decimal? PropertyRatesResidentialAmount { get; set; }
+    public decimal? PropertyRatesRebate1Amount { get; set; }
+    public decimal? PropertyRatesRebate2Amount { get; set; }
+    public decimal? PropertyRatesResidentialRebateAmount { get; set; }
+    public decimal? LevyAmount { get; set; }
+    public decimal? CsosAmount { get; set; }
+    public decimal? HoaAmount { get; set; }
+    public decimal? LevySecurityAmount { get; set; }
+    public decimal? CommunalElectricityAmount { get; set; }
+    public decimal? CommunalWaterAmount { get; set; }
+    public decimal? ElectricityDemandChargeAmount { get; set; }
+    public decimal? ElectricitySurchargeAmount { get; set; }
+    public decimal? ElectricityBasicChargeAmount { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
 

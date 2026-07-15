@@ -390,6 +390,7 @@ public class PropertyDashboardManagerTests
 
         public Task<UpdateStatementEntryResultVm> UpdateStatementEntryAsync(int leaseId, long statementEntryId, DateTime entryDate, decimal amount, string description) => throw new NotImplementedException();
         public Task<int> InsertServiceChargesAsync(int leaseId, List<ServiceChargeInsertDataModel> charges) => throw new NotImplementedException();
+        public Task<int> InsertPropertyTaxEntriesAsync(List<PropertyTaxEntryInsertDataModel> entries) => Task.FromResult(entries.Count);
         public Task<int> UpsertRentRateAsync(int leaseId, DateTime effectiveFrom, decimal amount, string notes) => throw new NotImplementedException();
         public Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount) => Task.FromResult(false);
         public Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments) => Task.FromResult(payments.Count);
