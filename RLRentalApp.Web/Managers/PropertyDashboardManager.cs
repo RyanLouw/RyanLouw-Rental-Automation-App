@@ -1109,7 +1109,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static SewerageParseVm ParseSewerage(string text)
     {
-        var sewerage = ParseAccountChargeByKeyword(text, "SEWERAGE|SEWER|SANITATION");
+        var sewerage = ParseAccountChargeByKeyword(text, "ADD\\.?\\s*SEWERAGE|ADDITIONAL\\s+SEWERAGE|SEWERAGE\\s+RESIDENTIAL");
 
         return new SewerageParseVm
         {
