@@ -18,11 +18,16 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 {
     private readonly IPropertyDashboardDataAccess _dataAccess;
     private readonly IEmailService _emailService;
+    private readonly IGoogleDriveStorageService? _googleDriveStorageService;
 
-    public PropertyDashboardManager(IPropertyDashboardDataAccess dataAccess, IEmailService emailService)
+    public PropertyDashboardManager(
+        IPropertyDashboardDataAccess dataAccess,
+        IEmailService emailService,
+        IGoogleDriveStorageService? googleDriveStorageService = null)
     {
         _dataAccess = dataAccess;
         _emailService = emailService;
+        _googleDriveStorageService = googleDriveStorageService;
     }
 
     private static string BuildFullAddress(PropertyOptionVm property)
@@ -347,10 +352,16 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             });
         }).GeneratePdf();
 
+        var fileName = BuildStatementPdfFileName(statement);
+        var googleDriveFileId = _googleDriveStorageService is null
+            ? null
+            : await _googleDriveStorageService.UploadFileAsync(fileName, pdfBytes, "application/pdf");
+
         return new PropertyStatementPdfVm
         {
             PdfBytes = pdfBytes,
-            FileName = BuildStatementPdfFileName(statement)
+            FileName = fileName,
+            GoogleDriveFileId = googleDriveFileId
         };
     }
 
