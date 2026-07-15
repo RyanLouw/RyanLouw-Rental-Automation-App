@@ -300,6 +300,10 @@
                         <input type="number" step="0.01" class="form-control" id="basicWaterTaxAmountInput" />
                     </div>
                     <div class="col-md-4">
+                        <label class="form-label" for="basicSewerageTaxAmountInput">Basic sewerage</label>
+                        <input type="number" step="0.01" class="form-control" id="basicSewerageTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label" for="propertyTaxAmountInput">Property tax</label>
                         <input type="number" step="0.01" class="form-control" id="propertyTaxAmountInput" />
                     </div>
@@ -317,6 +321,7 @@
                     <ul class="mb-3">
                         <li>Basic electricity: <strong id="basicElectricityTaxAmount">-</strong></li>
                         <li>Basic water: <strong id="basicWaterTaxAmount">-</strong></li>
+                        <li>Basic sewerage: <strong id="basicSewerageTaxAmount">-</strong></li>
                         <li>Property tax: <strong id="propertyTaxAmount">-</strong></li>
                     </ul>
                     <details>
@@ -500,12 +505,14 @@
             const taxEntryDateInput = document.getElementById('taxEntryDateInput');
             const basicElectricityTaxAmountInput = document.getElementById('basicElectricityTaxAmountInput');
             const basicWaterTaxAmountInput = document.getElementById('basicWaterTaxAmountInput');
+            const basicSewerageTaxAmountInput = document.getElementById('basicSewerageTaxAmountInput');
             const propertyTaxAmountInput = document.getElementById('propertyTaxAmountInput');
             const taxNotesInput = document.getElementById('taxNotesInput');
             const saveTaxEntriesBtn = document.getElementById('saveTaxEntriesBtn');
             const saveTaxEntriesMsg = document.getElementById('saveTaxEntriesMsg');
             const basicElectricityTaxAmount = document.getElementById('basicElectricityTaxAmount');
             const basicWaterTaxAmount = document.getElementById('basicWaterTaxAmount');
+            const basicSewerageTaxAmount = document.getElementById('basicSewerageTaxAmount');
             const propertyTaxAmount = document.getElementById('propertyTaxAmount');
             const taxPdfRawText = document.getElementById('taxPdfRawText');
             const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
@@ -805,11 +812,13 @@
 
                 basicElectricityTaxAmount.textContent = money(payload.basicElectricityAmount);
                 basicWaterTaxAmount.textContent = money(payload.basicWaterAmount);
+                basicSewerageTaxAmount.textContent = money(payload.basicSewerageAmount);
                 propertyTaxAmount.textContent = money(payload.propertyTaxAmount);
                 taxPdfRawText.textContent = payload.rawTextPreview || '';
 
                 basicElectricityTaxAmountInput.value = payload.basicElectricityAmount ?? '';
                 basicWaterTaxAmountInput.value = payload.basicWaterAmount ?? '';
+                basicSewerageTaxAmountInput.value = payload.basicSewerageAmount ?? '';
                 propertyTaxAmountInput.value = payload.propertyTaxAmount ?? '';
                 taxPdfResults?.classList.remove('d-none');
             });
@@ -833,6 +842,7 @@
                     entryDate: taxEntryDateInput.value,
                     basicElectricityAmount: basicElectricityTaxAmountInput.value ? Number(basicElectricityTaxAmountInput.value) : null,
                     basicWaterAmount: basicWaterTaxAmountInput.value ? Number(basicWaterTaxAmountInput.value) : null,
+                    basicSewerageAmount: basicSewerageTaxAmountInput.value ? Number(basicSewerageTaxAmountInput.value) : null,
                     propertyTaxAmount: propertyTaxAmountInput.value ? Number(propertyTaxAmountInput.value) : null,
                     notes: taxNotesInput.value || ''
                 };

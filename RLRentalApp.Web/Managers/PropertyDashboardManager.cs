@@ -492,6 +492,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         AddTaxExpense(entries, request.PropertyId, entryDate, "Basic electricity", request.BasicElectricityAmount, request.Notes);
         AddTaxExpense(entries, request.PropertyId, entryDate, "Basic water", request.BasicWaterAmount, request.Notes);
+        AddTaxExpense(entries, request.PropertyId, entryDate, "Basic sewerage", request.BasicSewerageAmount, request.Notes);
         AddTaxExpense(entries, request.PropertyId, entryDate, "Property tax", request.PropertyTaxAmount, request.Notes);
 
         if (entries.Count == 0)
@@ -977,8 +978,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         await using var stream = file!.OpenReadStream();
         var text = ExtractPdfText(stream, password);
-        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC|DOMESTIC\\s+STANDARD\\s+BASIC\\s+CHARGE");
+        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC");
         var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
+        var basicSewerage = ParseTaxCharge(text, "BAS\\.?\\s*SEWERAGE|BASIC\\s+SEWERAGE|SEWERAGE\\s+BASIC");
         var propertyTax = ParseTaxCharge(text, "PROPERTY\\s+TAX|PROPERTY\\s+RATES|PROPERTY\\s+RATES\\s+REBATE|ASSESSMENT\\s+RATES|MUNICIPAL\\s+RATES");
 
         return new TaxPdfParseResultVm
@@ -991,6 +993,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             RawTextPreview = serviceResult.RawTextPreview,
             BasicElectricityAmount = basicElectricity.Amount,
             BasicWaterAmount = basicWater.Amount,
+            BasicSewerageAmount = basicSewerage.Amount,
             PropertyTaxAmount = propertyTax.Amount
         };
     }

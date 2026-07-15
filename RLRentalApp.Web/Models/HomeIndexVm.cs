@@ -143,6 +143,7 @@ public class TaxPdfParseResultVm : ServicePdfParseResultVm
 {
     public decimal? BasicElectricityAmount { get; set; }
     public decimal? BasicWaterAmount { get; set; }
+    public decimal? BasicSewerageAmount { get; set; }
     public decimal? PropertyTaxAmount { get; set; }
 }
 
@@ -152,6 +153,7 @@ public class SaveTaxEntriesRequestVm
     public DateTime EntryDate { get; set; }
     public decimal? BasicElectricityAmount { get; set; }
     public decimal? BasicWaterAmount { get; set; }
+    public decimal? BasicSewerageAmount { get; set; }
     public decimal? PropertyTaxAmount { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
