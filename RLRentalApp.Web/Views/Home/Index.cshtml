@@ -252,6 +252,42 @@
                         <label class="form-label" for="propertyRatesResidentialRebateAmountInput">Property Rates Residential REBATE</label>
                         <input type="number" step="0.01" class="form-control" id="propertyRatesResidentialRebateAmountInput" />
                     </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="levyAmountInput">Levy</label>
+                        <input type="number" step="0.01" class="form-control" id="levyAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="csosAmountInput">CSOS</label>
+                        <input type="number" step="0.01" class="form-control" id="csosAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="hoaAmountInput">HOA</label>
+                        <input type="number" step="0.01" class="form-control" id="hoaAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="levySecurityAmountInput">Levy Security Levy</label>
+                        <input type="number" step="0.01" class="form-control" id="levySecurityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="communalElectricityAmountInput">Communal electricity</label>
+                        <input type="number" step="0.01" class="form-control" id="communalElectricityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="communalWaterAmountInput">Communal water</label>
+                        <input type="number" step="0.01" class="form-control" id="communalWaterAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityDemandChargeAmountInput">Electricity demand charge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityDemandChargeAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricitySurchargeAmountInput">Electricity surcharge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricitySurchargeAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityBasicChargeAmountInput">Electricity basic charge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityBasicChargeAmountInput" />
+                    </div>
                 </div>
                 <button class="btn btn-success mt-3" type="button" id="saveServicesBtn">Add services and tax entries</button>
                 <div id="saveServicesMsg" class="alert mt-3 d-none"></div>
@@ -298,6 +334,15 @@
                         <li>PROPERTY RATES REBATE 1: <strong id="propertyRatesRebate1Amount">-</strong></li>
                         <li>PROPERTY RATES REBATE 2: <strong id="propertyRatesRebate2Amount">-</strong></li>
                         <li>Property Rates Residential REBATE: <strong id="propertyRatesResidentialRebateAmount">-</strong></li>
+                        <li>Levy: <strong id="levyAmount">-</strong></li>
+                        <li>CSOS: <strong id="csosAmount">-</strong></li>
+                        <li>HOA: <strong id="hoaAmount">-</strong></li>
+                        <li>Levy Security Levy: <strong id="levySecurityAmount">-</strong></li>
+                        <li>Communal electricity: <strong id="communalElectricityAmount">-</strong></li>
+                        <li>Communal water: <strong id="communalWaterAmount">-</strong></li>
+                        <li>Electricity demand charge: <strong id="electricityDemandChargeAmount">-</strong></li>
+                        <li>Electricity surcharge: <strong id="electricitySurchargeAmount">-</strong></li>
+                        <li>Electricity basic charge: <strong id="electricityBasicChargeAmount">-</strong></li>
                     </ul>
                     <details>
                         <summary>Raw text preview</summary>
@@ -481,6 +526,15 @@
             const propertyRatesRebate1AmountInput = document.getElementById('propertyRatesRebate1AmountInput');
             const propertyRatesRebate2AmountInput = document.getElementById('propertyRatesRebate2AmountInput');
             const propertyRatesResidentialRebateAmountInput = document.getElementById('propertyRatesResidentialRebateAmountInput');
+            const levyAmountInput = document.getElementById('levyAmountInput');
+            const csosAmountInput = document.getElementById('csosAmountInput');
+            const hoaAmountInput = document.getElementById('hoaAmountInput');
+            const levySecurityAmountInput = document.getElementById('levySecurityAmountInput');
+            const communalElectricityAmountInput = document.getElementById('communalElectricityAmountInput');
+            const communalWaterAmountInput = document.getElementById('communalWaterAmountInput');
+            const electricityDemandChargeAmountInput = document.getElementById('electricityDemandChargeAmountInput');
+            const electricitySurchargeAmountInput = document.getElementById('electricitySurchargeAmountInput');
+            const electricityBasicChargeAmountInput = document.getElementById('electricityBasicChargeAmountInput');
             const basicElectricityTaxAmount = document.getElementById('basicElectricityTaxAmount');
             const basicWaterTaxAmount = document.getElementById('basicWaterTaxAmount');
             const basicSewerageTaxAmount = document.getElementById('basicSewerageTaxAmount');
@@ -488,6 +542,15 @@
             const propertyRatesRebate1Amount = document.getElementById('propertyRatesRebate1Amount');
             const propertyRatesRebate2Amount = document.getElementById('propertyRatesRebate2Amount');
             const propertyRatesResidentialRebateAmount = document.getElementById('propertyRatesResidentialRebateAmount');
+            const levyAmount = document.getElementById('levyAmount');
+            const csosAmount = document.getElementById('csosAmount');
+            const hoaAmount = document.getElementById('hoaAmount');
+            const levySecurityAmount = document.getElementById('levySecurityAmount');
+            const communalElectricityAmount = document.getElementById('communalElectricityAmount');
+            const communalWaterAmount = document.getElementById('communalWaterAmount');
+            const electricityDemandChargeAmount = document.getElementById('electricityDemandChargeAmount');
+            const electricitySurchargeAmount = document.getElementById('electricitySurchargeAmount');
+            const electricityBasicChargeAmount = document.getElementById('electricityBasicChargeAmount');
             const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
             const rentAmountInput = document.getElementById('rentAmountInput');
             const rentNotesInput = document.getElementById('rentNotesInput');
@@ -744,6 +807,15 @@
                 propertyRatesRebate1Amount.textContent = money(payload.propertyRatesRebate1Amount);
                 propertyRatesRebate2Amount.textContent = money(payload.propertyRatesRebate2Amount);
                 propertyRatesResidentialRebateAmount.textContent = money(payload.propertyRatesResidentialRebateAmount);
+                levyAmount.textContent = money(payload.levyAmount);
+                csosAmount.textContent = money(payload.csosAmount);
+                hoaAmount.textContent = money(payload.hoaAmount);
+                levySecurityAmount.textContent = money(payload.levySecurityAmount);
+                communalElectricityAmount.textContent = money(payload.communalElectricityAmount);
+                communalWaterAmount.textContent = money(payload.communalWaterAmount);
+                electricityDemandChargeAmount.textContent = money(payload.electricityDemandChargeAmount);
+                electricitySurchargeAmount.textContent = money(payload.electricitySurchargeAmount);
+                electricityBasicChargeAmount.textContent = money(payload.electricityBasicChargeAmount);
 
                 basicElectricityTaxAmountInput.value = payload.basicElectricityAmount ?? '';
                 basicWaterTaxAmountInput.value = payload.basicWaterAmount ?? '';
@@ -752,6 +824,15 @@
                 propertyRatesRebate1AmountInput.value = payload.propertyRatesRebate1Amount ?? '';
                 propertyRatesRebate2AmountInput.value = payload.propertyRatesRebate2Amount ?? '';
                 propertyRatesResidentialRebateAmountInput.value = payload.propertyRatesResidentialRebateAmount ?? '';
+                levyAmountInput.value = payload.levyAmount ?? '';
+                csosAmountInput.value = payload.csosAmount ?? '';
+                hoaAmountInput.value = payload.hoaAmount ?? '';
+                levySecurityAmountInput.value = payload.levySecurityAmount ?? '';
+                communalElectricityAmountInput.value = payload.communalElectricityAmount ?? '';
+                communalWaterAmountInput.value = payload.communalWaterAmount ?? '';
+                electricityDemandChargeAmountInput.value = payload.electricityDemandChargeAmount ?? '';
+                electricitySurchargeAmountInput.value = payload.electricitySurchargeAmount ?? '';
+                electricityBasicChargeAmountInput.value = payload.electricityBasicChargeAmount ?? '';
                 servicePdfResults?.classList.remove('d-none');
             });
 
@@ -1095,6 +1176,15 @@
                     propertyRatesRebate1Amount: propertyRatesRebate1AmountInput.value ? Number(propertyRatesRebate1AmountInput.value) : null,
                     propertyRatesRebate2Amount: propertyRatesRebate2AmountInput.value ? Number(propertyRatesRebate2AmountInput.value) : null,
                     propertyRatesResidentialRebateAmount: propertyRatesResidentialRebateAmountInput.value ? Number(propertyRatesResidentialRebateAmountInput.value) : null,
+                    levyAmount: levyAmountInput.value ? Number(levyAmountInput.value) : null,
+                    csosAmount: csosAmountInput.value ? Number(csosAmountInput.value) : null,
+                    hoaAmount: hoaAmountInput.value ? Number(hoaAmountInput.value) : null,
+                    levySecurityAmount: levySecurityAmountInput.value ? Number(levySecurityAmountInput.value) : null,
+                    communalElectricityAmount: communalElectricityAmountInput.value ? Number(communalElectricityAmountInput.value) : null,
+                    communalWaterAmount: communalWaterAmountInput.value ? Number(communalWaterAmountInput.value) : null,
+                    electricityDemandChargeAmount: electricityDemandChargeAmountInput.value ? Number(electricityDemandChargeAmountInput.value) : null,
+                    electricitySurchargeAmount: electricitySurchargeAmountInput.value ? Number(electricitySurchargeAmountInput.value) : null,
+                    electricityBasicChargeAmount: electricityBasicChargeAmountInput.value ? Number(electricityBasicChargeAmountInput.value) : null,
                     notes: servicesNotesInput.value || ''
                 };
 

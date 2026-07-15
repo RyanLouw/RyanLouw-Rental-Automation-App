@@ -974,6 +974,15 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate1Amount, notes);
         AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate2Amount, notes);
         AddTaxExpense(entries, propertyId, entryDate, "Property Rates Residential REBATE", request.PropertyRatesResidentialRebateAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Levy", request.LevyAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, @"CSOS", request.CsosAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "HOA", request.HoaAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Levy Security Levy", request.LevySecurityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Communal electricity", request.CommunalElectricityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Communal water", request.CommunalWaterAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity demand charge", request.ElectricityDemandChargeAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity surcharge", request.ElectricitySurchargeAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity basic charge", request.ElectricityBasicChargeAmount, notes);
     }
 
     private static void PopulateTaxParseValues(ServicePdfParseResultVm result, string text)
@@ -992,6 +1001,15 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         result.PropertyRatesRebate1Amount = GetTaxValueOrNull(propertyRatesRebates, 0);
         result.PropertyRatesRebate2Amount = GetTaxValueOrNull(propertyRatesRebates, 1);
         result.PropertyRatesResidentialRebateAmount = GetTaxValueOrNull(propertyRatesResidentialRebateRows, 0);
+        result.LevyAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"^(?!.*(CSOS|HOA|SECURITY)).*\bLEVY\b|MONTHLY\s+LEVY"), 0);
+        result.CsosAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"CSOS"), 0);
+        result.HoaAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"\bHOA\b|HOME\s+OWNERS"), 0);
+        result.LevySecurityAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY"), 0);
+        result.CommunalElectricityAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+ELECTRICITY"), 0);
+        result.CommunalWaterAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+WATER"), 0);
+        result.ElectricityDemandChargeAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE"), 0);
+        result.ElectricitySurchargeAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE"), 0);
+        result.ElectricityBasicChargeAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE"), 0);
     }
 
     private static void AddTaxExpense(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, string description, decimal? amount, string notes)
