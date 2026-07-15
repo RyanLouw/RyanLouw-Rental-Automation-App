@@ -493,7 +493,10 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         AddTaxExpense(entries, request.PropertyId, entryDate, "Basic electricity", request.BasicElectricityAmount, request.Notes);
         AddTaxExpense(entries, request.PropertyId, entryDate, "Basic water", request.BasicWaterAmount, request.Notes);
         AddTaxExpense(entries, request.PropertyId, entryDate, "Basic sewerage", request.BasicSewerageAmount, request.Notes);
-        AddTaxExpense(entries, request.PropertyId, entryDate, "Property tax", request.PropertyTaxAmount, request.Notes);
+        AddTaxExpense(entries, request.PropertyId, entryDate, "Property Rates Residential", request.PropertyRatesResidentialAmount, request.Notes);
+        AddTaxExpense(entries, request.PropertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate1Amount, request.Notes);
+        AddTaxExpense(entries, request.PropertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate2Amount, request.Notes);
+        AddTaxExpense(entries, request.PropertyId, entryDate, "Property Rates Residential REBATE", request.PropertyRatesResidentialRebateAmount, request.Notes);
 
         if (entries.Count == 0)
         {
@@ -981,7 +984,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC");
         var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
         var basicSewerage = ParseTaxCharge(text, "BAS\\.?\\s*SEWERAGE|BASIC\\s+SEWERAGE|SEWERAGE\\s+BASIC");
-        var propertyTax = ParseTaxCharge(text, "PROPERTY\\s+TAX|PROPERTY\\s+RATES|PROPERTY\\s+RATES\\s+REBATE|ASSESSMENT\\s+RATES|MUNICIPAL\\s+RATES");
+        var propertyRatesResidentialRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential(?!\\s+REBATE)");
+        var propertyRatesRebates = ParseTaxChargeValues(text, "PROPERTY\\s+RATES\\s+REBATE");
+        var propertyRatesResidentialRebateRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential\\s+REBATE");
 
         return new TaxPdfParseResultVm
         {
@@ -994,7 +999,10 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             BasicElectricityAmount = basicElectricity.Amount,
             BasicWaterAmount = basicWater.Amount,
             BasicSewerageAmount = basicSewerage.Amount,
-            PropertyTaxAmount = propertyTax.Amount
+            PropertyRatesResidentialAmount = GetTaxValueOrNull(propertyRatesResidentialRows, 0),
+            PropertyRatesRebate1Amount = GetTaxValueOrNull(propertyRatesRebates, 0),
+            PropertyRatesRebate2Amount = GetTaxValueOrNull(propertyRatesRebates, 1),
+            PropertyRatesResidentialRebateAmount = GetTaxValueOrNull(propertyRatesResidentialRebateRows, 0)
         };
     }
 
@@ -1132,7 +1140,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         var rowMatches = Regex.Matches(
             meterSection,
-            $@"(?is){meterType}\s*(\d+\.\d{{3}})\s*(\d+\.\d{{3}})\s*I?\s*(\d*\.\d{{3}})\s*([\d,]+\.\d{{2}})");
+            $@"(?is){meterType}\s*(\d+\.\d{{3}})\s*(\d+\.\d{{3}})\s*[A-Z]?\s*(\d*\.\d{{3}})\s*([\d,]+\.\d{{2}})");
 
         if (rowMatches.Count > 0)
         {
@@ -1266,6 +1274,21 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             : ParseAccountChargeByKeyword(text, keywordPattern);
     }
 
+
+    private static decimal? GetTaxValueOrNull(List<decimal> values, int index)
+    {
+        return index >= 0 && index < values.Count ? values[index] : null;
+    }
+
+    private static List<decimal> ParseTaxChargeValues(string text, string keywordPattern)
+    {
+        return ParseTaxChargeRows(text, keywordPattern)
+            .Select(row => ParseLastStatementMoneyValue(row.Row))
+            .Where(amount => amount.HasValue)
+            .Select(amount => Math.Abs(amount!.Value))
+            .ToList();
+    }
+
     private static AccountChargeResult ParseTaxChargeFromAccountRows(string text, string keywordPattern)
     {
         var result = new AccountChargeResult();
@@ -1275,24 +1298,11 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return result;
         }
 
-        var rowStarts = Regex.Matches(accountSection, @"\d{2}[\-/]\d{2}[\-/]\d{4}\d{4,8}")
-            .Cast<Match>()
-            .ToList();
-
         decimal total = 0m;
 
-        for (var index = 0; index < rowStarts.Count; index++)
+        foreach (var row in ParseTaxChargeRows(text, keywordPattern))
         {
-            var rowStart = rowStarts[index];
-            var nextStart = index + 1 < rowStarts.Count ? rowStarts[index + 1].Index : accountSection.Length;
-            var row = accountSection[rowStart.Index..nextStart];
-
-            if (!Regex.IsMatch(row, keywordPattern, RegexOptions.IgnoreCase))
-            {
-                continue;
-            }
-
-            var amount = ParseLastStatementMoneyValue(row);
+            var amount = ParseLastStatementMoneyValue(row.Row);
             if (!amount.HasValue)
             {
                 continue;
@@ -1302,8 +1312,8 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
             if (string.IsNullOrWhiteSpace(result.Date))
             {
-                result.Date = rowStart.Value[..10];
-                result.Code = rowStart.Value[10..];
+                result.Date = row.Date;
+                result.Code = row.Code;
             }
         }
 
@@ -1313,6 +1323,36 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         return result;
+    }
+
+
+    private static List<(string Row, string Date, string Code)> ParseTaxChargeRows(string text, string keywordPattern)
+    {
+        var accountSection = GetSection(text, "ACCOUNT DETAILS", "120+ DAYS");
+        if (string.IsNullOrWhiteSpace(accountSection))
+        {
+            return [];
+        }
+
+        var rowStarts = Regex.Matches(accountSection, @"\d{2}[\-/]\d{2}[\-/]\d{4}\d{4,8}")
+            .Cast<Match>()
+            .ToList();
+
+        var rows = new List<(string Row, string Date, string Code)>();
+
+        for (var index = 0; index < rowStarts.Count; index++)
+        {
+            var rowStart = rowStarts[index];
+            var nextStart = index + 1 < rowStarts.Count ? rowStarts[index + 1].Index : accountSection.Length;
+            var row = accountSection[rowStart.Index..nextStart];
+
+            if (Regex.IsMatch(row, keywordPattern, RegexOptions.IgnoreCase))
+            {
+                rows.Add((row, rowStart.Value[..10], rowStart.Value[10..]));
+            }
+        }
+
+        return rows;
     }
 
     private static decimal? ParseLastStatementMoneyValue(string row)

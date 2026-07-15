@@ -304,8 +304,20 @@
                         <input type="number" step="0.01" class="form-control" id="basicSewerageTaxAmountInput" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label" for="propertyTaxAmountInput">Property tax</label>
-                        <input type="number" step="0.01" class="form-control" id="propertyTaxAmountInput" />
+                        <label class="form-label" for="propertyRatesResidentialAmountInput">Property Rates Residential</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesResidentialAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesRebate1AmountInput">PROPERTY RATES REBATE 1</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesRebate1AmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesRebate2AmountInput">PROPERTY RATES REBATE 2</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesRebate2AmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesResidentialRebateAmountInput">Property Rates Residential REBATE</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesResidentialRebateAmountInput" />
                     </div>
                     <div class="col-md-8">
                         <label class="form-label" for="taxNotesInput">Notes</label>
@@ -322,7 +334,10 @@
                         <li>Basic electricity: <strong id="basicElectricityTaxAmount">-</strong></li>
                         <li>Basic water: <strong id="basicWaterTaxAmount">-</strong></li>
                         <li>Basic sewerage: <strong id="basicSewerageTaxAmount">-</strong></li>
-                        <li>Property tax: <strong id="propertyTaxAmount">-</strong></li>
+                        <li>Property Rates Residential: <strong id="propertyRatesResidentialAmount">-</strong></li>
+                        <li>PROPERTY RATES REBATE 1: <strong id="propertyRatesRebate1Amount">-</strong></li>
+                        <li>PROPERTY RATES REBATE 2: <strong id="propertyRatesRebate2Amount">-</strong></li>
+                        <li>Property Rates Residential REBATE: <strong id="propertyRatesResidentialRebateAmount">-</strong></li>
                     </ul>
                     <details>
                         <summary>Raw text preview</summary>
@@ -506,14 +521,20 @@
             const basicElectricityTaxAmountInput = document.getElementById('basicElectricityTaxAmountInput');
             const basicWaterTaxAmountInput = document.getElementById('basicWaterTaxAmountInput');
             const basicSewerageTaxAmountInput = document.getElementById('basicSewerageTaxAmountInput');
-            const propertyTaxAmountInput = document.getElementById('propertyTaxAmountInput');
+            const propertyRatesResidentialAmountInput = document.getElementById('propertyRatesResidentialAmountInput');
+            const propertyRatesRebate1AmountInput = document.getElementById('propertyRatesRebate1AmountInput');
+            const propertyRatesRebate2AmountInput = document.getElementById('propertyRatesRebate2AmountInput');
+            const propertyRatesResidentialRebateAmountInput = document.getElementById('propertyRatesResidentialRebateAmountInput');
             const taxNotesInput = document.getElementById('taxNotesInput');
             const saveTaxEntriesBtn = document.getElementById('saveTaxEntriesBtn');
             const saveTaxEntriesMsg = document.getElementById('saveTaxEntriesMsg');
             const basicElectricityTaxAmount = document.getElementById('basicElectricityTaxAmount');
             const basicWaterTaxAmount = document.getElementById('basicWaterTaxAmount');
             const basicSewerageTaxAmount = document.getElementById('basicSewerageTaxAmount');
-            const propertyTaxAmount = document.getElementById('propertyTaxAmount');
+            const propertyRatesResidentialAmount = document.getElementById('propertyRatesResidentialAmount');
+            const propertyRatesRebate1Amount = document.getElementById('propertyRatesRebate1Amount');
+            const propertyRatesRebate2Amount = document.getElementById('propertyRatesRebate2Amount');
+            const propertyRatesResidentialRebateAmount = document.getElementById('propertyRatesResidentialRebateAmount');
             const taxPdfRawText = document.getElementById('taxPdfRawText');
             const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
             const rentAmountInput = document.getElementById('rentAmountInput');
@@ -813,13 +834,19 @@
                 basicElectricityTaxAmount.textContent = money(payload.basicElectricityAmount);
                 basicWaterTaxAmount.textContent = money(payload.basicWaterAmount);
                 basicSewerageTaxAmount.textContent = money(payload.basicSewerageAmount);
-                propertyTaxAmount.textContent = money(payload.propertyTaxAmount);
+                propertyRatesResidentialAmount.textContent = money(payload.propertyRatesResidentialAmount);
+                propertyRatesRebate1Amount.textContent = money(payload.propertyRatesRebate1Amount);
+                propertyRatesRebate2Amount.textContent = money(payload.propertyRatesRebate2Amount);
+                propertyRatesResidentialRebateAmount.textContent = money(payload.propertyRatesResidentialRebateAmount);
                 taxPdfRawText.textContent = payload.rawTextPreview || '';
 
                 basicElectricityTaxAmountInput.value = payload.basicElectricityAmount ?? '';
                 basicWaterTaxAmountInput.value = payload.basicWaterAmount ?? '';
                 basicSewerageTaxAmountInput.value = payload.basicSewerageAmount ?? '';
-                propertyTaxAmountInput.value = payload.propertyTaxAmount ?? '';
+                propertyRatesResidentialAmountInput.value = payload.propertyRatesResidentialAmount ?? '';
+                propertyRatesRebate1AmountInput.value = payload.propertyRatesRebate1Amount ?? '';
+                propertyRatesRebate2AmountInput.value = payload.propertyRatesRebate2Amount ?? '';
+                propertyRatesResidentialRebateAmountInput.value = payload.propertyRatesResidentialRebateAmount ?? '';
                 taxPdfResults?.classList.remove('d-none');
             });
 
@@ -843,7 +870,10 @@
                     basicElectricityAmount: basicElectricityTaxAmountInput.value ? Number(basicElectricityTaxAmountInput.value) : null,
                     basicWaterAmount: basicWaterTaxAmountInput.value ? Number(basicWaterTaxAmountInput.value) : null,
                     basicSewerageAmount: basicSewerageTaxAmountInput.value ? Number(basicSewerageTaxAmountInput.value) : null,
-                    propertyTaxAmount: propertyTaxAmountInput.value ? Number(propertyTaxAmountInput.value) : null,
+                    propertyRatesResidentialAmount: propertyRatesResidentialAmountInput.value ? Number(propertyRatesResidentialAmountInput.value) : null,
+                    propertyRatesRebate1Amount: propertyRatesRebate1AmountInput.value ? Number(propertyRatesRebate1AmountInput.value) : null,
+                    propertyRatesRebate2Amount: propertyRatesRebate2AmountInput.value ? Number(propertyRatesRebate2AmountInput.value) : null,
+                    propertyRatesResidentialRebateAmount: propertyRatesResidentialRebateAmountInput.value ? Number(propertyRatesResidentialRebateAmountInput.value) : null,
                     notes: taxNotesInput.value || ''
                 };
 

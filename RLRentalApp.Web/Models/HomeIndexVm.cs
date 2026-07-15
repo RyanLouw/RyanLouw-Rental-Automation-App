@@ -144,7 +144,10 @@ public class TaxPdfParseResultVm : ServicePdfParseResultVm
     public decimal? BasicElectricityAmount { get; set; }
     public decimal? BasicWaterAmount { get; set; }
     public decimal? BasicSewerageAmount { get; set; }
-    public decimal? PropertyTaxAmount { get; set; }
+    public decimal? PropertyRatesResidentialAmount { get; set; }
+    public decimal? PropertyRatesRebate1Amount { get; set; }
+    public decimal? PropertyRatesRebate2Amount { get; set; }
+    public decimal? PropertyRatesResidentialRebateAmount { get; set; }
 }
 
 public class SaveTaxEntriesRequestVm
@@ -154,7 +157,10 @@ public class SaveTaxEntriesRequestVm
     public decimal? BasicElectricityAmount { get; set; }
     public decimal? BasicWaterAmount { get; set; }
     public decimal? BasicSewerageAmount { get; set; }
-    public decimal? PropertyTaxAmount { get; set; }
+    public decimal? PropertyRatesResidentialAmount { get; set; }
+    public decimal? PropertyRatesRebate1Amount { get; set; }
+    public decimal? PropertyRatesRebate2Amount { get; set; }
+    public decimal? PropertyRatesResidentialRebateAmount { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
 
