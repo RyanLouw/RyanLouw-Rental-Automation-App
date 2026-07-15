@@ -987,7 +987,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static void PopulateTaxParseValues(ServicePdfParseResultVm result, string text)
     {
-        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC");
+        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|BASIC\\s+ELEC");
         var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
         var basicSewerage = ParseTaxCharge(text, "BAS\\.?\\s*SEWERAGE|BASIC\\s+SEWERAGE|SEWERAGE\\s+BASIC");
         var propertyRatesResidentialRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential(?!\\s+REBATE)");
@@ -1001,15 +1001,24 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         result.PropertyRatesRebate1Amount = GetTaxValueOrNull(propertyRatesRebates, 0);
         result.PropertyRatesRebate2Amount = GetTaxValueOrNull(propertyRatesRebates, 1);
         result.PropertyRatesResidentialRebateAmount = GetTaxValueOrNull(propertyRatesResidentialRebateRows, 0);
-        result.LevyAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"^(?!.*(CSOS|HOA|SECURITY)).*\bLEVY\b|MONTHLY\s+LEVY"), 0);
-        result.CsosAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"CSOS"), 0);
-        result.HoaAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"\bHOA\b|HOME\s+OWNERS"), 0);
-        result.LevySecurityAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY"), 0);
-        result.CommunalElectricityAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+ELECTRICITY"), 0);
-        result.CommunalWaterAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+WATER"), 0);
-        result.ElectricityDemandChargeAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE"), 0);
-        result.ElectricitySurchargeAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE"), 0);
-        result.ElectricityBasicChargeAmount = GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE"), 0);
+        result.LevyAmount = ParseBodyCorporateLineAmount(text, @"\bLevies\b|\bLevy\b", @"CSOS|HOA|Security")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"^(?!.*(CSOS|HOA|SECURITY)).*\bLEVY\b|MONTHLY\s+LEVY"), 0);
+        result.CsosAmount = ParseBodyCorporateLineAmount(text, @"CSOS")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"CSOS"), 0);
+        result.HoaAmount = ParseBodyCorporateLineAmount(text, @"\bHOA\b|HOME\s+OWNERS")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"\bHOA\b|HOME\s+OWNERS"), 0);
+        result.LevySecurityAmount = ParseBodyCorporateLineAmount(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY"), 0);
+        result.CommunalElectricityAmount = ParseBodyCorporateLineAmount(text, @"COMMUNAL\s+ELECTRICITY")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+ELECTRICITY"), 0);
+        result.CommunalWaterAmount = ParseBodyCorporateLineAmount(text, @"COMMUNAL\s+WATER")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+WATER"), 0);
+        result.ElectricityDemandChargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE"), 0);
+        result.ElectricitySurchargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE"), 0);
+        result.ElectricityBasicChargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE"), 0);
     }
 
     private static void AddTaxExpense(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, string description, decimal? amount, string notes)
@@ -1263,6 +1272,35 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             : ParseAccountChargeByKeyword(text, keywordPattern);
     }
 
+
+
+    private static decimal? ParseBodyCorporateLineAmount(string text, string labelPattern, string? excludePattern = null)
+    {
+        var labelMatches = Regex.Matches(text, labelPattern, RegexOptions.IgnoreCase);
+        foreach (Match labelMatch in labelMatches.Cast<Match>().Reverse())
+        {
+            var lineEndMatch = Regex.Match(text[labelMatch.Index..], @"(?=\d{4}-\d{2}-\d{2}(?:Invoice|Journal|STANDARD|Balance)|120\+ days|BANKING DETAILS|Total Due)", RegexOptions.IgnoreCase);
+            var maxLength = lineEndMatch.Success && lineEndMatch.Index > 0
+                ? lineEndMatch.Index
+                : Math.Min(180, text.Length - labelMatch.Index);
+            var line = text.Substring(labelMatch.Index, maxLength);
+
+            if (!string.IsNullOrWhiteSpace(excludePattern) && Regex.IsMatch(line, excludePattern, RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
+            line = Regex.Replace(line, @"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}\b", string.Empty, RegexOptions.IgnoreCase);
+            var amountMatch = Regex.Match(line, @"\d+(?:\.\d{2})");
+            var amount = TryParseDecimal(amountMatch.Value);
+            if (amount.HasValue)
+            {
+                return amount.Value;
+            }
+        }
+
+        return null;
+    }
 
     private static decimal? GetTaxValueOrNull(List<decimal> values, int index)
     {
