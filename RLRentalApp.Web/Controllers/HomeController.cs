@@ -106,34 +106,6 @@ public class HomeController : Controller
 
 
     [HttpPost]
-    public async Task<IActionResult> ParseTaxPdf(IFormFile? pdfFile, string? pdfPassword)
-    {
-        var result = await _propertyDashboardManager.ParseTaxPdfAsync(pdfFile, pdfPassword);
-
-        if (!result.Success)
-        {
-            return BadRequest(result);
-        }
-
-        return Json(result);
-    }
-
-
-    [HttpPost]
-    public async Task<IActionResult> SaveTaxEntries([FromBody] SaveTaxEntriesRequestVm request)
-    {
-        var result = await _propertyDashboardManager.SaveTaxEntriesAsync(request);
-
-        if (!result.Success)
-        {
-            return BadRequest(result);
-        }
-
-        return Json(result);
-    }
-
-
-    [HttpPost]
     public async Task<IActionResult> SaveRent([FromBody] SaveRentRequestVm request)
     {
         var result = await _propertyDashboardManager.SaveRentAsync(request);

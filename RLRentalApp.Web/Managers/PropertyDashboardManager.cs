@@ -438,16 +438,6 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     public async Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request)
     {
-        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
-        if (activeLease is null)
-        {
-            return new SaveServicesResultVm
-            {
-                Success = false,
-                Message = "No active lease found for the selected property."
-            };
-        }
-
         var charges = new List<ServiceChargeInsertDataModel>();
 
         AddCharge(charges, "Electricity", request.ElectricityAmount, request.BillingPeriod, request.Notes);
@@ -455,65 +445,53 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         AddCharge(charges, "Sanitation", request.SewerageAmount, request.BillingPeriod, request.Notes);
         AddCharge(charges, "Refuse", request.RefuseAmount, request.BillingPeriod, request.Notes);
 
-        if (charges.Count == 0)
+        var taxEntries = new List<PropertyTaxEntryInsertDataModel>();
+        AddTaxEntries(taxEntries, request.PropertyId, request.BillingPeriod, request, request.Notes);
+
+        if (charges.Count == 0 && taxEntries.Count == 0)
         {
             return new SaveServicesResultVm
             {
                 Success = false,
-                Message = "Please capture at least one service amount."
+                Message = "Please capture at least one service or tax amount."
             };
         }
 
-        var inserted = await _dataAccess.InsertServiceChargesAsync(activeLease.LeaseId, charges);
+        var insertedServices = 0;
+        if (charges.Count > 0)
+        {
+            var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+            if (activeLease is null)
+            {
+                return new SaveServicesResultVm
+                {
+                    Success = false,
+                    Message = "No active lease found for the selected property."
+                };
+            }
+
+            insertedServices = await _dataAccess.InsertServiceChargesAsync(activeLease.LeaseId, charges);
+        }
+
+        var insertedTaxEntries = taxEntries.Count > 0
+            ? await _dataAccess.InsertPropertyTaxEntriesAsync(taxEntries)
+            : 0;
+
+        var parts = new List<string>();
+        if (insertedServices > 0)
+        {
+            parts.Add($"saved {insertedServices} service charge(s)");
+        }
+        if (insertedTaxEntries > 0)
+        {
+            parts.Add($"saved {insertedTaxEntries} tax entr{(insertedTaxEntries == 1 ? "y" : "ies")}");
+        }
 
         return new SaveServicesResultVm
         {
-            Success = inserted > 0,
-            AddedCount = inserted,
-            Message = inserted > 0 ? $"Saved {inserted} service charge(s)." : "No service charges were saved."
-        };
-    }
-
-
-    public async Task<SaveTaxEntriesResultVm> SaveTaxEntriesAsync(SaveTaxEntriesRequestVm request)
-    {
-        var property = await _dataAccess.LoadPropertyAsync(request.PropertyId);
-        if (property is null)
-        {
-            return new SaveTaxEntriesResultVm
-            {
-                Success = false,
-                Message = "Property not found."
-            };
-        }
-
-        var entries = new List<PropertyTaxEntryInsertDataModel>();
-        var entryDate = request.EntryDate == default ? DateTime.Today : request.EntryDate;
-
-        AddTaxExpense(entries, request.PropertyId, entryDate, "Basic electricity", request.BasicElectricityAmount, request.Notes);
-        AddTaxExpense(entries, request.PropertyId, entryDate, "Basic water", request.BasicWaterAmount, request.Notes);
-        AddTaxExpense(entries, request.PropertyId, entryDate, "Basic sewerage", request.BasicSewerageAmount, request.Notes);
-        AddTaxExpense(entries, request.PropertyId, entryDate, "Property Rates Residential", request.PropertyRatesResidentialAmount, request.Notes);
-        AddTaxExpense(entries, request.PropertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate1Amount, request.Notes);
-        AddTaxExpense(entries, request.PropertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate2Amount, request.Notes);
-        AddTaxExpense(entries, request.PropertyId, entryDate, "Property Rates Residential REBATE", request.PropertyRatesResidentialRebateAmount, request.Notes);
-
-        if (entries.Count == 0)
-        {
-            return new SaveTaxEntriesResultVm
-            {
-                Success = false,
-                Message = "Please capture at least one tax amount."
-            };
-        }
-
-        var inserted = await _dataAccess.InsertPropertyTaxEntriesAsync(entries);
-
-        return new SaveTaxEntriesResultVm
-        {
-            Success = inserted > 0,
-            AddedCount = inserted,
-            Message = inserted > 0 ? $"Saved {inserted} tax entr{(inserted == 1 ? "y" : "ies")}." : "No tax entries were saved."
+            Success = insertedServices > 0 || insertedTaxEntries > 0,
+            AddedCount = insertedServices + insertedTaxEntries,
+            Message = parts.Count > 0 ? $"Successfully {string.Join(" and ", parts)}." : "No service charges or tax entries were saved."
         };
     }
 
@@ -955,7 +933,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         var sewerage = ParseSewerage(text);
         var refuse = ParseRefuse(text);
 
-        return new ServicePdfParseResultVm
+        var result = new ServicePdfParseResultVm
         {
             Success = true,
             Electricity = electricity,
@@ -964,46 +942,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Refuse = refuse,
             RawTextPreview = text.Length > 4000 ? text[..4000] : text
         };
-    }
 
-
-    public async Task<TaxPdfParseResultVm> ParseTaxPdfAsync(IFormFile? file, string? password = null)
-    {
-        var serviceResult = await ParseServicePdfAsync(file, password);
-        if (!serviceResult.Success)
-        {
-            return new TaxPdfParseResultVm
-            {
-                Success = false,
-                ErrorMessage = serviceResult.ErrorMessage
-            };
-        }
-
-        await using var stream = file!.OpenReadStream();
-        var text = ExtractPdfText(stream, password);
-        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC");
-        var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
-        var basicSewerage = ParseTaxCharge(text, "BAS\\.?\\s*SEWERAGE|BASIC\\s+SEWERAGE|SEWERAGE\\s+BASIC");
-        var propertyRatesResidentialRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential(?!\\s+REBATE)");
-        var propertyRatesRebates = ParseTaxChargeValues(text, "PROPERTY\\s+RATES\\s+REBATE");
-        var propertyRatesResidentialRebateRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential\\s+REBATE");
-
-        return new TaxPdfParseResultVm
-        {
-            Success = true,
-            Electricity = serviceResult.Electricity,
-            Water = serviceResult.Water,
-            Sewerage = serviceResult.Sewerage,
-            Refuse = serviceResult.Refuse,
-            RawTextPreview = serviceResult.RawTextPreview,
-            BasicElectricityAmount = basicElectricity.Amount,
-            BasicWaterAmount = basicWater.Amount,
-            BasicSewerageAmount = basicSewerage.Amount,
-            PropertyRatesResidentialAmount = GetTaxValueOrNull(propertyRatesResidentialRows, 0),
-            PropertyRatesRebate1Amount = GetTaxValueOrNull(propertyRatesRebates, 0),
-            PropertyRatesRebate2Amount = GetTaxValueOrNull(propertyRatesRebates, 1),
-            PropertyRatesResidentialRebateAmount = GetTaxValueOrNull(propertyRatesResidentialRebateRows, 0)
-        };
+        PopulateTaxParseValues(result, text);
+        return result;
     }
 
 
@@ -1021,6 +962,36 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             BillingPeriod = new DateTime(billingPeriod.Year, billingPeriod.Month, 1),
             Notes = string.IsNullOrWhiteSpace(notes) ? "Captured from dashboard" : notes
         });
+    }
+
+
+    private static void AddTaxEntries(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, SaveServicesRequestVm request, string notes)
+    {
+        AddTaxExpense(entries, propertyId, entryDate, "Basic electricity", request.BasicElectricityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Basic water", request.BasicWaterAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Basic sewerage", request.BasicSewerageAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Property Rates Residential", request.PropertyRatesResidentialAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate1Amount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate2Amount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Property Rates Residential REBATE", request.PropertyRatesResidentialRebateAmount, notes);
+    }
+
+    private static void PopulateTaxParseValues(ServicePdfParseResultVm result, string text)
+    {
+        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|ELECTRICITY\\s+BASIC|BASIC\\s+ELEC");
+        var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
+        var basicSewerage = ParseTaxCharge(text, "BAS\\.?\\s*SEWERAGE|BASIC\\s+SEWERAGE|SEWERAGE\\s+BASIC");
+        var propertyRatesResidentialRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential(?!\\s+REBATE)");
+        var propertyRatesRebates = ParseTaxChargeValues(text, "PROPERTY\\s+RATES\\s+REBATE");
+        var propertyRatesResidentialRebateRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential\\s+REBATE");
+
+        result.BasicElectricityAmount = basicElectricity.Amount;
+        result.BasicWaterAmount = basicWater.Amount;
+        result.BasicSewerageAmount = basicSewerage.Amount;
+        result.PropertyRatesResidentialAmount = GetTaxValueOrNull(propertyRatesResidentialRows, 0);
+        result.PropertyRatesRebate1Amount = GetTaxValueOrNull(propertyRatesRebates, 0);
+        result.PropertyRatesRebate2Amount = GetTaxValueOrNull(propertyRatesRebates, 1);
+        result.PropertyRatesResidentialRebateAmount = GetTaxValueOrNull(propertyRatesResidentialRebateRows, 0);
     }
 
     private static void AddTaxExpense(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, string description, decimal? amount, string notes)
