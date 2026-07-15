@@ -1324,7 +1324,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         var token = matches[^1].Value;
-        var isNegative = token.EndsWith('-', StringComparison.Ordinal);
+        var isNegative = token.EndsWith("-", StringComparison.Ordinal);
         var amount = TryParseDecimal(isNegative ? token[..^1] : token);
 
         if (!amount.HasValue)
