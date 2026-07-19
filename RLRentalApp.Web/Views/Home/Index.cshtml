@@ -793,6 +793,7 @@
 
                 const formData = new FormData();
                 formData.append('pdfFile', file);
+                formData.append('propertyId', selectedPropertyId || '0');
                 if (servicePdfPassword?.value) {
                     formData.append('pdfPassword', servicePdfPassword.value);
                 }

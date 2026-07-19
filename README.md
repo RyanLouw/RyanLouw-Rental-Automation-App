@@ -332,3 +332,7 @@ For a live server, Google requires a real HTTPS domain, for example `https://ren
 ### Test the connection
 
 Use **Test Google Drive** at the top of the Property Dashboard. A successful test creates a timestamped folder and `connection-test.txt` in your configured Drive folder.
+
+### Uploaded source-document folders
+
+When Google Drive is enabled, PDFs selected in **Did they pay?** are saved under `Bank/<year>/<month>/`. PDFs selected in **Add services** are saved under `Properties/<property name>/<year>/<month>/`. The app creates any missing folders automatically before uploading the PDF.

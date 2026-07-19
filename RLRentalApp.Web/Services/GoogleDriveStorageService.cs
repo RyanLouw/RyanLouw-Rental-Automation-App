@@ -39,6 +39,24 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
         return new GoogleDriveConnectionTestResult { TestFolderName = testFolderName, TestFolderId = folder.Id ?? string.Empty, TestFileName = testFileName, TestFileId = upload.ResponseBody?.Id ?? string.Empty };
     }
 
+    public async Task<string?> UploadFileToFoldersAsync(string fileName, byte[] content, string contentType, IReadOnlyList<string> folderNames, CancellationToken cancellationToken = default)
+    {
+        if (!_options.Enabled) return null;
+        using var driveService = await CreateDriveServiceAsync(cancellationToken);
+        var parentId = _options.FolderId;
+        foreach (var folderName in folderNames.Where(x => !string.IsNullOrWhiteSpace(x)))
+        {
+            parentId = await GetOrCreateFolderAsync(driveService, parentId, folderName.Trim(), cancellationToken);
+        }
+
+        await using var uploadStream = new MemoryStream(content);
+        var request = driveService.Files.Create(new GoogleFile { Name = fileName, Parents = [parentId] }, uploadStream, contentType);
+        request.Fields = "id";
+        var result = await request.UploadAsync(cancellationToken);
+        if (result.Exception is not null) throw result.Exception;
+        return request.ResponseBody?.Id;
+    }
+
     public async Task<string?> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
     {
         if (!_options.Enabled) return null;
@@ -49,6 +67,19 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
         var result = await request.UploadAsync(cancellationToken);
         if (result.Exception is not null) throw result.Exception;
         return request.ResponseBody?.Id;
+    }
+
+    private static async Task<string> GetOrCreateFolderAsync(DriveService driveService, string parentId, string folderName, CancellationToken cancellationToken)
+    {
+        var escapedName = folderName.Replace("'", "\\'");
+        var list = driveService.Files.List();
+        list.Q = $"'{parentId}' in parents and name = '{escapedName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+        list.Fields = "files(id)";
+        var existing = await list.ExecuteAsync(cancellationToken);
+        if (existing.Files?.FirstOrDefault()?.Id is { Length: > 0 } existingId) return existingId;
+
+        var created = await driveService.Files.Create(new GoogleFile { Name = folderName, MimeType = "application/vnd.google-apps.folder", Parents = [parentId] }).ExecuteAsync(cancellationToken);
+        return created.Id ?? throw new InvalidOperationException($"Google Drive did not return an ID for folder '{folderName}'.");
     }
 
     private async Task<DriveService> CreateDriveServiceAsync(CancellationToken cancellationToken)

@@ -112,7 +112,7 @@ public class HomeController : Controller
 
 
     [HttpPost]
-    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile, string? pdfPassword)
+    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile, string? pdfPassword, int propertyId)
     {
         var result = await _propertyDashboardManager.ParseServicePdfAsync(pdfFile, pdfPassword);
 
@@ -121,6 +121,8 @@ public class HomeController : Controller
             return BadRequest(result);
         }
 
+        var property = await _propertyDashboardManager.GetPropertyStatusAsync(propertyId);
+        if (property is not null) await UploadDriveDocumentAsync(pdfFile!, ["Properties", SafeFolderName(property.PropertyName), DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
         return Json(result);
     }
 
@@ -164,6 +166,7 @@ public class HomeController : Controller
             return BadRequest(result);
         }
 
+        await UploadDriveDocumentAsync(pdfFile!, ["Bank", DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
         return Json(result);
     }
 
@@ -178,6 +181,7 @@ public class HomeController : Controller
             return BadRequest(result);
         }
 
+        await UploadDriveDocumentAsync(pdfFile!, ["Bank", DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
         return Json(result);
     }
 
@@ -237,6 +241,15 @@ public class HomeController : Controller
 
         return Json(result);
     }
+
+    private async Task UploadDriveDocumentAsync(IFormFile pdfFile, IReadOnlyList<string> folderNames)
+    {
+        await using var stream = new MemoryStream();
+        await pdfFile.CopyToAsync(stream);
+        await _googleDriveStorageService.UploadFileToFoldersAsync(pdfFile.FileName, stream.ToArray(), pdfFile.ContentType ?? "application/pdf", folderNames);
+    }
+
+    private static string SafeFolderName(string name) => string.Concat(name.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '-' : character)).Trim();
 
     public IActionResult Privacy()
     {
