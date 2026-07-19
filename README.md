@@ -335,4 +335,4 @@ Use **Test Google Drive** at the top of the Property Dashboard. A successful tes
 
 ### Uploaded source-document folders
 
-When Google Drive is enabled, PDFs selected in **Did they pay?** are saved under `Bank/<year>/<month>/`. PDFs selected in **Add services** are saved under `Properties/<property name>/<year>/<month>/`. The app creates any missing folders automatically before uploading the PDF.
+Set `GoogleDrive:Enabled` to `true` in the active configuration. The connection test and document uploads require it. When Google Drive is enabled, PDFs selected in **Did they pay?** are saved under `Bank/<year>/<month>/`. PDFs selected in **Add services** are saved under `Properties/<property name>/<year>/<month>/`. The app creates any missing folders automatically before uploading the PDF.

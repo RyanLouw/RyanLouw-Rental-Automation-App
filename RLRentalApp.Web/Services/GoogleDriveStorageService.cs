@@ -27,6 +27,7 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
 
     public async Task<GoogleDriveConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (!_options.Enabled) throw new InvalidOperationException("GoogleDrive:Enabled must be true before testing or uploading documents.");
         using var driveService = await CreateDriveServiceAsync(cancellationToken);
         var suffix = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         var testFolderName = $"RLRentalApp-GoogleDrive-Test-{suffix}";
