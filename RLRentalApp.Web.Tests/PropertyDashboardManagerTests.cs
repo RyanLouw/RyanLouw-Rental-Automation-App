@@ -2,12 +2,18 @@ using RLRentalApp.Models;
 using RLRentalApp.Web.DataAccess;
 using RLRentalApp.Web.Managers;
 using RLRentalApp.Web.Services;
+using QuestPDF.Infrastructure;
 using Xunit;
 
 namespace RLRentalApp.Web.Tests;
 
 public class PropertyDashboardManagerTests
 {
+    public PropertyDashboardManagerTests()
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+    }
+
     [Fact]
     public async Task GetPropertyStatusAsync_UsesLedgerSnapshotForCurrentBalance()
     {

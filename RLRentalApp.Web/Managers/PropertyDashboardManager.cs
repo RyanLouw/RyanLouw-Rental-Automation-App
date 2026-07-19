@@ -377,7 +377,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         return candidates.FirstOrDefault(File.Exists);
     }
 
-    private static string FormatMoney(decimal value) => $"R {value:N2}";
+    private static string FormatMoney(decimal value) => $"R {value.ToString("N2", CultureInfo.InvariantCulture)}";
 
     private static string BuildStatementPdfFileName(PropertyStatementVm statement)
     {
@@ -1176,11 +1176,16 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
             if (amount.HasValue)
             {
+                // Statements are ordered oldest to newest; retain the latest complete meter line.
                 result.OldReading = oldReading;
                 result.NewReading = newReading;
                 result.LeviedAmount = amount;
-                return result;
             }
+        }
+
+        if (result.OldReading.HasValue)
+        {
+            return result;
         }
 
         var oldMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?old\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
