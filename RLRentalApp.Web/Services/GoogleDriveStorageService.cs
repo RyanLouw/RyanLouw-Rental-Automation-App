@@ -63,7 +63,7 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
         var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
         {
             ClientSecrets = new ClientSecrets { ClientId = _options.ClientId, ClientSecret = _options.ClientSecret },
-            Scopes = [DriveService.Scope.DriveFile],
+            Scopes = [DriveService.Scope.Drive],
             DataStore = new NullDataStore()
         });
         var credential = new UserCredential(flow, user.Id, new TokenResponse { AccessToken = accessToken, RefreshToken = refreshToken });

@@ -37,7 +37,7 @@ builder.Services.AddAuthentication()
         options.ClientSecret = googleDrive.ClientSecret;
         options.SaveTokens = true;
         options.CallbackPath = "/signin-google";
-        options.Scope.Add(DriveService.Scope.DriveFile);
+        options.Scope.Add(DriveService.Scope.Drive);
         options.AccessType = "offline";
     });
 

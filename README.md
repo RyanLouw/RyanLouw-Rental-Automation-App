@@ -307,7 +307,7 @@ For production, use environment variables or a managed secret store (Azure Key V
 
 ## Google Drive setup (save statement PDFs to your Drive)
 
-This app uses **Sign in with Google** and asks for permission to create files in the Google Drive of the account you sign in with. It does not use a service-account JSON key.
+This app uses **Sign in with Google** and asks for Google Drive permission for the account you sign in with. It does not use a service-account JSON key. The permission allows the app to save statements to the folder you select, including a folder that existed before the app was connected.
 
 1. In Google Cloud Console, configure the **OAuth consent screen**. While the app is in **Testing**, open **Audience** (or **Test users**) and add every Google email that will sign in, such as the Drive-folder owner and your personal account. This avoids the Google `Error 403: access_denied` verification message.
 2. Create an **OAuth 2.0 Client ID** of type **Web application**.
@@ -327,7 +327,7 @@ This app uses **Sign in with Google** and asks for permission to create files in
 }
 ```
 
-For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder.
+For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder. If you change the folder or Google Drive permission settings, sign out and connect Google again so Google can issue a fresh permission token.
 
 ### Test the connection
 
