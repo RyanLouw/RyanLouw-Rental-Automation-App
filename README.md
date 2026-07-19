@@ -310,7 +310,7 @@ For production, use environment variables or a managed secret store (Azure Key V
 This app uses **Sign in with Google** and asks for permission to create files in the Google Drive of the account you sign in with. It does not use a service-account JSON key.
 
 1. In Google Cloud Console, create an **OAuth 2.0 Client ID** of type **Web application**.
-2. Add your app callback URL: `https://your-domain/Account/GoogleLoginCallback` (for local development, use the exact local HTTPS URL shown by the app plus that path).
+2. Add the **Google OAuth callback URI** `https://your-domain/signin-google` under **Authorized redirect URIs**. This is not the `Account/GoogleLoginCallback` route; the Google authentication handler receives the Google response at `/signin-google` first. For local development in this project, use `https://localhost:7241/signin-google`.
 3. Enable the **Google Drive API**.
 4. Create a folder in the Google Drive account you will use, and copy its folder ID from the URL.
 5. Add the OAuth client values outside git in `RLRentalApp.Web/appsettings.Local.json`:
@@ -326,7 +326,7 @@ This app uses **Sign in with Google** and asks for permission to create files in
 }
 ```
 
-Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder.
+For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder.
 
 ### Test the connection
 
