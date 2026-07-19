@@ -307,45 +307,27 @@ For production, use environment variables or a managed secret store (Azure Key V
 
 ## Google Drive setup (save statement PDFs to your Drive)
 
-The app can optionally upload generated statement PDFs to a Google Drive folder that you own. This uses a Google service account, so tenants do not need to sign in with Google.
+This app uses **Sign in with Google** and asks for permission to create files in the Google Drive of the account you sign in with. It does not use a service-account JSON key.
 
-### 1. Create and share the Drive folder
-
-1. In Google Cloud Console, create or open a project.
-2. Enable the **Google Drive API** for that project.
-3. Create a **service account** and download its JSON key file.
-4. In your personal Google Drive, create a folder such as `Rental App Statements`.
-5. Share that folder with the service account email address, for example `rental-drive-uploader@your-project.iam.gserviceaccount.com`, and give it **Editor** access.
-6. Copy the folder ID from the Drive URL. In `https://drive.google.com/drive/folders/abc123`, the folder ID is `abc123`.
-
-### 2. Configure the app
-
-Keep the real service account JSON outside git. For local development, put the values in `RLRentalApp.Web/appsettings.Local.json` or user-secrets:
+1. In Google Cloud Console, create an **OAuth 2.0 Client ID** of type **Web application**.
+2. Add your app callback URL: `https://your-domain/Account/GoogleLoginCallback` (for local development, use the exact local HTTPS URL shown by the app plus that path).
+3. Enable the **Google Drive API**.
+4. Create a folder in the Google Drive account you will use, and copy its folder ID from the URL.
+5. Add the OAuth client values outside git in `RLRentalApp.Web/appsettings.Local.json`:
 
 ```json
 {
   "GoogleDrive": {
     "Enabled": true,
-    "ApplicationName": "RLRentalApp",
-    "ServiceAccountJsonPath": "C:\\secure\\rental-drive-service-account.json",
+    "ClientId": "your-oauth-client-id",
+    "ClientSecret": "your-oauth-client-secret",
     "FolderId": "your-google-drive-folder-id"
   }
 }
 ```
 
-For production, set environment variables instead:
-
-```bash
-GoogleDrive__Enabled="true"
-GoogleDrive__ApplicationName="RLRentalApp"
-GoogleDrive__ServiceAccountJsonPath="/secure/rental-drive-service-account.json"
-GoogleDrive__FolderId="your-google-drive-folder-id"
-```
-
-If `GoogleDrive:Enabled` is `false`, the app still generates and downloads PDFs normally but skips Google Drive upload.
+Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder.
 
 ### Test the connection
 
-After adding your settings and starting the app, use the **Test Google Drive** button at the top of the Property Dashboard. A successful test creates a new `RLRentalApp-GoogleDrive-Test-<timestamp>` folder inside the Drive folder configured by `GoogleDrive:FolderId`, then creates `connection-test.txt` inside it. Seeing both items in Google Drive confirms that the app can create folders and save files there. You can delete the test folder afterwards.
-
-If the test fails, the dashboard now identifies the likely setup issue. For a missing folder, re-check `GoogleDrive:FolderId` and share that exact folder with the service-account email as an **Editor**. For a permissions message, the folder has not been shared correctly. For a missing JSON-file message, re-check `GoogleDrive:ServiceAccountJsonPath`. Also confirm that the **Google Drive API** is enabled in the Google Cloud project that owns the service account.
+Use **Test Google Drive** at the top of the Property Dashboard. A successful test creates a timestamped folder and `connection-test.txt` in your configured Drive folder.

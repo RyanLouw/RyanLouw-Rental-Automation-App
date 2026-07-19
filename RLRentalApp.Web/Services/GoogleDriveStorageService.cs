@@ -1,131 +1,86 @@
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
+using Google.Apis.Util.Store;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Responses;
 using GoogleFile = Google.Apis.Drive.v3.Data.File;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
 
 namespace RLRentalApp.Web.Services;
 
 public class GoogleDriveStorageService : IGoogleDriveStorageService
 {
     private readonly GoogleDriveOptions _options;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly UserManager<IdentityUser> _userManager;
 
-    public GoogleDriveStorageService(IOptions<GoogleDriveOptions> options)
+    public GoogleDriveStorageService(IOptions<GoogleDriveOptions> options, IHttpContextAccessor httpContextAccessor, UserManager<IdentityUser> userManager)
     {
         _options = options.Value;
+        _httpContextAccessor = httpContextAccessor;
+        _userManager = userManager;
     }
 
     public async Task<GoogleDriveConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
-        ValidateOptions();
-
-        using var driveService = CreateDriveService();
+        using var driveService = await CreateDriveServiceAsync(cancellationToken);
         var suffix = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         var testFolderName = $"RLRentalApp-GoogleDrive-Test-{suffix}";
-        var folderRequest = driveService.Files.Create(new GoogleFile
-        {
-            Name = testFolderName,
-            MimeType = "application/vnd.google-apps.folder",
-            Parents = [_options.FolderId]
-        });
-        folderRequest.Fields = "id,name";
-
-        var createdFolder = await folderRequest.ExecuteAsync(cancellationToken);
+        var folder = await driveService.Files.Create(new GoogleFile { Name = testFolderName, MimeType = "application/vnd.google-apps.folder", Parents = [_options.FolderId] }).ExecuteAsync(cancellationToken);
         var testFileName = "connection-test.txt";
-        var testContent = System.Text.Encoding.UTF8.GetBytes(
-            $"Google Drive connection succeeded at {DateTime.UtcNow:O}. You can delete this test folder and file after checking them.");
-
-        await using var testFileStream = new MemoryStream(testContent);
-        var fileRequest = driveService.Files.Create(new GoogleFile
-        {
-            Name = testFileName,
-            Parents = [createdFolder.Id]
-        }, testFileStream, "text/plain");
-        fileRequest.Fields = "id,name";
-
-        var uploadResult = await fileRequest.UploadAsync(cancellationToken);
-        if (uploadResult.Exception is not null)
-        {
-            throw uploadResult.Exception;
-        }
-
-        return new GoogleDriveConnectionTestResult
-        {
-            TestFolderName = testFolderName,
-            TestFolderId = createdFolder.Id ?? string.Empty,
-            TestFileName = testFileName,
-            TestFileId = fileRequest.ResponseBody?.Id ?? string.Empty
-        };
+        await using var content = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"Google Drive connection succeeded at {DateTime.UtcNow:O}."));
+        var upload = driveService.Files.Create(new GoogleFile { Name = testFileName, Parents = [folder.Id] }, content, "text/plain");
+        var uploadResult = await upload.UploadAsync(cancellationToken);
+        if (uploadResult.Exception is not null) throw uploadResult.Exception;
+        return new GoogleDriveConnectionTestResult { TestFolderName = testFolderName, TestFolderId = folder.Id ?? string.Empty, TestFileName = testFileName, TestFileId = upload.ResponseBody?.Id ?? string.Empty };
     }
 
-    public async Task<string?> UploadFileAsync(
-        string fileName,
-        byte[] content,
-        string contentType,
-        CancellationToken cancellationToken = default)
+    public async Task<string?> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled)
-        {
-            return null;
-        }
-
-        ValidateOptions();
-
-        using var driveService = CreateDriveService();
-
-        var fileMetadata = new GoogleFile
-        {
-            Name = fileName,
-            Parents = [_options.FolderId]
-        };
-
+        if (!_options.Enabled) return null;
+        using var driveService = await CreateDriveServiceAsync(cancellationToken);
         await using var uploadStream = new MemoryStream(content);
-        var request = driveService.Files.Create(fileMetadata, uploadStream, contentType);
+        var request = driveService.Files.Create(new GoogleFile { Name = fileName, Parents = [_options.FolderId] }, uploadStream, contentType);
         request.Fields = "id";
-
         var result = await request.UploadAsync(cancellationToken);
-        if (result.Exception is not null)
-        {
-            throw result.Exception;
-        }
-
+        if (result.Exception is not null) throw result.Exception;
         return request.ResponseBody?.Id;
     }
 
-    private DriveService CreateDriveService()
+    private async Task<DriveService> CreateDriveServiceAsync(CancellationToken cancellationToken)
     {
-        using var credentialStream = File.OpenRead(_options.ServiceAccountJsonPath);
-        var credential = GoogleCredential
-            .FromStream(credentialStream)
-            .CreateScoped(DriveService.Scope.DriveFile);
+        ValidateOptions();
+        var user = await GetCurrentUserAsync();
+        var accessToken = await _userManager.GetAuthenticationTokenAsync(user, GoogleDefaults.AuthenticationScheme, "access_token");
+        var refreshToken = await _userManager.GetAuthenticationTokenAsync(user, GoogleDefaults.AuthenticationScheme, "refresh_token");
+        if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
+            throw new InvalidOperationException("Connect your Google account before using Google Drive.");
 
-        return new DriveService(new BaseClientService.Initializer
+        var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
         {
-            HttpClientInitializer = credential,
-            ApplicationName = _options.ApplicationName
+            ClientSecrets = new ClientSecrets { ClientId = _options.ClientId, ClientSecret = _options.ClientSecret },
+            Scopes = [DriveService.Scope.DriveFile],
+            DataStore = new NullDataStore()
         });
+        var credential = new UserCredential(flow, user.Id, new TokenResponse { AccessToken = accessToken, RefreshToken = refreshToken });
+        await credential.RefreshTokenAsync(cancellationToken);
+        await _userManager.SetAuthenticationTokenAsync(user, GoogleDefaults.AuthenticationScheme, "access_token", credential.Token.AccessToken);
+        return new DriveService(new BaseClientService.Initializer { HttpClientInitializer = credential, ApplicationName = _options.ApplicationName });
+    }
+
+    private async Task<IdentityUser> GetCurrentUserAsync()
+    {
+        var principal = _httpContextAccessor.HttpContext?.User ?? throw new InvalidOperationException("Sign in with Google before using Google Drive.");
+        return await _userManager.GetUserAsync(principal) ?? throw new InvalidOperationException("Sign in with Google before using Google Drive.");
     }
 
     private void ValidateOptions()
     {
-        if (string.IsNullOrWhiteSpace(_options.ServiceAccountJsonPath))
-        {
-            throw new InvalidOperationException("GoogleDrive:ServiceAccountJsonPath must be configured when Google Drive uploads are enabled.");
-        }
-
-        if (!File.Exists(_options.ServiceAccountJsonPath))
-        {
-            throw new FileNotFoundException("Google Drive service account JSON file was not found.", _options.ServiceAccountJsonPath);
-        }
-
-        if (string.IsNullOrWhiteSpace(_options.FolderId))
-        {
-            throw new InvalidOperationException("GoogleDrive:FolderId must be configured when Google Drive uploads are enabled.");
-        }
-
-        if (string.IsNullOrWhiteSpace(_options.ApplicationName))
-        {
-            throw new InvalidOperationException("GoogleDrive:ApplicationName must be configured when Google Drive uploads are enabled.");
-        }
+        if (string.IsNullOrWhiteSpace(_options.ClientId) || string.IsNullOrWhiteSpace(_options.ClientSecret)) throw new InvalidOperationException("GoogleDrive:ClientId and GoogleDrive:ClientSecret must be configured.");
+        if (string.IsNullOrWhiteSpace(_options.FolderId)) throw new InvalidOperationException("GoogleDrive:FolderId must be configured.");
     }
 }

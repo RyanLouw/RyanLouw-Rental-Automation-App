@@ -50,13 +50,12 @@ public class HomeController : Controller
     {
         return exception switch
         {
-            FileNotFoundException => "Google Drive could not find the service-account JSON file. Check GoogleDrive:ServiceAccountJsonPath.",
             InvalidOperationException => exception.Message,
             _ when exception.Message.Contains("File not found", StringComparison.OrdinalIgnoreCase)
-                => "Google Drive could not find the configured folder. Check GoogleDrive:FolderId and share that folder with the service-account email address as an Editor.",
+                => "Google Drive could not find the configured folder. Check GoogleDrive:FolderId and make sure the connected Google account can edit that folder.",
             _ when exception.Message.Contains("permission", StringComparison.OrdinalIgnoreCase)
                 || exception.Message.Contains("forbidden", StringComparison.OrdinalIgnoreCase)
-                => "Google Drive denied access. Share the configured folder with the service-account email address and give it Editor access.",
+                => "Google Drive denied access. Sign in with the Google account that owns the folder or has Editor access.",
             _ => "Google Drive could not create the test folder and file. Check that the Google Drive API is enabled, then check the application log for the technical error."
         };
     }
