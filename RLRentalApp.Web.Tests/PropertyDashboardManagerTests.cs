@@ -441,6 +441,9 @@ public class PropertyDashboardManagerTests
         public byte[] LastContent { get; private set; } = [];
         public string LastContentType { get; private set; } = string.Empty;
 
+        public Task<GoogleDriveConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new GoogleDriveConnectionTestResult());
+
         public Task<string?> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
         {
             UploadCount++;

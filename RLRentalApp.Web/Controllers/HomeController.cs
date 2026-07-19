@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RLRentalApp.Models;
 using RLRentalApp.Web.Managers;
+using RLRentalApp.Web.Services;
 using System.Diagnostics;
 
 namespace RLRentalApp.Controllers;
@@ -12,17 +13,37 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly IPropertyDashboardManager _propertyDashboardManager;
+    private readonly IGoogleDriveStorageService _googleDriveStorageService;
 
-    public HomeController(ILogger<HomeController> logger, IPropertyDashboardManager propertyDashboardManager)
+    public HomeController(
+        ILogger<HomeController> logger,
+        IPropertyDashboardManager propertyDashboardManager,
+        IGoogleDriveStorageService googleDriveStorageService)
     {
         _logger = logger;
         _propertyDashboardManager = propertyDashboardManager;
+        _googleDriveStorageService = googleDriveStorageService;
     }
 
     public async Task<IActionResult> Index()
     {
         var vm = await _propertyDashboardManager.GetDashboardAsync();
         return View(vm);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> TestGoogleDrive()
+    {
+        try
+        {
+            var result = await _googleDriveStorageService.TestConnectionAsync();
+            return Json(result);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Google Drive connection test failed.");
+            return BadRequest(new { message = "Could not create the Google Drive test folder and file. Check the Google Drive configuration and folder sharing, then try again." });
+        }
     }
 
     [HttpGet]

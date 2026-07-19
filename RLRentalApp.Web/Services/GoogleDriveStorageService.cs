@@ -15,6 +15,49 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
         _options = options.Value;
     }
 
+    public async Task<GoogleDriveConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateOptions();
+
+        using var driveService = CreateDriveService();
+        var suffix = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var testFolderName = $"RLRentalApp-GoogleDrive-Test-{suffix}";
+        var folderRequest = driveService.Files.Create(new GoogleFile
+        {
+            Name = testFolderName,
+            MimeType = "application/vnd.google-apps.folder",
+            Parents = [_options.FolderId]
+        });
+        folderRequest.Fields = "id,name";
+
+        var createdFolder = await folderRequest.ExecuteAsync(cancellationToken);
+        var testFileName = "connection-test.txt";
+        var testContent = System.Text.Encoding.UTF8.GetBytes(
+            $"Google Drive connection succeeded at {DateTime.UtcNow:O}. You can delete this test folder and file after checking them.");
+
+        await using var testFileStream = new MemoryStream(testContent);
+        var fileRequest = driveService.Files.Create(new GoogleFile
+        {
+            Name = testFileName,
+            Parents = [createdFolder.Id]
+        }, testFileStream, "text/plain");
+        fileRequest.Fields = "id,name";
+
+        var uploadResult = await fileRequest.UploadAsync(cancellationToken);
+        if (uploadResult.Exception is not null)
+        {
+            throw uploadResult.Exception;
+        }
+
+        return new GoogleDriveConnectionTestResult
+        {
+            TestFolderName = testFolderName,
+            TestFolderId = createdFolder.Id ?? string.Empty,
+            TestFileName = testFileName,
+            TestFileId = fileRequest.ResponseBody?.Id ?? string.Empty
+        };
+    }
+
     public async Task<string?> UploadFileAsync(
         string fileName,
         byte[] content,
@@ -28,16 +71,7 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
 
         ValidateOptions();
 
-        await using var credentialStream = File.OpenRead(_options.ServiceAccountJsonPath);
-        var credential = GoogleCredential
-            .FromStream(credentialStream)
-            .CreateScoped(DriveService.Scope.DriveFile);
-
-        using var driveService = new DriveService(new BaseClientService.Initializer
-        {
-            HttpClientInitializer = credential,
-            ApplicationName = _options.ApplicationName
-        });
+        using var driveService = CreateDriveService();
 
         var fileMetadata = new GoogleFile
         {
@@ -56,6 +90,20 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
         }
 
         return request.ResponseBody?.Id;
+    }
+
+    private DriveService CreateDriveService()
+    {
+        using var credentialStream = File.OpenRead(_options.ServiceAccountJsonPath);
+        var credential = GoogleCredential
+            .FromStream(credentialStream)
+            .CreateScoped(DriveService.Scope.DriveFile);
+
+        return new DriveService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = _options.ApplicationName
+        });
     }
 
     private void ValidateOptions()

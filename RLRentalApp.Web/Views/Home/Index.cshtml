@@ -8,6 +8,17 @@
     <h1 class="mb-3">Property Dashboard</h1>
     <p class="text-muted mb-4">Choose a property to track payment status, services, rent, and extra notes.</p>
 
+    <section class="card border-secondary mb-3">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <div class="flex-grow-1">
+                <h2 class="h6 mb-1">Google Drive connection</h2>
+                <p class="text-muted mb-0">Creates a new test folder and a <code>connection-test.txt</code> file inside your configured Google Drive folder.</p>
+            </div>
+            <button class="btn btn-outline-secondary" type="button" id="testGoogleDriveBtn">Test Google Drive</button>
+            <div id="googleDriveTestMsg" class="alert mb-0 d-none" role="status"></div>
+        </div>
+    </section>
+
     <div id="selectedPropertyHeader" class="alert alert-primary d-none"></div>
 
     <section id="propertySwitcherSection" class="card shadow-sm mb-3 d-none">
@@ -477,6 +488,8 @@
 @section Scripts {
     <script>
         (() => {
+            const testGoogleDriveBtn = document.getElementById('testGoogleDriveBtn');
+            const googleDriveTestMsg = document.getElementById('googleDriveTestMsg');
             const propertySelect = document.getElementById('propertySelect');
             const confirmButton = document.getElementById('confirmPropertyBtn');
             const selectedHeader = document.getElementById('selectedPropertyHeader');
@@ -615,6 +628,28 @@
                 lateChargeDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             }
 
+
+            testGoogleDriveBtn?.addEventListener('click', async () => {
+                testGoogleDriveBtn.disabled = true;
+                googleDriveTestMsg.classList.add('d-none');
+
+                try {
+                    const response = await fetch('/Home/TestGoogleDrive', { method: 'POST' });
+                    const payload = await response.json();
+
+                    googleDriveTestMsg.className = response.ok ? 'alert alert-success mb-0' : 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = response.ok
+                        ? `Connected. Created "${payload.testFolderName}" with "${payload.testFileName}" in your configured Google Drive folder.`
+                        : (payload.message || 'Google Drive test failed.');
+                    googleDriveTestMsg.classList.remove('d-none');
+                } catch {
+                    googleDriveTestMsg.className = 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = 'Google Drive test failed. Check your connection and configuration.';
+                    googleDriveTestMsg.classList.remove('d-none');
+                } finally {
+                    testGoogleDriveBtn.disabled = false;
+                }
+            });
 
             propertySelect?.addEventListener('change', () => {
                 confirmButton.disabled = !propertySelect.value;

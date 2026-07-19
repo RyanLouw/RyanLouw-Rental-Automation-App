@@ -343,3 +343,7 @@ GoogleDrive__FolderId="your-google-drive-folder-id"
 ```
 
 If `GoogleDrive:Enabled` is `false`, the app still generates and downloads PDFs normally but skips Google Drive upload.
+
+### Test the connection
+
+After adding your settings and starting the app, use the **Test Google Drive** button at the top of the Property Dashboard. A successful test creates a new `RLRentalApp-GoogleDrive-Test-<timestamp>` folder inside the Drive folder configured by `GoogleDrive:FolderId`, then creates `connection-test.txt` inside it. Seeing both items in Google Drive confirms that the app can create folders and save files there. You can delete the test folder afterwards.
