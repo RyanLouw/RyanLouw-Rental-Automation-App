@@ -42,8 +42,23 @@ public class HomeController : Controller
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Google Drive connection test failed.");
-            return BadRequest(new { message = "Could not create the Google Drive test folder and file. Check the Google Drive configuration and folder sharing, then try again." });
+            return BadRequest(new { message = GetGoogleDriveConnectionErrorMessage(exception) });
         }
+    }
+
+    private static string GetGoogleDriveConnectionErrorMessage(Exception exception)
+    {
+        return exception switch
+        {
+            FileNotFoundException => "Google Drive could not find the service-account JSON file. Check GoogleDrive:ServiceAccountJsonPath.",
+            InvalidOperationException => exception.Message,
+            _ when exception.Message.Contains("File not found", StringComparison.OrdinalIgnoreCase)
+                => "Google Drive could not find the configured folder. Check GoogleDrive:FolderId and share that folder with the service-account email address as an Editor.",
+            _ when exception.Message.Contains("permission", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("forbidden", StringComparison.OrdinalIgnoreCase)
+                => "Google Drive denied access. Share the configured folder with the service-account email address and give it Editor access.",
+            _ => "Google Drive could not create the test folder and file. Check that the Google Drive API is enabled, then check the application log for the technical error."
+        };
     }
 
     [HttpGet]

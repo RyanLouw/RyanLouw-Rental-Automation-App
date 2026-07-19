@@ -347,3 +347,5 @@ If `GoogleDrive:Enabled` is `false`, the app still generates and downloads PDFs 
 ### Test the connection
 
 After adding your settings and starting the app, use the **Test Google Drive** button at the top of the Property Dashboard. A successful test creates a new `RLRentalApp-GoogleDrive-Test-<timestamp>` folder inside the Drive folder configured by `GoogleDrive:FolderId`, then creates `connection-test.txt` inside it. Seeing both items in Google Drive confirms that the app can create folders and save files there. You can delete the test folder afterwards.
+
+If the test fails, the dashboard now identifies the likely setup issue. For a missing folder, re-check `GoogleDrive:FolderId` and share that exact folder with the service-account email as an **Editor**. For a permissions message, the folder has not been shared correctly. For a missing JSON-file message, re-check `GoogleDrive:ServiceAccountJsonPath`. Also confirm that the **Google Drive API** is enabled in the Google Cloud project that owns the service account.
