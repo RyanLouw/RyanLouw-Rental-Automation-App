@@ -892,15 +892,20 @@
                 }
 
                 const rows = renterPaymentMatches.map(match => {
-                    const rowClass = match.warning ? 'table-warning' : 'table-success';
+                    const paidTotal = (match.payments || []).reduce((total, payment) => total + Number(payment.amount || 0), 0);
+                    const expectedAmount = match.expectedAmount === null || match.expectedAmount === undefined ? null : Number(match.expectedAmount);
+                    const warning = expectedAmount !== null && paidTotal > expectedAmount
+                        ? `Paid ${money(paidTotal)}, which is more than the expected ${money(expectedAmount)}. Check the amount before saving.`
+                        : match.warning;
+                    const rowClass = warning ? 'table-warning' : 'table-success';
                     return `
                         <tr class="${rowClass}">
                             <td>${match.propertyName}</td>
                             <td>${match.tenantName}</td>
                             <td><code>${match.paymentReference || '-'}</code></td>
                             <td class="text-end">${match.expectedAmount !== null && match.expectedAmount !== undefined ? Number(match.expectedAmount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : '-'}</td>
-                            <td class="text-end">${Number(match.paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
-                            <td>${match.warning || 'Paid'}</td>
+                            <td class="text-end">${Number(paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td>${warning || 'Paid'}</td>
                         </tr>`;
                 }).join('');
 
@@ -922,15 +927,26 @@
 
                 paymentTableBody.innerHTML = parsedPayments.map((payment, index) => `
                     <tr>
-                        <td>${new Date(payment.paidOn).toLocaleDateString()}</td>
-                        <td>${payment.description}</td>
-                        <td class="text-end">${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td><input class="form-control form-control-sm payment-date" data-index="${index}" type="date" value="${new Date(payment.paidOn).toISOString().slice(0, 10)}" /></td>
+                        <td><input class="form-control form-control-sm payment-description" data-index="${index}" value="${payment.description}" /></td>
+                        <td><input class="form-control form-control-sm payment-amount text-end" data-index="${index}" type="number" min="0" step="0.01" value="${payment.amount}" /></td>
                         <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-index="${index}" type="button">Delete</button></td>
                     </tr>
                 `).join('');
 
                 renderRenterPaymentSummary();
             };
+
+            paymentTableBody?.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLInputElement)) return;
+                const index = Number(target.dataset.index);
+                if (Number.isNaN(index) || !parsedPayments[index]) return;
+                if (target.classList.contains('payment-date')) parsedPayments[index].paidOn = target.value;
+                if (target.classList.contains('payment-description')) parsedPayments[index].description = target.value;
+                if (target.classList.contains('payment-amount')) parsedPayments[index].amount = Number(target.value);
+                renderPaymentRows();
+            });
 
             paymentTableBody?.addEventListener('click', (event) => {
                 const target = event.target;
@@ -1150,11 +1166,11 @@
                     notes: paymentNotesInput?.value || ''
                 };
 
-                const response = await fetch('/Home/SavePayments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
+                const formData = new FormData();
+                formData.append('requestJson', JSON.stringify(body));
+                const bankPdf = paymentPdfFile?.files?.[0];
+                if (bankPdf) formData.append('pdfFile', bankPdf);
+                const response = await fetch('/Home/SavePayments', { method: 'POST', body: formData });
 
                 const payload = await response.json();
 

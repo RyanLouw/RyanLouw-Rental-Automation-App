@@ -166,7 +166,6 @@ public class HomeController : Controller
             return BadRequest(result);
         }
 
-        await UploadDriveDocumentAsync(pdfFile!, ["Bank", DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
         return Json(result);
     }
 
@@ -181,19 +180,31 @@ public class HomeController : Controller
             return BadRequest(result);
         }
 
-        await UploadDriveDocumentAsync(pdfFile!, ["Bank", DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
         return Json(result);
     }
 
 
     [HttpPost]
-    public async Task<IActionResult> SavePayments([FromBody] SavePaymentsRequestVm request)
+    public async Task<IActionResult> SavePayments(string requestJson, IFormFile? pdfFile)
     {
-        var result = await _propertyDashboardManager.SavePaymentsAsync(request);
+        var request = System.Text.Json.JsonSerializer.Deserialize<SavePaymentsRequestVm>(requestJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (request is null) return BadRequest(new { message = "Could not read the payment details." });
 
-        if (!result.Success)
+        var result = await _propertyDashboardManager.SavePaymentsAsync(request);
+        if (!result.Success) return BadRequest(result);
+
+        if (pdfFile is not null && pdfFile.Length > 0)
         {
-            return BadRequest(result);
+            try
+            {
+                var month = result.SavedPayments.FirstOrDefault()?.PaidOn ?? DateTime.UtcNow;
+                await UploadDriveDocumentAsync(pdfFile, ["Bank", month.Year.ToString(), month.ToString("MM")]);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Payment values were saved but the bank PDF upload failed.");
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"Payment values were saved, but the bank PDF was not uploaded: {GetGoogleDriveConnectionErrorMessage(exception)}", savedPayments = result.SavedPayments });
+            }
         }
 
         return Json(result);
