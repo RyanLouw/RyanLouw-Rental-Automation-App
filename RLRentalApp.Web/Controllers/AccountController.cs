@@ -22,7 +22,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public IActionResult Login(string? returnUrl = null)
     {
-        return View();
+        return View(new LoginVm { ReturnUrl = returnUrl });
     }
 
     [HttpPost]
@@ -77,7 +77,7 @@ public class AccountController : Controller
             if (string.IsNullOrWhiteSpace(email))
             {
                 ModelState.AddModelError(string.Empty, "Google did not provide an email address.");
-                return View("Login");
+                return View("Login", new LoginVm { ReturnUrl = returnUrl });
             }
 
             var user = await _userManager.FindByEmailAsync(email) ?? new IdentityUser { UserName = email, Email = email, EmailConfirmed = true };
@@ -87,7 +87,7 @@ public class AccountController : Controller
                 if (!createResult.Succeeded)
                 {
                     foreach (var error in createResult.Errors) ModelState.AddModelError(string.Empty, error.Description);
-                    return View("Login");
+                    return View("Login", new LoginVm { ReturnUrl = returnUrl });
                 }
             }
 
@@ -95,7 +95,7 @@ public class AccountController : Controller
             if (!addLoginResult.Succeeded)
             {
                 foreach (var error in addLoginResult.Errors) ModelState.AddModelError(string.Empty, error.Description);
-                return View("Login");
+                return View("Login", new LoginVm { ReturnUrl = returnUrl });
             }
         }
 
