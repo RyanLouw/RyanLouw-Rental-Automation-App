@@ -1170,9 +1170,26 @@
                 formData.append('requestJson', JSON.stringify(body));
                 const bankPdf = paymentPdfFile?.files?.[0];
                 if (bankPdf) formData.append('pdfFile', bankPdf);
-                const response = await fetch('/Home/SavePayments', { method: 'POST', body: formData });
 
-                const payload = await response.json();
+                savePaymentsBtn.disabled = true;
+                savePaymentsMsg.className = 'alert alert-info mt-3';
+                savePaymentsMsg.textContent = bankPdf
+                    ? 'Saving payment values and uploading the bank PDF to Google Drive. Please wait...'
+                    : 'Saving payment values. Please wait...';
+                savePaymentsMsg.classList.remove('d-none');
+
+                let response;
+                let payload;
+                try {
+                    response = await fetch('/Home/SavePayments', { method: 'POST', body: formData });
+                    payload = await response.json();
+                } catch {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = 'The save request did not finish. Check your connection and try again.';
+                    return;
+                } finally {
+                    savePaymentsBtn.disabled = false;
+                }
 
                 if (!response.ok) {
                     savePaymentsMsg.className = 'alert alert-danger mt-3';
