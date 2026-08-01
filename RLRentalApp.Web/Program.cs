@@ -74,7 +74,7 @@ using (var scope = app.Services.CreateScope())
     await authDb.Database.MigrateAsync();
 }
 
-await IdentitySeeder.SeedAsync(app.Services);
+await IdentitySeeder.SeedAsync(app.Services, app.Configuration);
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
