@@ -79,13 +79,17 @@ jobs:
           service=rlrentalapp.service
           deployment_stage="initialization"
 
-          report_failure() {
-            local exit_code=$?
-            echo "Deployment failed during $deployment_stage at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
+          show_service_diagnostics() {
             echo "Service state:" >&2
             systemctl --no-pager --full status "$service" >&2 || true
             echo "Recent service logs:" >&2
             journalctl -u "$service" -n 50 --no-pager >&2 || true
+          }
+
+          report_failure() {
+            local exit_code=$?
+            echo "Deployment failed during $deployment_stage at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
+            show_service_diagnostics
             exit "$exit_code"
           }
           trap report_failure ERR
@@ -132,7 +136,10 @@ jobs:
           ln -sfn "$release_dir/web" "$app_dir/publish"
           if ! systemctl start "$service" || \
              ! curl --fail --silent --show-error --retry 10 --retry-delay 2 \
+               --retry-connrefused \
                http://127.0.0.1:5000/ >/dev/null; then
+            echo "The new release failed its startup health check." >&2
+            show_service_diagnostics
             systemctl stop "$service" || true
             if [[ -n "$previous_publish" && -d "$previous_publish" ]]; then
               ln -sfn "$previous_publish" "$app_dir/publish"
