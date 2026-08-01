@@ -1,5 +1,106 @@
 # RyanLouw-Rental-Automation-App
 
+## Deploying to the existing DigitalOcean Droplet
+
+The production server runs Ubuntu 24.04 with Nginx on port 80, the ASP.NET app as
+`rlrentalapp.service` on `127.0.0.1:5000`, and PostgreSQL on `127.0.0.1:5432`.
+Because the Droplet has only 458 MiB RAM and 2.8 GB free disk, deployment uses the
+installed .NET runtime and systemd rather than Docker.
+
+The GitHub workflow tests and publishes both .NET projects on a GitHub runner,
+uploads only the published files, runs migrations, switches
+`/var/www/rlrentalapp/publish` to the new release, restarts the existing service,
+and checks the local HTTP endpoint. If startup fails, it switches back to the
+previous application files.
+
+### One-time server configuration
+
+Create a root-only environment file on the Droplet:
+
+```bash
+sudoedit /etc/rlrentalapp.env
+sudo chmod 600 /etc/rlrentalapp.env
+sudo chown root:root /etc/rlrentalapp.env
+```
+
+Use shell-compatible quoted values; never commit this file:
+
+```dotenv
+ASPNETCORE_ENVIRONMENT="Production"
+ASPNETCORE_URLS="http://127.0.0.1:5000"
+ConnectionStrings__rentaldb="Host=localhost;Port=5432;Database=rentaldb;Username=YOUR_USER;Password=YOUR_PASSWORD"
+GmailSmtp__Host="smtp.gmail.com"
+GmailSmtp__Port="587"
+GmailSmtp__EnableSsl="true"
+GmailSmtp__Username="you@example.com"
+GmailSmtp__AppPassword="YOUR_APP_PASSWORD"
+GmailSmtp__FromEmail="you@example.com"
+GmailSmtp__FromDisplayName="RLRentalApp"
+GoogleDrive__Enabled="false"
+GoogleDrive__ApplicationName="RLRentalApp"
+GoogleDrive__ClientId=""
+GoogleDrive__ClientSecret=""
+GoogleDrive__FolderId=""
+```
+
+For a brand-new database only, an initial administrator can be created by adding
+these lines temporarily with a unique password:
+
+```dotenv
+SeedAdmin__Email="admin@example.com"
+SeedAdmin__Password="A-UNIQUE-LONG-PASSWORD"
+```
+
+Restart once, confirm the account exists, and then remove both `SeedAdmin` lines.
+An existing production database does not need them.
+
+Make the existing service load it with `sudo systemctl edit rlrentalapp.service`:
+
+```ini
+[Service]
+EnvironmentFile=/etc/rlrentalapp.env
+```
+
+Then run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rlrentalapp.service
+sudo systemctl status rlrentalapp.service --no-pager
+curl --fail http://127.0.0.1:5000/
+```
+
+Do not proceed until the service and local request succeed. Back up the PostgreSQL
+database before the first automated migration.
+
+### GitHub production secrets
+
+Create a GitHub environment named `production` and add:
+
+| Secret | Value |
+| --- | --- |
+| `DIGITALOCEAN_HOST` | Droplet IP address |
+| `DIGITALOCEAN_USER` | `root` for the current server |
+| `DIGITALOCEAN_SSH_PRIVATE_KEY` | Dedicated deployment private key |
+| `DIGITALOCEAN_SSH_KNOWN_HOSTS` | Verified SSH host-key line |
+
+Never paste the private key or application passwords into an issue, pull request,
+or committed file. The workflow deploys pushes to `main` and can also be started
+manually from the Actions page.
+
+### Operations
+
+```bash
+systemctl status rlrentalapp.service --no-pager
+journalctl -u rlrentalapp.service -n 200 --no-pager
+nginx -t
+curl -I http://127.0.0.1:5000/
+```
+
+Nginx should remain the only public web listener. Port 5000 and PostgreSQL port
+5432 remain bound to localhost. Add a domain and HTTPS before using real tenant,
+login, or financial data over the public internet.
+
 ## One-shot database migration script
 
 If you want one file to run now instead of opening all 10 migration files, generate a combined SQL script from the existing ordered migration scripts and run that single file with `psql`.
