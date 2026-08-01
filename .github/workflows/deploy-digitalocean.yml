@@ -25,11 +25,13 @@ jobs:
       - run: dotnet restore RLRentalApp.sln
       - run: dotnet build RLRentalApp.sln --configuration Release --no-restore
       - run: dotnet test RLRentalApp.sln --configuration Release --no-build
-      - name: Publish applications
+      - name: Publish application
         run: |
           dotnet publish RLRentalApp.Web/RLRentalApp.Web.csproj -c Release --no-build -o artifact/web
-          dotnet publish RLRentalApp.Migrations/RLRentalApp.Migrations.csproj -c Release --no-build -o artifact/migrations
-          tar -C artifact -czf rlrentalapp-publish.tar.gz web migrations
+          # Temporarily disabled until the production database credentials are fixed:
+          # dotnet publish RLRentalApp.Migrations/RLRentalApp.Migrations.csproj -c Release --no-build -o artifact/migrations
+          # tar -C artifact -czf rlrentalapp-publish.tar.gz web migrations
+          tar -C artifact -czf rlrentalapp-publish.tar.gz web
       - uses: actions/upload-artifact@v5
         with:
           name: production-publish
@@ -61,7 +63,7 @@ jobs:
         run: |
           scp rlrentalapp-publish.tar.gz \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/rlrentalapp-${{ github.sha }}.tar.gz"
-      - name: Migrate and switch release
+      - name: Switch application release
         env:
           DEPLOY_HOST: ${{ secrets.DIGITALOCEAN_HOST }}
           DEPLOY_USER: ${{ secrets.DIGITALOCEAN_USER }}
@@ -75,10 +77,11 @@ jobs:
           archive="/tmp/rlrentalapp-$RELEASE_SHA.tar.gz"
           env_file=/etc/rlrentalapp.env
           service=rlrentalapp.service
+          deployment_stage="initialization"
 
           report_failure() {
             local exit_code=$?
-            echo "Deployment failed at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
+            echo "Deployment failed during $deployment_stage at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
             echo "Service state:" >&2
             systemctl --no-pager --full status "$service" >&2 || true
             echo "Recent service logs:" >&2
@@ -87,6 +90,7 @@ jobs:
           }
           trap report_failure ERR
 
+          deployment_stage="server prerequisite checks"
           echo "Checking server prerequisites..."
           command -v dotnet >/dev/null
           command -v curl >/dev/null
@@ -94,21 +98,27 @@ jobs:
           test -s "$env_file"
           bash -n "$env_file"
 
+          deployment_stage="release extraction"
           echo "Extracting release $RELEASE_SHA..."
           mkdir -p "$release_dir"
           tar -xzf "$archive" -C "$release_dir"
           chmod -R go-w "$release_dir"
           test -f "$release_dir/web/RLRentalApp.Web.dll"
-          test -f "$release_dir/migrations/RLRentalApp.Migrations.dll"
 
-          echo "Loading production configuration..."
-          set -a
-          # The file is root-owned and uses shell-compatible KEY="value" lines.
-          source "$env_file"
-          set +a
-
-          echo "Running database migrations..."
-          dotnet "$release_dir/migrations/RLRentalApp.Migrations.dll"
+          # Database migrations are temporarily disabled until the production
+          # database credentials are fixed. Restore the migration publish above
+          # before re-enabling this block.
+          # test -f "$release_dir/migrations/RLRentalApp.Migrations.dll"
+          #
+          # deployment_stage="production configuration loading"
+          # echo "Loading production configuration..."
+          # set -a
+          # source "$env_file"
+          # set +a
+          #
+          # deployment_stage="database migrations"
+          # echo "Running database migrations..."
+          # dotnet "$release_dir/migrations/RLRentalApp.Migrations.dll"
 
           previous_publish=$(readlink -f "$app_dir/publish" || true)
           if [[ -d "$app_dir/publish" && ! -L "$app_dir/publish" ]]; then
@@ -116,6 +126,7 @@ jobs:
             mv "$app_dir/publish" "$previous_publish"
           fi
 
+          deployment_stage="application release switch"
           echo "Switching the application release..."
           systemctl stop "$service"
           ln -sfn "$release_dir/web" "$app_dir/publish"
