@@ -16,8 +16,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
           cache: true
@@ -30,7 +30,7 @@ jobs:
           dotnet publish RLRentalApp.Web/RLRentalApp.Web.csproj -c Release --no-build -o artifact/web
           dotnet publish RLRentalApp.Migrations/RLRentalApp.Migrations.csproj -c Release --no-build -o artifact/migrations
           tar -C artifact -czf rlrentalapp-publish.tar.gz web migrations
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: production-publish
           path: rlrentalapp-publish.tar.gz
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: production-publish
       - name: Configure SSH
@@ -76,15 +76,38 @@ jobs:
           env_file=/etc/rlrentalapp.env
           service=rlrentalapp.service
 
+          report_failure() {
+            local exit_code=$?
+            echo "Deployment failed at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
+            echo "Service state:" >&2
+            systemctl --no-pager --full status "$service" >&2 || true
+            echo "Recent service logs:" >&2
+            journalctl -u "$service" -n 50 --no-pager >&2 || true
+            exit "$exit_code"
+          }
+          trap report_failure ERR
+
+          echo "Checking server prerequisites..."
+          command -v dotnet >/dev/null
+          command -v curl >/dev/null
+          test -f "$archive"
           test -s "$env_file"
+          bash -n "$env_file"
+
+          echo "Extracting release $RELEASE_SHA..."
           mkdir -p "$release_dir"
           tar -xzf "$archive" -C "$release_dir"
           chmod -R go-w "$release_dir"
+          test -f "$release_dir/web/RLRentalApp.Web.dll"
+          test -f "$release_dir/migrations/RLRentalApp.Migrations.dll"
 
+          echo "Loading production configuration..."
           set -a
           # The file is root-owned and uses shell-compatible KEY="value" lines.
           source "$env_file"
           set +a
+
+          echo "Running database migrations..."
           dotnet "$release_dir/migrations/RLRentalApp.Migrations.dll"
 
           previous_publish=$(readlink -f "$app_dir/publish" || true)
@@ -93,6 +116,7 @@ jobs:
             mv "$app_dir/publish" "$previous_publish"
           fi
 
+          echo "Switching the application release..."
           systemctl stop "$service"
           ln -sfn "$release_dir/web" "$app_dir/publish"
           if ! systemctl start "$service" || \
@@ -106,6 +130,7 @@ jobs:
             exit 1
           fi
 
+          echo "Deployment health check passed."
           rm -f "$archive"
           find "$app_dir/releases" -mindepth 1 -maxdepth 1 -type d \
             ! -path "$release_dir" -mtime +7 -exec rm -rf {} +
