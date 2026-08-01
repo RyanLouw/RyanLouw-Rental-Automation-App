@@ -21,9 +21,9 @@ public static class Program
     {
         try
         {
-
             Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
+            Console.WriteLine("Starting database migration runner.");
             Log.Information("Starting DB migration runner");
 
             var configSettings = new ConfigurationBuilder()
@@ -41,14 +41,20 @@ public static class Program
                 using var scope = serviceProvider.CreateScope();
                 MigrateUp(scope.ServiceProvider);
 
+                Console.WriteLine($"Finished migrations for '{tag.ConnectionKey}'.");
                 Log.Information("Finished migrations for {ConnectionKey}", tag.ConnectionKey);
             }
 
+            Console.WriteLine("All database migrations completed successfully.");
             Log.Information("✅ All migrations completed successfully");
             return 0;
         }
         catch (Exception ex)
         {
+            // Serilog may not have a sink configured in production. Always write the
+            // exception to stderr so a one-shot deployment can report the actual cause.
+            Console.Error.WriteLine("Database migration runner failed:");
+            Console.Error.WriteLine(ex);
             Log.Error(ex, "❌ Migration runner failed");
             return 1;
         }
