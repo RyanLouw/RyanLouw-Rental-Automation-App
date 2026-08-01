@@ -34,7 +34,8 @@
                     <button class="btn btn-success" type="button" data-add-ledger="Revenue">+ Add to Revenue</button>
                     <button class="btn btn-danger" type="button" data-add-ledger="Expenses">+ Add to Expenses</button>
                 </div>
-                @if (Model.Descriptions.Count == 0)<div class="alert alert-warning mt-3 mb-0">No tax ledger descriptions exist for this property yet.</div>
+                @if (Model.Descriptions.Count == 0)
+                {<div class="alert alert-warning mt-3 mb-0">No tax ledger descriptions exist for this property yet.</div>}
             </div>
         </div>
 
