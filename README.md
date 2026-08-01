@@ -304,3 +304,35 @@ For production, use environment variables or a managed secret store (Azure Key V
 - The app still reads `appsettings.json` and `appsettings.Development.json` exactly as before.
 - `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
 - Demo/default behavior is unchanged unless you add local secrets or environment variables.
+
+## Google Drive setup (save statement PDFs to your Drive)
+
+This app uses **Sign in with Google** and asks for Google Drive permission for the account you sign in with. It does not use a service-account JSON key. The permission allows the app to save statements to the folder you select, including a folder that existed before the app was connected.
+
+1. In Google Cloud Console, configure the **OAuth consent screen**. While the app is in **Testing**, open **Audience** (or **Test users**) and add every Google email that will sign in, such as the Drive-folder owner and your personal account. This avoids the Google `Error 403: access_denied` verification message.
+2. Create an **OAuth 2.0 Client ID** of type **Web application**.
+3. Add the **Google OAuth callback URI** `https://your-domain/signin-google` under **Authorized redirect URIs**. This is not the `Account/GoogleLoginCallback` route; the Google authentication handler receives the Google response at `/signin-google` first. For local development in this project, use `https://localhost:7241/signin-google`.
+4. Enable the **Google Drive API**.
+5. Create a folder in the Google Drive account you will use, and copy its folder ID from the URL.
+6. Add the OAuth client values outside git in `RLRentalApp.Web/appsettings.Local.json`:
+
+```json
+{
+  "GoogleDrive": {
+    "Enabled": true,
+    "ClientId": "your-oauth-client-id",
+    "ClientSecret": "your-oauth-client-secret",
+    "FolderId": "your-google-drive-folder-id"
+  }
+}
+```
+
+For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder. If you change the folder or Google Drive permission settings, sign out and connect Google again so Google can issue a fresh permission token.
+
+### Test the connection
+
+Use **Test Google Drive** at the top of the Property Dashboard. A successful test creates a timestamped folder and `connection-test.txt` in your configured Drive folder.
+
+### Uploaded source-document folders
+
+Set `GoogleDrive:Enabled` to `true` in the active configuration. The connection test and document uploads require it. When Google Drive is enabled, PDFs selected in **Did they pay?** are saved under `Bank/<year>/<month>/`. PDFs selected in **Add services** are saved under `Properties/<property name>/<year>/<month>/`. The app creates any missing folders automatically before uploading the PDF.

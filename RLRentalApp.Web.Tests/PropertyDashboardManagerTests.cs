@@ -2,12 +2,18 @@ using RLRentalApp.Models;
 using RLRentalApp.Web.DataAccess;
 using RLRentalApp.Web.Managers;
 using RLRentalApp.Web.Services;
+using QuestPDF.Infrastructure;
 using Xunit;
 
 namespace RLRentalApp.Web.Tests;
 
 public class PropertyDashboardManagerTests
 {
+    public PropertyDashboardManagerTests()
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+    }
+
     [Fact]
     public async Task GetPropertyStatusAsync_UsesLedgerSnapshotForCurrentBalance()
     {
@@ -109,6 +115,29 @@ public class PropertyDashboardManagerTests
         var manualRow = Assert.Single(statement.Entries.Where(x => x.StatementEntryId == 11));
         Assert.True(rentRow.CanEdit);
         Assert.False(manualRow.CanEdit);
+    }
+
+
+    [Fact]
+    public async Task GeneratePropertyStatementPdfAsync_UploadsPdfToGoogleDrive_WhenStorageServiceProvided()
+    {
+        var dataAccess = new FakePropertyDashboardDataAccess
+        {
+            Property = new PropertyOptionVm { Id = 5, Name = "Flat", AddressLine1 = "Address", IsActive = true },
+            ActiveLease = new ActiveLeaseDataModel { LeaseId = 6, TenantId = 7, TenantName = "Tenant", PaymentReference = "REF", StartDate = new DateTime(2024, 1, 1) },
+            Snapshot = new StatementSnapshotDataModel()
+        };
+        var googleDrive = new FakeGoogleDriveStorageService();
+        var sut = new PropertyDashboardManager(dataAccess, new FakeEmailService(), googleDrive);
+
+        var result = await sut.GeneratePropertyStatementPdfAsync(5, new DateTime(2025, 3, 1));
+
+        Assert.NotNull(result);
+        Assert.Equal("google-drive-file-id", result!.GoogleDriveFileId);
+        Assert.Equal(1, googleDrive.UploadCount);
+        Assert.Equal(result.FileName, googleDrive.LastFileName);
+        Assert.Equal("application/pdf", googleDrive.LastContentType);
+        Assert.NotEmpty(googleDrive.LastContent);
     }
 
     [Fact]
@@ -402,6 +431,30 @@ public class PropertyDashboardManagerTests
 
         public Task<int> InsertManualLateChargesAsync(int leaseId, DateTime chargeDate, decimal interestAmount, bool addLetterFee, string notes)
             => Task.FromResult((interestAmount > 0 ? 1 : 0) + (addLetterFee ? 1 : 0));
+    }
+
+
+    private sealed class FakeGoogleDriveStorageService : IGoogleDriveStorageService
+    {
+        public int UploadCount { get; private set; }
+        public string LastFileName { get; private set; } = string.Empty;
+        public byte[] LastContent { get; private set; } = [];
+        public string LastContentType { get; private set; } = string.Empty;
+
+        public Task<GoogleDriveConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new GoogleDriveConnectionTestResult());
+
+        public Task<string?> UploadFileToFoldersAsync(string fileName, byte[] content, string contentType, IReadOnlyList<string> folderNames, CancellationToken cancellationToken = default)
+            => UploadFileAsync(fileName, content, contentType, cancellationToken);
+
+        public Task<string?> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
+        {
+            UploadCount++;
+            LastFileName = fileName;
+            LastContent = content;
+            LastContentType = contentType;
+            return Task.FromResult<string?>("google-drive-file-id");
+        }
     }
 
     private sealed class FakeEmailService : IEmailService

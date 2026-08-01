@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
+using Google.Apis.Drive.v3;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -27,9 +29,23 @@ builder.Services.AddControllersWithViews(options =>
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("rentaldb")));
 
+builder.Services.AddAuthentication()
+    .AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
+    {
+        var googleDrive = builder.Configuration.GetSection(GoogleDriveOptions.SectionName).Get<GoogleDriveOptions>() ?? new GoogleDriveOptions();
+        options.ClientId = googleDrive.ClientId;
+        options.ClientSecret = googleDrive.ClientSecret;
+        options.SaveTokens = true;
+        options.CallbackPath = "/signin-google";
+        options.Scope.Add(DriveService.Scope.Drive);
+        options.AccessType = "offline";
+    });
+
 builder.Services.AddScoped<IPropertyDashboardDataAccess, PropertyDashboardDataAccess>();
 builder.Services.Configure<GmailSmtpOptions>(builder.Configuration.GetSection(GmailSmtpOptions.SectionName));
+builder.Services.Configure<GoogleDriveOptions>(builder.Configuration.GetSection(GoogleDriveOptions.SectionName));
 builder.Services.AddScoped<IEmailService, GmailEmailService>();
+builder.Services.AddScoped<IGoogleDriveStorageService, GoogleDriveStorageService>();
 builder.Services.AddScoped<IPropertyDashboardManager, PropertyDashboardManager>();
 
 // Identity services

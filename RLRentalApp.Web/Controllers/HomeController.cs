@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RLRentalApp.Models;
 using RLRentalApp.Web.Managers;
+using RLRentalApp.Web.Services;
 using System.Diagnostics;
 
 namespace RLRentalApp.Controllers;
@@ -12,17 +13,51 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly IPropertyDashboardManager _propertyDashboardManager;
+    private readonly IGoogleDriveStorageService _googleDriveStorageService;
 
-    public HomeController(ILogger<HomeController> logger, IPropertyDashboardManager propertyDashboardManager)
+    public HomeController(
+        ILogger<HomeController> logger,
+        IPropertyDashboardManager propertyDashboardManager,
+        IGoogleDriveStorageService googleDriveStorageService)
     {
         _logger = logger;
         _propertyDashboardManager = propertyDashboardManager;
+        _googleDriveStorageService = googleDriveStorageService;
     }
 
     public async Task<IActionResult> Index()
     {
         var vm = await _propertyDashboardManager.GetDashboardAsync();
         return View(vm);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> TestGoogleDrive()
+    {
+        try
+        {
+            var result = await _googleDriveStorageService.TestConnectionAsync();
+            return Json(result);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Google Drive connection test failed.");
+            return BadRequest(new { message = GetGoogleDriveConnectionErrorMessage(exception) });
+        }
+    }
+
+    private static string GetGoogleDriveConnectionErrorMessage(Exception exception)
+    {
+        return exception switch
+        {
+            InvalidOperationException => exception.Message,
+            _ when exception.Message.Contains("File not found", StringComparison.OrdinalIgnoreCase)
+                => "Google Drive could not find the configured folder. Check GoogleDrive:FolderId and make sure the connected Google account can edit that folder.",
+            _ when exception.Message.Contains("permission", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("forbidden", StringComparison.OrdinalIgnoreCase)
+                => "Google Drive denied access. Sign in with the Google account that owns the folder or has Editor access.",
+            _ => "Google Drive could not create the test folder and file. Check that the Google Drive API is enabled, then check the application log for the technical error."
+        };
     }
 
     [HttpGet]
@@ -77,7 +112,7 @@ public class HomeController : Controller
 
 
     [HttpPost]
-    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile, string? pdfPassword)
+    public async Task<IActionResult> ParseServicePdf(IFormFile? pdfFile, string? pdfPassword, int propertyId)
     {
         var result = await _propertyDashboardManager.ParseServicePdfAsync(pdfFile, pdfPassword);
 
@@ -86,6 +121,8 @@ public class HomeController : Controller
             return BadRequest(result);
         }
 
+        var property = await _propertyDashboardManager.GetPropertyStatusAsync(propertyId);
+        if (property is not null) await UploadDriveDocumentAsync(pdfFile!, ["Properties", SafeFolderName(property.PropertyName), DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
         return Json(result);
     }
 
@@ -148,13 +185,26 @@ public class HomeController : Controller
 
 
     [HttpPost]
-    public async Task<IActionResult> SavePayments([FromBody] SavePaymentsRequestVm request)
+    public async Task<IActionResult> SavePayments(string requestJson, IFormFile? pdfFile)
     {
-        var result = await _propertyDashboardManager.SavePaymentsAsync(request);
+        var request = System.Text.Json.JsonSerializer.Deserialize<SavePaymentsRequestVm>(requestJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (request is null) return BadRequest(new { message = "Could not read the payment details." });
 
-        if (!result.Success)
+        var result = await _propertyDashboardManager.SavePaymentsAsync(request);
+        if (!result.Success) return BadRequest(result);
+
+        if (pdfFile is not null && pdfFile.Length > 0)
         {
-            return BadRequest(result);
+            try
+            {
+                var month = result.SavedPayments.FirstOrDefault()?.PaidOn ?? DateTime.UtcNow;
+                await UploadDriveDocumentAsync(pdfFile, ["Bank", month.Year.ToString(), month.ToString("MM")]);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Payment values were saved but the bank PDF upload failed.");
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"Payment values were saved, but the bank PDF was not uploaded: {GetGoogleDriveConnectionErrorMessage(exception)}", savedPayments = result.SavedPayments });
+            }
         }
 
         return Json(result);
@@ -202,6 +252,15 @@ public class HomeController : Controller
 
         return Json(result);
     }
+
+    private async Task UploadDriveDocumentAsync(IFormFile pdfFile, IReadOnlyList<string> folderNames)
+    {
+        await using var stream = new MemoryStream();
+        await pdfFile.CopyToAsync(stream);
+        await _googleDriveStorageService.UploadFileToFoldersAsync(pdfFile.FileName, stream.ToArray(), pdfFile.ContentType ?? "application/pdf", folderNames);
+    }
+
+    private static string SafeFolderName(string name) => string.Concat(name.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '-' : character)).Trim();
 
     public IActionResult Privacy()
     {

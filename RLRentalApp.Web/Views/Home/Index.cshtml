@@ -8,6 +8,17 @@
     <h1 class="mb-3">Property Dashboard</h1>
     <p class="text-muted mb-4">Choose a property to track payment status, services, rent, and extra notes.</p>
 
+    <section class="card border-secondary mb-3">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <div class="flex-grow-1">
+                <h2 class="h6 mb-1">Google Drive connection</h2>
+                <p class="text-muted mb-0">Uses your connected Google account to create a test folder and <code>connection-test.txt</code> file inside your configured Google Drive folder.</p>
+            </div>
+            <button class="btn btn-outline-secondary" type="button" id="testGoogleDriveBtn">Test Google Drive</button>
+            <div id="googleDriveTestMsg" class="alert mb-0 d-none" role="status"></div>
+        </div>
+    </section>
+
     <div id="selectedPropertyHeader" class="alert alert-primary d-none"></div>
 
     <section id="propertySwitcherSection" class="card shadow-sm mb-3 d-none">
@@ -477,6 +488,8 @@
 @section Scripts {
     <script>
         (() => {
+            const testGoogleDriveBtn = document.getElementById('testGoogleDriveBtn');
+            const googleDriveTestMsg = document.getElementById('googleDriveTestMsg');
             const propertySelect = document.getElementById('propertySelect');
             const confirmButton = document.getElementById('confirmPropertyBtn');
             const selectedHeader = document.getElementById('selectedPropertyHeader');
@@ -615,6 +628,28 @@
                 lateChargeDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             }
 
+
+            testGoogleDriveBtn?.addEventListener('click', async () => {
+                testGoogleDriveBtn.disabled = true;
+                googleDriveTestMsg.classList.add('d-none');
+
+                try {
+                    const response = await fetch('/Home/TestGoogleDrive', { method: 'POST' });
+                    const payload = await response.json();
+
+                    googleDriveTestMsg.className = response.ok ? 'alert alert-success mb-0' : 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = response.ok
+                        ? `Connected. Created "${payload.testFolderName}" with "${payload.testFileName}" in your configured Google Drive folder.`
+                        : (payload.message || 'Google Drive test failed.');
+                    googleDriveTestMsg.classList.remove('d-none');
+                } catch {
+                    googleDriveTestMsg.className = 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = 'Google Drive test failed. Check your connection and configuration.';
+                    googleDriveTestMsg.classList.remove('d-none');
+                } finally {
+                    testGoogleDriveBtn.disabled = false;
+                }
+            });
 
             propertySelect?.addEventListener('change', () => {
                 confirmButton.disabled = !propertySelect.value;
@@ -758,6 +793,7 @@
 
                 const formData = new FormData();
                 formData.append('pdfFile', file);
+                formData.append('propertyId', selectedPropertyId || '0');
                 if (servicePdfPassword?.value) {
                     formData.append('pdfPassword', servicePdfPassword.value);
                 }
@@ -856,15 +892,20 @@
                 }
 
                 const rows = renterPaymentMatches.map(match => {
-                    const rowClass = match.warning ? 'table-warning' : 'table-success';
+                    const paidTotal = (match.payments || []).reduce((total, payment) => total + Number(payment.amount || 0), 0);
+                    const expectedAmount = match.expectedAmount === null || match.expectedAmount === undefined ? null : Number(match.expectedAmount);
+                    const warning = expectedAmount !== null && paidTotal > expectedAmount
+                        ? `Paid ${money(paidTotal)}, which is more than the expected ${money(expectedAmount)}. Check the amount before saving.`
+                        : match.warning;
+                    const rowClass = warning ? 'table-warning' : 'table-success';
                     return `
                         <tr class="${rowClass}">
                             <td>${match.propertyName}</td>
                             <td>${match.tenantName}</td>
                             <td><code>${match.paymentReference || '-'}</code></td>
                             <td class="text-end">${match.expectedAmount !== null && match.expectedAmount !== undefined ? Number(match.expectedAmount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : '-'}</td>
-                            <td class="text-end">${Number(match.paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
-                            <td>${match.warning || 'Paid'}</td>
+                            <td class="text-end">${Number(paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td>${warning || 'Paid'}</td>
                         </tr>`;
                 }).join('');
 
@@ -886,15 +927,26 @@
 
                 paymentTableBody.innerHTML = parsedPayments.map((payment, index) => `
                     <tr>
-                        <td>${new Date(payment.paidOn).toLocaleDateString()}</td>
-                        <td>${payment.description}</td>
-                        <td class="text-end">${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td><input class="form-control form-control-sm payment-date" data-index="${index}" type="date" value="${new Date(payment.paidOn).toISOString().slice(0, 10)}" /></td>
+                        <td><input class="form-control form-control-sm payment-description" data-index="${index}" value="${payment.description}" /></td>
+                        <td><input class="form-control form-control-sm payment-amount text-end" data-index="${index}" type="number" min="0" step="0.01" value="${payment.amount}" /></td>
                         <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-index="${index}" type="button">Delete</button></td>
                     </tr>
                 `).join('');
 
                 renderRenterPaymentSummary();
             };
+
+            paymentTableBody?.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLInputElement)) return;
+                const index = Number(target.dataset.index);
+                if (Number.isNaN(index) || !parsedPayments[index]) return;
+                if (target.classList.contains('payment-date')) parsedPayments[index].paidOn = target.value;
+                if (target.classList.contains('payment-description')) parsedPayments[index].description = target.value;
+                if (target.classList.contains('payment-amount')) parsedPayments[index].amount = Number(target.value);
+                renderPaymentRows();
+            });
 
             paymentTableBody?.addEventListener('click', (event) => {
                 const target = event.target;
@@ -1114,13 +1166,30 @@
                     notes: paymentNotesInput?.value || ''
                 };
 
-                const response = await fetch('/Home/SavePayments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
+                const formData = new FormData();
+                formData.append('requestJson', JSON.stringify(body));
+                const bankPdf = paymentPdfFile?.files?.[0];
+                if (bankPdf) formData.append('pdfFile', bankPdf);
 
-                const payload = await response.json();
+                savePaymentsBtn.disabled = true;
+                savePaymentsMsg.className = 'alert alert-info mt-3';
+                savePaymentsMsg.textContent = bankPdf
+                    ? 'Saving payment values and uploading the bank PDF to Google Drive. Please wait...'
+                    : 'Saving payment values. Please wait...';
+                savePaymentsMsg.classList.remove('d-none');
+
+                let response;
+                let payload;
+                try {
+                    response = await fetch('/Home/SavePayments', { method: 'POST', body: formData });
+                    payload = await response.json();
+                } catch {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = 'The save request did not finish. Check your connection and try again.';
+                    return;
+                } finally {
+                    savePaymentsBtn.disabled = false;
+                }
 
                 if (!response.ok) {
                     savePaymentsMsg.className = 'alert alert-danger mt-3';
