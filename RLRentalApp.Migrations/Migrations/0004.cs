@@ -13,6 +13,6 @@ public class _0004_AddStatementSdt : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0004.sql");
+        Execute.Script(@"Migrations/Scripts/0004.sql");
     }
 }

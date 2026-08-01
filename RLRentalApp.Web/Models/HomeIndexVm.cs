@@ -25,12 +25,30 @@ public class PropertyStatusVm
     public int? TenantId { get; set; }
     public string? TenantName { get; set; }
     public string? TenantEmail { get; set; }
+    public string? PaymentReference { get; set; }
     public DateTime? LeaseStartDate { get; set; }
     public decimal? LatestRent { get; set; }
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentMonthServiceTotal { get; set; }
     public decimal CurrentMonthPaymentTotal { get; set; }
     public decimal CurrentBalance { get; set; }
+}
+
+
+public class ManualLateChargeRequestVm
+{
+    public int PropertyId { get; set; }
+    public DateTime ChargeDate { get; set; }
+    public decimal InterestAmount { get; set; }
+    public bool AddLetterFee { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class ManualLateChargeResultVm
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int AddedCount { get; set; }
 }
 
 public class SendTenantEmailRequestVm
@@ -54,6 +72,7 @@ public class PropertyStatementVm
     public string PropertyName { get; set; } = string.Empty;
     public string PropertyAddress { get; set; } = string.Empty;
     public string TenantName { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
     public decimal OpeningOutstanding { get; set; }
     public decimal CurrentBalance { get; set; }
     public DateTime StatementMonth { get; set; }
@@ -76,6 +95,7 @@ public class PropertyStatementPdfVm
 {
     public byte[] PdfBytes { get; set; } = [];
     public string FileName { get; set; } = string.Empty;
+    public string? GoogleDriveFileId { get; set; }
 }
 
 public class ServicePdfParseResultVm
@@ -86,6 +106,22 @@ public class ServicePdfParseResultVm
     public WaterParseVm Water { get; set; } = new();
     public SewerageParseVm Sewerage { get; set; } = new();
     public RefuseParseVm Refuse { get; set; } = new();
+    public decimal? BasicElectricityAmount { get; set; }
+    public decimal? BasicWaterAmount { get; set; }
+    public decimal? BasicSewerageAmount { get; set; }
+    public decimal? PropertyRatesResidentialAmount { get; set; }
+    public decimal? PropertyRatesRebate1Amount { get; set; }
+    public decimal? PropertyRatesRebate2Amount { get; set; }
+    public decimal? PropertyRatesResidentialRebateAmount { get; set; }
+    public decimal? LevyAmount { get; set; }
+    public decimal? CsosAmount { get; set; }
+    public decimal? HoaAmount { get; set; }
+    public decimal? LevySecurityAmount { get; set; }
+    public decimal? CommunalElectricityAmount { get; set; }
+    public decimal? CommunalWaterAmount { get; set; }
+    public decimal? ElectricityDemandChargeAmount { get; set; }
+    public decimal? ElectricitySurchargeAmount { get; set; }
+    public decimal? ElectricityBasicChargeAmount { get; set; }
     public string RawTextPreview { get; set; } = string.Empty;
 }
 
@@ -119,6 +155,7 @@ public class RefuseParseVm
 }
 
 
+
 public class SaveServicesRequestVm
 {
     public int PropertyId { get; set; }
@@ -127,6 +164,22 @@ public class SaveServicesRequestVm
     public decimal? WaterAmount { get; set; }
     public decimal? SewerageAmount { get; set; }
     public decimal? RefuseAmount { get; set; }
+    public decimal? BasicElectricityAmount { get; set; }
+    public decimal? BasicWaterAmount { get; set; }
+    public decimal? BasicSewerageAmount { get; set; }
+    public decimal? PropertyRatesResidentialAmount { get; set; }
+    public decimal? PropertyRatesRebate1Amount { get; set; }
+    public decimal? PropertyRatesRebate2Amount { get; set; }
+    public decimal? PropertyRatesResidentialRebateAmount { get; set; }
+    public decimal? LevyAmount { get; set; }
+    public decimal? CsosAmount { get; set; }
+    public decimal? HoaAmount { get; set; }
+    public decimal? LevySecurityAmount { get; set; }
+    public decimal? CommunalElectricityAmount { get; set; }
+    public decimal? CommunalWaterAmount { get; set; }
+    public decimal? ElectricityDemandChargeAmount { get; set; }
+    public decimal? ElectricitySurchargeAmount { get; set; }
+    public decimal? ElectricityBasicChargeAmount { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
 
@@ -142,6 +195,7 @@ public class PaymentPdfParseResultVm
     public bool Success { get; set; }
     public string? ErrorMessage { get; set; }
     public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
     public string RawTextPreview { get; set; } = string.Empty;
 }
 
@@ -156,6 +210,7 @@ public class SavePaymentsRequestVm
 {
     public int PropertyId { get; set; }
     public List<PaymentCandidateVm> Payments { get; set; } = [];
+    public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
     public string Notes { get; set; } = string.Empty;
 }
 
@@ -166,6 +221,40 @@ public class SavePaymentsResultVm
     public int AddedCount { get; set; }
     public int SkippedDuplicates { get; set; }
     public List<PaymentCandidateVm> SavedPayments { get; set; } = [];
+    public List<RenterPaymentMatchVm> RenterMatches { get; set; } = [];
+}
+
+public class LatePaymentChargeDataModel
+{
+    public int LeaseId { get; set; }
+    public int TenantId { get; set; }
+    public string TenantName { get; set; } = string.Empty;
+    public string TenantEmail { get; set; } = string.Empty;
+    public DateTime PaidOn { get; set; }
+    public decimal PaymentAmount { get; set; }
+    public decimal BalanceBeforePayment { get; set; }
+    public decimal BalanceAfterPayment { get; set; }
+    public int DaysLate { get; set; }
+    public decimal InterestAmount { get; set; }
+    public decimal LetterAmount { get; set; }
+    public decimal CurrentBalance { get; set; }
+    public string InterestDescription { get; set; } = string.Empty;
+}
+
+public class RenterPaymentMatchVm
+{
+    public int PropertyId { get; set; }
+    public string PropertyName { get; set; } = string.Empty;
+    public int LeaseId { get; set; }
+    public int TenantId { get; set; }
+    public string TenantName { get; set; } = string.Empty;
+    public string PaymentReference { get; set; } = string.Empty;
+    public decimal? ExpectedAmount { get; set; }
+    public decimal PaidTotal { get; set; }
+    public bool HasPayment { get; set; }
+    public bool IsShortPaid { get; set; }
+    public string Warning { get; set; } = string.Empty;
+    public List<PaymentCandidateVm> Payments { get; set; } = [];
 }
 
 

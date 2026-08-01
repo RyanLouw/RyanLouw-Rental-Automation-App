@@ -83,9 +83,10 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         var connection = _authDbContext.Database.GetDbConnection();
         await EnsureConnectionOpenAsync(connection);
 
+        var paymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection);
         await using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), l.start_date
+        cmd.CommandText = $@"
+            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, ''), {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference, l.start_date
             FROM lease l
             INNER JOIN tenant t ON t.id = l.tenant_id
             WHERE l.property_id = @propertyId AND l.end_date IS NULL
@@ -110,8 +111,70 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             TenantId = reader.GetInt32(1),
             TenantName = reader.GetString(2),
             TenantEmail = reader.GetString(3),
-            StartDate = reader.GetDateTime(4)
+            PaymentReference = reader.GetString(4),
+            StartDate = reader.GetDateTime(5)
         };
+    }
+
+
+    public async Task<List<ActiveLeasePaymentMatchDataModel>> LoadActiveLeasesForPaymentMatchingAsync(DateTime asOfDate)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var paymentReferenceColumn = await HasTenantPaymentReferenceColumnAsync(connection);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = $@"
+            SELECT p.id,
+                   p.name,
+                   l.id,
+                   l.tenant_id,
+                   t.full_name,
+                   {(paymentReferenceColumn ? "COALESCE(t.payment_reference, '')" : "''")} AS payment_reference,
+                   rr.amount,
+                   COALESCE(svc.current_month_services, 0) AS current_month_services
+            FROM lease l
+            INNER JOIN property p ON p.id = l.property_id
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN LATERAL (
+                SELECT amount
+                FROM rent_rate
+                WHERE lease_id = l.id
+                  AND effective_from <= @asOfDate
+                ORDER BY effective_from DESC
+                LIMIT 1
+            ) rr ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT SUM(amount) AS current_month_services
+                FROM service_charge
+                WHERE lease_id = l.id
+                  AND billing_period = date_trunc('month', @asOfDate)::date
+            ) svc ON TRUE
+            WHERE l.end_date IS NULL
+              AND p.is_active = TRUE
+            ORDER BY p.name;";
+
+        AddParameter(cmd, "@asOfDate", asOfDate.Date);
+
+        var result = new List<ActiveLeasePaymentMatchDataModel>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            result.Add(new ActiveLeasePaymentMatchDataModel
+            {
+                PropertyId = reader.GetInt32(0),
+                PropertyName = reader.GetString(1),
+                LeaseId = reader.GetInt32(2),
+                TenantId = reader.GetInt32(3),
+                TenantName = reader.GetString(4),
+                PaymentReference = reader.GetString(5),
+                LatestRent = reader.IsDBNull(6) ? null : reader.GetDecimal(6),
+                CurrentMonthServiceTotal = reader.IsDBNull(7) ? 0m : reader.GetDecimal(7)
+            });
+        }
+
+        return result;
     }
 
     public async Task<decimal> LoadOpeningOutstandingAsync(int tenantId)
@@ -443,7 +506,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
             leaseId,
             effectiveFrom.Date,
             "Rent",
-            "Rent for statement month",
+            "Rental",
             amount,
             "rent_rate",
             rentRateId.Value);
@@ -501,6 +564,45 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         return inserted;
     }
 
+
+    public async Task<int> InsertPropertyTaxEntriesAsync(List<PropertyTaxEntryInsertDataModel> entries)
+    {
+        if (entries.Count == 0)
+        {
+            return 0;
+        }
+
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var inserted = 0;
+
+        foreach (var entry in entries)
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO property_tax_entry (property_id, entry_date, description, entry_type, amount)
+                VALUES (@propertyId, @entryDate, @description, @entryType, @amount)
+                RETURNING id;";
+
+            var amount = entry.Amount <= 0 ? entry.Amount : -entry.Amount;
+
+            AddParameter(cmd, "@propertyId", entry.PropertyId);
+            AddParameter(cmd, "@entryDate", entry.EntryDate.Date);
+            AddParameter(cmd, "@description", entry.Description);
+            AddParameter(cmd, "@entryType", amount >= 0 ? "Income" : "Expense");
+            AddParameter(cmd, "@amount", amount);
+
+            var insertedId = await cmd.ExecuteScalarAsync();
+            if (insertedId is not null && insertedId is not DBNull)
+            {
+                inserted += 1;
+            }
+        }
+
+        return inserted;
+    }
+
     public async Task<bool> PaymentExistsAsync(int leaseId, DateTime paidOn, decimal amount)
     {
         var connection = _authDbContext.Database.GetDbConnection();
@@ -522,6 +624,208 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         var exists = await cmd.ExecuteScalarAsync();
         return exists is not null and not DBNull;
     }
+
+
+    public async Task<List<LatePaymentChargeDataModel>> ApplyLatePaymentChargesAsync(int leaseId, List<PaymentInsertDataModel> payments)
+    {
+        var charges = new List<LatePaymentChargeDataModel>();
+        if (payments.Count == 0)
+        {
+            return charges;
+        }
+
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        foreach (var payment in payments.Where(x => x.Amount > 0 && x.PaidOn.Day > 4))
+        {
+            var paymentId = await LoadLatestPaymentIdAsync(connection, leaseId, payment.PaidOn.Date, payment.Amount);
+            if (!paymentId.HasValue || await LateChargeExistsAsync(connection, paymentId.Value))
+            {
+                continue;
+            }
+
+            var dueDate = new DateTime(payment.PaidOn.Year, payment.PaidOn.Month, 4);
+            var daysLate = (payment.PaidOn.Date - dueDate).Days;
+            if (daysLate <= 0)
+            {
+                continue;
+            }
+
+            var balanceBeforePayment = await LoadBalanceBeforePaymentAsync(connection, leaseId, payment.PaidOn.Date);
+            if (balanceBeforePayment <= 0)
+            {
+                continue;
+            }
+
+            var balanceAfterPayment = Math.Max(0m, balanceBeforePayment - payment.Amount);
+            var firstInterest = RoundMoney(balanceBeforePayment * daysLate / 365m * 0.23m);
+            var ongoingInterest = balanceAfterPayment > 0 ? RoundMoney(balanceAfterPayment * 30m / 365m * 0.23m) : 0m;
+            var interestAmount = firstInterest + ongoingInterest;
+            if (interestAmount <= 0)
+            {
+                continue;
+            }
+
+            var interestDescription = balanceAfterPayment > 0
+                ? $"Late payment interest: R {balanceBeforePayment:N2} x {daysLate}/365 x 23% = R {firstInterest:N2}; outstanding after payment R {balanceAfterPayment:N2} x 30/365 x 23% = R {ongoingInterest:N2}"
+                : $"Late payment interest: R {balanceBeforePayment:N2} x {daysLate}/365 x 23% = R {firstInterest:N2}";
+
+            await InsertStatementOnlyEntryAsync(connection, leaseId, payment.PaidOn.Date, "Interest", interestDescription, interestAmount, "late_interest", paymentId.Value);
+
+            var letterAmount = 0m;
+            if (balanceAfterPayment > 0)
+            {
+                letterAmount = 200m;
+                await InsertStatementOnlyEntryAsync(connection, leaseId, payment.PaidOn.Date, "Fee", "Late payment letter", letterAmount, "late_payment_letter", paymentId.Value);
+            }
+
+            var noticeInfo = await LoadLatePaymentNoticeInfoAsync(connection, leaseId);
+            noticeInfo.PaidOn = payment.PaidOn.Date;
+            noticeInfo.PaymentAmount = payment.Amount;
+            noticeInfo.BalanceBeforePayment = balanceBeforePayment;
+            noticeInfo.BalanceAfterPayment = balanceAfterPayment;
+            noticeInfo.DaysLate = daysLate;
+            noticeInfo.InterestAmount = interestAmount;
+            noticeInfo.LetterAmount = letterAmount;
+            noticeInfo.CurrentBalance = await LoadCurrentLeaseBalanceAsync(connection, leaseId);
+            noticeInfo.InterestDescription = interestDescription;
+            charges.Add(noticeInfo);
+        }
+
+        return charges;
+    }
+
+    private static decimal RoundMoney(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    private static async Task<long?> LoadLatestPaymentIdAsync(DbConnection connection, int leaseId, DateTime paidOn, decimal amount)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"SELECT id FROM payment WHERE lease_id = @leaseId AND paid_on = @paidOn AND amount = @amount ORDER BY id DESC LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@paidOn", paidOn.Date);
+        AddParameter(cmd, "@amount", amount);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is null or DBNull ? null : Convert.ToInt64(value);
+    }
+
+    private static async Task<bool> LateChargeExistsAsync(DbConnection connection, long paymentId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"SELECT 1 FROM statement_sdt WHERE source_table IN ('late_interest', 'late_payment_letter') AND source_id = @paymentId LIMIT 1;";
+        AddParameter(cmd, "@paymentId", paymentId);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is not null and not DBNull;
+    }
+
+    private static async Task<decimal> LoadBalanceBeforePaymentAsync(DbConnection connection, int leaseId, DateTime paidOn)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COALESCE(t.current_amount_outstanding, 0) + COALESCE((
+                SELECT SUM(amount)
+                FROM statement_sdt
+                WHERE lease_id = @leaseId
+                  AND entry_date < @paidOn
+            ), 0)
+            FROM lease l
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            WHERE l.id = @leaseId
+            LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        AddParameter(cmd, "@paidOn", paidOn.Date);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    private static async Task<decimal> LoadCurrentLeaseBalanceAsync(DbConnection connection, int leaseId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COALESCE(t.current_amount_outstanding, 0) + COALESCE(SUM(s.amount), 0)
+            FROM lease l
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN statement_sdt s ON s.lease_id = l.id
+            WHERE l.id = @leaseId
+            GROUP BY t.current_amount_outstanding
+            LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    private static async Task<LatePaymentChargeDataModel> LoadLatePaymentNoticeInfoAsync(DbConnection connection, int leaseId)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT l.id, l.tenant_id, t.full_name, COALESCE(t.email, '')
+            FROM lease l
+            INNER JOIN tenant t ON t.id = l.tenant_id
+            WHERE l.id = @leaseId
+            LIMIT 1;";
+        AddParameter(cmd, "@leaseId", leaseId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return new LatePaymentChargeDataModel { LeaseId = leaseId };
+        }
+        return new LatePaymentChargeDataModel
+        {
+            LeaseId = reader.GetInt32(0),
+            TenantId = reader.GetInt32(1),
+            TenantName = reader.GetString(2),
+            TenantEmail = reader.GetString(3)
+        };
+    }
+
+    private static async Task InsertStatementOnlyEntryAsync(DbConnection connection, int leaseId, DateTime entryDate, string entryType, string description, decimal amount, string sourceTable, long sourceId)
+    {
+        await UpsertStatementSdtEntryAsync(connection, leaseId, entryDate, entryType, description, amount, sourceTable, sourceId);
+    }
+
+
+    public async Task<int> InsertManualLateChargesAsync(int leaseId, DateTime chargeDate, decimal interestAmount, bool addLetterFee, string notes)
+    {
+        var connection = _authDbContext.Database.GetDbConnection();
+        await EnsureConnectionOpenAsync(connection);
+
+        var inserted = 0;
+        var cleanNotes = string.IsNullOrWhiteSpace(notes) ? "Manual late rent charge" : notes.Trim();
+        var sourceId = BuildManualLateChargeSourceId(leaseId, chargeDate.Date);
+
+        if (interestAmount > 0)
+        {
+            await UpsertStatementSdtEntryAsync(
+                connection,
+                leaseId,
+                chargeDate.Date,
+                "Interest",
+                cleanNotes,
+                RoundMoney(interestAmount),
+                "manual_late_interest",
+                sourceId);
+            inserted++;
+        }
+
+        if (addLetterFee)
+        {
+            await UpsertStatementSdtEntryAsync(
+                connection,
+                leaseId,
+                chargeDate.Date,
+                "Fee",
+                "Late payment letter",
+                200m,
+                "manual_late_payment_letter",
+                sourceId);
+            inserted++;
+        }
+
+        return inserted;
+    }
+
+    private static long BuildManualLateChargeSourceId(int leaseId, DateTime chargeDate)
+        => (leaseId * 100000000L) + (chargeDate.Year * 10000L) + (chargeDate.Month * 100L) + chargeDate.Day;
 
     public async Task<int> InsertPaymentsAsync(int leaseId, List<PaymentInsertDataModel> payments)
     {
@@ -561,7 +865,7 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
                 leaseId,
                 payment.PaidOn.Date,
                 "Payment",
-                string.IsNullOrWhiteSpace(payment.Reference) ? "Payment received" : payment.Reference,
+                "Payment received, thank you",
                 -payment.Amount,
                 "payment",
                 Convert.ToInt64(insertedId));
@@ -603,6 +907,23 @@ public class PropertyDashboardDataAccess : IPropertyDashboardDataAccess
         AddParameter(cmd, "@sourceId", sourceId);
 
         await cmd.ExecuteNonQueryAsync();
+    }
+
+
+    private static async Task<bool> HasTenantPaymentReferenceColumnAsync(DbConnection connection)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'tenant'
+                  AND column_name = 'payment_reference'
+            );";
+
+        var value = await cmd.ExecuteScalarAsync();
+        return value is bool exists && exists;
     }
 
     private static void AddParameter(DbCommand cmd, string name, object? value)

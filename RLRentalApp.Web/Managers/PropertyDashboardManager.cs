@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Linq;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
 
 namespace RLRentalApp.Web.Managers;
 
@@ -17,11 +18,16 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 {
     private readonly IPropertyDashboardDataAccess _dataAccess;
     private readonly IEmailService _emailService;
+    private readonly IGoogleDriveStorageService? _googleDriveStorageService;
 
-    public PropertyDashboardManager(IPropertyDashboardDataAccess dataAccess, IEmailService emailService)
+    public PropertyDashboardManager(
+        IPropertyDashboardDataAccess dataAccess,
+        IEmailService emailService,
+        IGoogleDriveStorageService? googleDriveStorageService = null)
     {
         _dataAccess = dataAccess;
         _emailService = emailService;
+        _googleDriveStorageService = googleDriveStorageService;
     }
 
     private static string BuildFullAddress(PropertyOptionVm property)
@@ -37,6 +43,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         public const string CompanyLine2 = "Investment";
         public const string CompanyLine3 = "Properties";
         public const string HeaderTitle = "Statement";
+        public const string LogoRelativePath = "wwwroot/Logo.enc";//C:\Users\louwr\Source\Repos\RyanLouw-Rental-Automation-App\RLRentalApp.Web\wwwroot\Logo.enc
         public const string OfficeAddressLine1 = "No 9 Waterberg straat";
         public const string OfficeAddressLine2 = "Noordheuwel X6";
         public const string OfficeAddressLine3 = "Krugersdorp";
@@ -93,6 +100,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             TenantId = activeLease.TenantId,
             TenantName = activeLease.TenantName,
             TenantEmail = activeLease.TenantEmail,
+            PaymentReference = activeLease.PaymentReference,
             LeaseStartDate = activeLease.StartDate,
             LatestRent = latestRent,
             OpeningOutstanding = openingOutstanding,
@@ -157,6 +165,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             PropertyName = property.Name,
             PropertyAddress = BuildFullAddress(property),
             TenantName = activeLease.TenantName,
+            PaymentReference = activeLease.PaymentReference,
             OpeningOutstanding = statementWindowOpening,
             CurrentBalance = openingOutstanding + snapshot.AmountThroughMonth,
             StatementMonth = monthStart,
@@ -190,39 +199,61 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 {
                     column.Spacing(16);
 
-                    column.Item().Row(row =>
+                    column.Item().BorderBottom(2).BorderColor(Colors.Blue.Darken2).PaddingBottom(12).Row(row =>
                     {
                         row.RelativeItem().Column(left =>
                         {
-                            left.Item().Text(StatementPdfConstants.CompanyLine1).SemiBold().FontSize(20);
-                            left.Item().Text(StatementPdfConstants.CompanyLine2).SemiBold().FontSize(20);
-                            left.Item().Text(StatementPdfConstants.CompanyLine3).SemiBold().FontSize(20);
+                            left.Item().Text(StatementPdfConstants.CompanyLine1).SemiBold().FontSize(20).FontColor(Colors.Blue.Darken3);
+                            left.Item().Text(StatementPdfConstants.CompanyLine2).SemiBold().FontSize(20).FontColor(Colors.Blue.Darken3);
+                            left.Item().Text(StatementPdfConstants.CompanyLine3).SemiBold().FontSize(20).FontColor(Colors.Blue.Darken3);
                         });
 
-                        row.ConstantItem(140).AlignCenter().Text("✦").FontSize(38).FontColor(Colors.Grey.Darken1);
+                        row.ConstantItem(130).Height(64).Column(logo =>
+                        {
+                            var logoPath = ResolveStatementLogoPath();
+                            if (!string.IsNullOrWhiteSpace(logoPath))
+                            {
+                                logo.Item().AlignCenter().AlignMiddle().Image(logoPath).FitArea();
+                            }
+                            else
+                            {
+                                logo.Item()
+                                    .Border(1)
+                                    .BorderColor(Colors.Grey.Lighten1)
+                                    .Background(Colors.Grey.Lighten4)
+                                    .AlignCenter()
+                                    .AlignMiddle()
+                                    .Text("Logo")
+                                    .SemiBold()
+                                    .FontSize(12)
+                                    .FontColor(Colors.Grey.Darken1);
+                            }
+                        });
 
                         row.RelativeItem().AlignRight().Column(right =>
                         {
                             right.Item().Text(StatementPdfConstants.HeaderTitle)
-                                .Italic()
                                 .SemiBold()
-                                .FontSize(24)
-                                .FontColor(Colors.Grey.Darken1);
+                                .FontSize(26)
+                                .FontColor(Colors.Blue.Darken2);
+                            right.Item().Text($"Issued {generatedOn:dd MMMM yyyy}").FontSize(9).FontColor(Colors.Grey.Darken1);
                         });
                     });
 
                     column.Item().Row(row =>
                     {
-                        row.RelativeItem().Column(left =>
+                        row.RelativeItem().Padding(10).Background(Colors.Grey.Lighten4).Column(left =>
                         {
+                            left.Item().Text("Office").SemiBold().FontColor(Colors.Grey.Darken2);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine1);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine2);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine3);
                             left.Item().Text(StatementPdfConstants.OfficeAddressLine4);
                         });
 
-                        row.RelativeItem().Column(right =>
+                        row.RelativeItem().Padding(10).Background(Colors.Grey.Lighten4).Column(right =>
                         {
+                            right.Item().Text("Contact").SemiBold().FontColor(Colors.Grey.Darken2);
                             right.Item().Text($"Phone: {StatementPdfConstants.Phone}").SemiBold();
                             right.Item().Text($"Fax: {StatementPdfConstants.Fax}").SemiBold();
                             right.Item().Text($"E-mail: {StatementPdfConstants.Email}").FontColor(Colors.Blue.Medium);
@@ -231,18 +262,37 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
                     column.Item().Row(row =>
                     {
-                        row.RelativeItem().Text($"Date: {generatedOn:MMMM d, yyyy}").SemiBold();
-                        row.RelativeItem().AlignRight().Column(right =>
+                        row.RelativeItem().Padding(12).Border(1).BorderColor(Colors.Grey.Lighten2).Column(left =>
                         {
-                            right.Item().Text("Statement To:").SemiBold().FontColor(Colors.Grey.Darken1);
+                            left.Item().Text("Statement details").SemiBold().FontColor(Colors.Grey.Darken1);
+                            left.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
+                            left.Item().Text($"Payment due: {dueDate:dd MMMM yyyy}");
+                            left.Item().Text($"Current balance: {FormatMoney(statement.CurrentBalance)}").SemiBold().FontSize(12);
+                        });
+
+                        row.RelativeItem().Padding(12).Border(1).BorderColor(Colors.Grey.Lighten2).Column(right =>
+                        {
+                            right.Item().Text("Statement To").SemiBold().FontColor(Colors.Grey.Darken1);
                             right.Item().Text(statement.TenantName).SemiBold().FontSize(13);
                             right.Item().Text(statement.PropertyName).FontSize(13);
                             right.Item().Text(statement.PropertyAddress).FontSize(11).FontColor(Colors.Grey.Darken1);
                         });
                     });
 
-                    column.Item().Text($"Statement month: {statement.StatementMonth:MMMM yyyy}");
-                    column.Item().Text($"Current balance: {FormatMoney(statement.CurrentBalance)}").SemiBold();
+                    if (!string.IsNullOrWhiteSpace(statement.PaymentReference))
+                    {
+                        column.Item()
+                            .Background(Colors.Blue.Lighten5)
+                            .BorderLeft(4)
+                            .BorderColor(Colors.Blue.Darken2)
+                            .Padding(10)
+                            .Text(text =>
+                            {
+                                text.Span("Payment reference: ").SemiBold();
+                                text.Span(statement.PaymentReference).SemiBold().FontColor(Colors.Blue.Darken3);
+                                text.Span(" — please use this exact reference when making payment.");
+                            });
+                    }
 
                     column.Item().Table(table =>
                     {
@@ -302,14 +352,32 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             });
         }).GeneratePdf();
 
+        var fileName = BuildStatementPdfFileName(statement);
+        var googleDriveFileId = _googleDriveStorageService is null
+            ? null
+            : await _googleDriveStorageService.UploadFileAsync(fileName, pdfBytes, "application/pdf");
+
         return new PropertyStatementPdfVm
         {
             PdfBytes = pdfBytes,
-            FileName = BuildStatementPdfFileName(statement)
+            FileName = fileName,
+            GoogleDriveFileId = googleDriveFileId
         };
     }
 
-    private static string FormatMoney(decimal value) => $"R {value:N2}";
+
+    private static string? ResolveStatementLogoPath()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(Directory.GetCurrentDirectory(), StatementPdfConstants.LogoRelativePath),
+            Path.Combine(AppContext.BaseDirectory, StatementPdfConstants.LogoRelativePath)
+        };
+
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static string FormatMoney(decimal value) => $"R {value.ToString("N2", CultureInfo.InvariantCulture)}";
 
     private static string BuildStatementPdfFileName(PropertyStatementVm statement)
     {
@@ -381,16 +449,6 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     public async Task<SaveServicesResultVm> SaveServicesAsync(SaveServicesRequestVm request)
     {
-        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
-        if (activeLease is null)
-        {
-            return new SaveServicesResultVm
-            {
-                Success = false,
-                Message = "No active lease found for the selected property."
-            };
-        }
-
         var charges = new List<ServiceChargeInsertDataModel>();
 
         AddCharge(charges, "Electricity", request.ElectricityAmount, request.BillingPeriod, request.Notes);
@@ -398,22 +456,53 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         AddCharge(charges, "Sanitation", request.SewerageAmount, request.BillingPeriod, request.Notes);
         AddCharge(charges, "Refuse", request.RefuseAmount, request.BillingPeriod, request.Notes);
 
-        if (charges.Count == 0)
+        var taxEntries = new List<PropertyTaxEntryInsertDataModel>();
+        AddTaxEntries(taxEntries, request.PropertyId, request.BillingPeriod, request, request.Notes);
+
+        if (charges.Count == 0 && taxEntries.Count == 0)
         {
             return new SaveServicesResultVm
             {
                 Success = false,
-                Message = "Please capture at least one service amount."
+                Message = "Please capture at least one service or tax amount."
             };
         }
 
-        var inserted = await _dataAccess.InsertServiceChargesAsync(activeLease.LeaseId, charges);
+        var insertedServices = 0;
+        if (charges.Count > 0)
+        {
+            var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+            if (activeLease is null)
+            {
+                return new SaveServicesResultVm
+                {
+                    Success = false,
+                    Message = "No active lease found for the selected property."
+                };
+            }
+
+            insertedServices = await _dataAccess.InsertServiceChargesAsync(activeLease.LeaseId, charges);
+        }
+
+        var insertedTaxEntries = taxEntries.Count > 0
+            ? await _dataAccess.InsertPropertyTaxEntriesAsync(taxEntries)
+            : 0;
+
+        var parts = new List<string>();
+        if (insertedServices > 0)
+        {
+            parts.Add($"saved {insertedServices} service charge(s)");
+        }
+        if (insertedTaxEntries > 0)
+        {
+            parts.Add($"saved {insertedTaxEntries} tax entr{(insertedTaxEntries == 1 ? "y" : "ies")}");
+        }
 
         return new SaveServicesResultVm
         {
-            Success = inserted > 0,
-            AddedCount = inserted,
-            Message = inserted > 0 ? $"Saved {inserted} service charge(s)." : "No service charges were saved."
+            Success = insertedServices > 0 || insertedTaxEntries > 0,
+            AddedCount = insertedServices + insertedTaxEntries,
+            Message = parts.Count > 0 ? $"Successfully {string.Join(" and ", parts)}." : "No service charges or tax entries were saved."
         };
     }
 
@@ -478,6 +567,11 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     public async Task<SavePaymentsResultVm> SavePaymentsAsync(SavePaymentsRequestVm request)
     {
+        if (request.RenterMatches.Count > 0)
+        {
+            return await SaveRenterMatchPaymentsAsync(request);
+        }
+
         var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
         if (activeLease is null)
         {
@@ -488,9 +582,157 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             };
         }
 
-        var cleanedPayments = request.Payments
+        return await SavePaymentsForLeaseAsync(activeLease.LeaseId, request.Payments, request.Notes, "Captured from statement PDF");
+    }
+
+    private async Task<SavePaymentsResultVm> SaveRenterMatchPaymentsAsync(SavePaymentsRequestVm request)
+    {
+        var matches = request.RenterMatches
+            .Where(x => x.LeaseId > 0 && x.Payments.Any(p => p.Amount > 0))
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            return new SavePaymentsResultVm
+            {
+                Success = false,
+                Message = "No matched renter payments to save."
+            };
+        }
+
+        var savedPayments = new List<PaymentCandidateVm>();
+        var addedCount = 0;
+        var skippedDuplicates = 0;
+
+        foreach (var match in matches)
+        {
+            var result = await SavePaymentsForLeaseAsync(
+                match.LeaseId,
+                match.Payments,
+                request.Notes,
+                $"Captured from bank PDF for {match.PaymentReference}");
+
+            addedCount += result.AddedCount;
+            skippedDuplicates += result.SkippedDuplicates;
+            savedPayments.AddRange(result.SavedPayments);
+        }
+
+        return new SavePaymentsResultVm
+        {
+            Success = addedCount > 0,
+            AddedCount = addedCount,
+            SkippedDuplicates = skippedDuplicates,
+            SavedPayments = savedPayments,
+            RenterMatches = request.RenterMatches,
+            Message = addedCount > 0
+                ? $"Saved {addedCount} payment(s) across {matches.Count} renter(s). Skipped {skippedDuplicates} duplicate(s)."
+                : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."
+        };
+    }
+
+
+    public async Task<ManualLateChargeResultVm> SaveManualLateChargeAsync(ManualLateChargeRequestVm request)
+    {
+        var activeLease = await _dataAccess.LoadActiveLeaseAsync(request.PropertyId);
+        if (activeLease is null)
+        {
+            return new ManualLateChargeResultVm { Success = false, Message = "No active lease found for selected property." };
+        }
+
+        if (request.InterestAmount <= 0 && !request.AddLetterFee)
+        {
+            return new ManualLateChargeResultVm { Success = false, Message = "Enter an interest amount or choose the R200 late payment letter fee." };
+        }
+
+        var chargeDate = request.ChargeDate == default ? DateTime.UtcNow.Date : request.ChargeDate.Date;
+        var added = await _dataAccess.InsertManualLateChargesAsync(
+            activeLease.LeaseId,
+            chargeDate,
+            request.InterestAmount,
+            request.AddLetterFee,
+            request.Notes);
+
+        var emailAttempted = false;
+        if (added > 0 && request.AddLetterFee && !string.IsNullOrWhiteSpace(activeLease.TenantEmail))
+        {
+            var status = await GetPropertyStatusAsync(request.PropertyId);
+            emailAttempted = true;
+            await SendManualLatePaymentNoticeAsync(
+                activeLease.TenantName,
+                activeLease.TenantEmail,
+                chargeDate,
+                request.InterestAmount,
+                request.AddLetterFee ? 200m : 0m,
+                status?.CurrentBalance ?? 0m,
+                request.Notes);
+        }
+
+        return new ManualLateChargeResultVm
+        {
+            Success = added > 0,
+            AddedCount = added,
+            Message = added > 0
+                ? $"Added {added} late charge row(s) to the statement.{(emailAttempted ? " Sent the late payment letter email." : string.Empty)}"
+                : "No late charge rows were added."
+        };
+    }
+
+
+    private async Task SendManualLatePaymentNoticeAsync(
+        string tenantName,
+        string tenantEmail,
+        DateTime chargeDate,
+        decimal interestAmount,
+        decimal letterAmount,
+        decimal currentBalance,
+        string notes)
+    {
+        if (string.IsNullOrWhiteSpace(tenantEmail))
+        {
+            return;
+        }
+
+        var subject = $"Late rent - demand for payment - {chargeDate:dd MMMM yyyy}";
+        var body = BuildManualLatePaymentNoticeBody(tenantName, chargeDate, interestAmount, letterAmount, currentBalance, notes);
+
+        try
+        {
+            await _emailService.SendEmailAsync(tenantEmail.Trim(), subject, body);
+        }
+        catch
+        {
+            // Manual late-charge saving must not fail because the late-payment notice email could not be sent.
+        }
+    }
+
+    private static string BuildManualLatePaymentNoticeBody(string tenantName, DateTime chargeDate, decimal interestAmount, decimal letterAmount, decimal currentBalance, string notes)
+    {
+        var interestLine = interestAmount > 0
+            ? $"Interest added: {FormatMoney(interestAmount)}\n"
+            : string.Empty;
+        var letterLine = letterAmount > 0
+            ? $"Late payment letter: {FormatMoney(letterAmount)}\n"
+            : string.Empty;
+        var notesLine = string.IsNullOrWhiteSpace(notes)
+            ? string.Empty
+            : $"Description: {notes.Trim()}\n";
+
+        return $"Dear {tenantName}\n\n" +
+               $"Late rent - demand for payment\n\n" +
+               $"Your rent has not been received as of {chargeDate:dd MMMM yyyy}. As a result and according to our lease agreement, a late charge has been added to your total balance.\n\n" +
+               notesLine +
+               interestLine +
+               letterLine +
+               $"Total late charges added: {FormatMoney(interestAmount + letterAmount)}\n\n" +
+               $"Your current balance is {FormatMoney(currentBalance)}. THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY. This is a serious matter and your urgent attention is required. Failure to act promptly may lead to eviction proceedings. If such is sought you may be liable / responsible for additional charges, such as, but not limited to attorney fees and your credit rating could be affected. Please contact me as soon as you receive this notice.\n\n" +
+               $"Thank you in advance for your prompt attention to this matter. Feel free to contact me with any questions or concerns.";
+    }
+
+    private async Task<SavePaymentsResultVm> SavePaymentsForLeaseAsync(int leaseId, List<PaymentCandidateVm> payments, string notes, string defaultNotes)
+    {
+        var cleanedPayments = payments
             .Where(x => x.Amount > 0)
-            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount })
+            .GroupBy(x => new { Date = x.PaidOn.Date, x.Amount, Description = x.Description.Trim() })
             .Select(g => g.First())
             .ToList();
 
@@ -508,7 +750,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         foreach (var payment in cleanedPayments)
         {
-            var exists = await _dataAccess.PaymentExistsAsync(activeLease.LeaseId, payment.PaidOn, payment.Amount);
+            var exists = await _dataAccess.PaymentExistsAsync(leaseId, payment.PaidOn, payment.Amount);
             if (exists)
             {
                 skippedDuplicates++;
@@ -520,11 +762,23 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 PaidOn = payment.PaidOn.Date,
                 Amount = payment.Amount,
                 Reference = payment.Description,
-                Notes = string.IsNullOrWhiteSpace(request.Notes) ? "Captured from statement PDF" : request.Notes
+                Notes = string.IsNullOrWhiteSpace(notes) ? defaultNotes : notes
             });
         }
 
-        var inserted = await _dataAccess.InsertPaymentsAsync(activeLease.LeaseId, toInsert);
+        var inserted = await _dataAccess.InsertPaymentsAsync(leaseId, toInsert);
+        var lateChargeCandidates = toInsert
+            .Where(x => x.PaidOn.Day > 4)
+            .ToList();
+        var lateCharges = inserted > 0 && lateChargeCandidates.Count > 0
+            ? await _dataAccess.ApplyLatePaymentChargesAsync(leaseId, lateChargeCandidates)
+            : [];
+
+        foreach (var charge in lateCharges)
+        {
+            await SendLatePaymentNoticeAsync(charge);
+        }
+
         var savedPayments = toInsert
             .Select(x => new PaymentCandidateVm
             {
@@ -541,9 +795,47 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             SkippedDuplicates = skippedDuplicates,
             SavedPayments = savedPayments,
             Message = inserted > 0
-                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s)."
+                ? $"Saved {inserted} payment(s). Skipped {skippedDuplicates} duplicate(s). Added late interest for {lateCharges.Count} late payment(s)."
                 : $"No new payments saved. Skipped {skippedDuplicates} duplicate(s)."
         };
+    }
+
+    private async Task SendLatePaymentNoticeAsync(LatePaymentChargeDataModel charge)
+    {
+        if (string.IsNullOrWhiteSpace(charge.TenantEmail))
+        {
+            return;
+        }
+
+        var addedTotal = charge.InterestAmount + charge.LetterAmount;
+        var subject = $"Late rent - demand for payment - {charge.PaidOn:dd MMMM yyyy}";
+        var body = BuildLatePaymentNoticeBody(charge, addedTotal);
+
+        try
+        {
+            await _emailService.SendEmailAsync(charge.TenantEmail.Trim(), subject, body);
+        }
+        catch
+        {
+            // Payment saving must not fail because the late-payment notice email could not be sent.
+        }
+    }
+
+    private static string BuildLatePaymentNoticeBody(LatePaymentChargeDataModel charge, decimal addedTotal)
+    {
+        var letterLine = charge.LetterAmount > 0
+            ? $"\nLate payment letter: {FormatMoney(charge.LetterAmount)}"
+            : string.Empty;
+
+        return $"Dear {charge.TenantName}\n\n" +
+               $"Late rent - demand for payment\n\n" +
+               $"Your payment was received after the 4th of the month. As a result and according to our lease agreement, a late charge has been added to your total balance.\n\n" +
+               $"Interest calculation: {charge.InterestDescription}\n" +
+               $"Interest added: {FormatMoney(charge.InterestAmount)}{letterLine}\n" +
+               $"Total late charges added: {FormatMoney(addedTotal)}\n\n" +
+               $"Your current balance is {FormatMoney(charge.CurrentBalance)}. THIS ENTIRE BALANCE MUST BE PAID IMMEDIATELY. This is a serious matter and your urgent attention is required. Failure to act promptly may lead to eviction proceedings. If such is sought you may be liable / responsible for additional charges, such as, but not limited to attorney fees and your credit rating could be affected. Please contact me as soon as you receive this notice.\n\n" +
+               $"This is also a friendly reminder that your rent has not been received on time and is due. If this was an oversight, please send your payment immediately in order to avoid further late charges. Remember that paying your rent on time is of great importance, and the rent must be received by me on the due date in order to be considered on time.\n\n" +
+               $"Thank you in advance for your prompt attention to this matter. Feel free to contact me with any questions or concerns.";
     }
 
     public async Task<PaymentPdfParseResultVm> ParsePaymentPdfAsync(IFormFile? file, string? descriptionContains)
@@ -583,8 +875,39 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         };
     }
 
+    public async Task<PaymentPdfParseResultVm> ParseAllRentersPaymentPdfAsync(IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Please choose a PDF file." };
+        }
 
-    public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file)
+        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Only PDF files are supported." };
+        }
+
+        await using var stream = file.OpenReadStream();
+        var text = ExtractPdfText(stream);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new PaymentPdfParseResultVm { Success = false, ErrorMessage = "Could not read text from the PDF." };
+        }
+
+        var renters = await _dataAccess.LoadActiveLeasesForPaymentMatchingAsync(DateTime.UtcNow.Date);
+        var matches = BuildRenterPaymentMatches(text, renters);
+
+        return new PaymentPdfParseResultVm
+        {
+            Success = true,
+            RenterMatches = matches,
+            RawTextPreview = text.Length > 4000 ? text[..4000] : text
+        };
+    }
+
+
+    public async Task<ServicePdfParseResultVm> ParseServicePdfAsync(IFormFile? file, string? password = null)
     {
         if (file is null || file.Length == 0)
         {
@@ -597,7 +920,19 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         await using var stream = file.OpenReadStream();
-        var text = ExtractPdfText(stream);
+        string text;
+        try
+        {
+            text = ExtractPdfText(stream, password);
+        }
+        catch (Exception ex) when (IsPdfPasswordFailure(ex))
+        {
+            var message = string.IsNullOrWhiteSpace(password)
+                ? "This PDF is password protected. Enter the PDF password and try again."
+                : "Could not open the PDF with that password. Check the password and try again.";
+
+            return new ServicePdfParseResultVm { Success = false, ErrorMessage = message };
+        }
 
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -609,7 +944,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         var sewerage = ParseSewerage(text);
         var refuse = ParseRefuse(text);
 
-        return new ServicePdfParseResultVm
+        var result = new ServicePdfParseResultVm
         {
             Success = true,
             Electricity = electricity,
@@ -618,6 +953,9 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             Refuse = refuse,
             RawTextPreview = text.Length > 4000 ? text[..4000] : text
         };
+
+        PopulateTaxParseValues(result, text);
+        return result;
     }
 
 
@@ -637,10 +975,93 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         });
     }
 
-    private static string ExtractPdfText(Stream stream)
+
+    private static void AddTaxEntries(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, SaveServicesRequestVm request, string notes)
+    {
+        AddTaxExpense(entries, propertyId, entryDate, "Basic electricity", request.BasicElectricityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Basic water", request.BasicWaterAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Basic sewerage", request.BasicSewerageAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Property Rates Residential", request.PropertyRatesResidentialAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate1Amount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "PROPERTY RATES REBATE", request.PropertyRatesRebate2Amount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Property Rates Residential REBATE", request.PropertyRatesResidentialRebateAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Levy", request.LevyAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, @"CSOS", request.CsosAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "HOA", request.HoaAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Levy Security Levy", request.LevySecurityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Communal electricity", request.CommunalElectricityAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Communal water", request.CommunalWaterAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity demand charge", request.ElectricityDemandChargeAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity surcharge", request.ElectricitySurchargeAmount, notes);
+        AddTaxExpense(entries, propertyId, entryDate, "Electricity basic charge", request.ElectricityBasicChargeAmount, notes);
+    }
+
+    private static void PopulateTaxParseValues(ServicePdfParseResultVm result, string text)
+    {
+        var basicElectricity = ParseTaxCharge(text, "BASIC\\s+ELECTRICITY|BASIC\\s+ELEC");
+        var basicWater = ParseTaxCharge(text, "BASIC\\s+WATER|WATER\\s+BASIC|WATER\\s+BASIC\\s+CHARGE");
+        var basicSewerage = ParseTaxCharge(text, "BAS\\.?\\s*SEWERAGE|BASIC\\s+SEWERAGE|SEWERAGE\\s+BASIC");
+        var propertyRatesResidentialRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential(?!\\s+REBATE)");
+        var propertyRatesRebates = ParseTaxChargeValues(text, "PROPERTY\\s+RATES\\s+REBATE");
+        var propertyRatesResidentialRebateRows = ParseTaxChargeValues(text, "Property\\s+Rates\\s+Residential\\s+REBATE");
+
+        result.BasicElectricityAmount = basicElectricity.Amount;
+        result.BasicWaterAmount = basicWater.Amount;
+        result.BasicSewerageAmount = basicSewerage.Amount;
+        result.PropertyRatesResidentialAmount = GetTaxValueOrNull(propertyRatesResidentialRows, 0);
+        result.PropertyRatesRebate1Amount = GetTaxValueOrNull(propertyRatesRebates, 0);
+        result.PropertyRatesRebate2Amount = GetTaxValueOrNull(propertyRatesRebates, 1);
+        result.PropertyRatesResidentialRebateAmount = GetTaxValueOrNull(propertyRatesResidentialRebateRows, 0);
+        result.LevyAmount = ParseBodyCorporateLineAmount(text, @"\bLevies\b|\bLevy\b", @"CSOS|HOA|Security")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"^(?!.*(CSOS|HOA|SECURITY)).*\bLEVY\b|MONTHLY\s+LEVY"), 0);
+        result.CsosAmount = ParseBodyCorporateLineAmount(text, @"CSOS")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"CSOS"), 0);
+        result.HoaAmount = ParseBodyCorporateLineAmount(text, @"\bHOA\b|HOME\s+OWNERS")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"\bHOA\b|HOME\s+OWNERS"), 0);
+        result.LevySecurityAmount = ParseBodyCorporateLineAmount(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"LEVY\s+SECURITY\s+LEVY|SECURITY\s+LEVY"), 0);
+        result.CommunalElectricityAmount = ParseBodyCorporateLineAmount(text, @"COMMUNAL\s+ELECTRICITY")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+ELECTRICITY"), 0);
+        result.CommunalWaterAmount = ParseBodyCorporateLineAmount(text, @"COMMUNAL\s+WATER")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"COMMUNAL\s+WATER"), 0);
+        result.ElectricityDemandChargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+DEMAND\s+CHARGE|DEMAND\s+CHARGE"), 0);
+        result.ElectricitySurchargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+SURCHARGE|SURCHARGE"), 0);
+        result.ElectricityBasicChargeAmount = ParseBodyCorporateLineAmount(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE")
+            ?? GetTaxValueOrNull(ParseTaxChargeValues(text, @"ELECTRICITY\s+BASIC\s+CHARGE|BASIC\s+ELECTRICITY\s+CHARGE"), 0);
+    }
+
+    private static void AddTaxExpense(List<PropertyTaxEntryInsertDataModel> entries, int propertyId, DateTime entryDate, string description, decimal? amount, string notes)
+    {
+        if (!amount.HasValue || amount.Value <= 0)
+        {
+            return;
+        }
+
+        var entryDescription = string.IsNullOrWhiteSpace(notes)
+            ? description
+            : $"{description} - {notes}";
+
+        entries.Add(new PropertyTaxEntryInsertDataModel
+        {
+            PropertyId = propertyId,
+            EntryDate = entryDate.Date,
+            Description = entryDescription,
+            Amount = -Math.Abs(amount.Value)
+        });
+    }
+
+
+    private static string ExtractPdfText(Stream stream, string? password = null)
     {
         var builder = new StringBuilder();
-        using var document = PdfDocument.Open(stream);
+        var options = string.IsNullOrWhiteSpace(password)
+            ? null
+            : new ParsingOptions { Password = password.Trim() };
+        using var document = options is null
+            ? PdfDocument.Open(stream)
+            : PdfDocument.Open(stream, options);
 
         foreach (var page in document.GetPages())
         {
@@ -648,6 +1069,14 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         }
 
         return builder.ToString();
+    }
+
+    private static bool IsPdfPasswordFailure(Exception ex)
+    {
+        var message = ex.Message ?? string.Empty;
+        return message.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("encrypt", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("decrypt", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ElectricityParseVm ParseElectricity(string text)
@@ -689,7 +1118,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static SewerageParseVm ParseSewerage(string text)
     {
-        var sewerage = ParseAccountChargeByKeyword(text, "SEWERAGE|SEWER|SANITATION");
+        var sewerage = ParseAccountChargeByKeyword(text, "ADD\\.?\\s*SEWERAGE|ADDITIONAL\\s+SEWERAGE|SEWERAGE\\s+RESIDENTIAL");
 
         return new SewerageParseVm
         {
@@ -720,7 +1149,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
         var rowMatches = Regex.Matches(
             meterSection,
-            $@"(?is){meterType}\s*(\d+\.\d{{3}})\s*(\d+\.\d{{3}})\s*I?\s*(\d*\.\d{{3}})\s*([\d,]+\.\d{{2}})");
+            $@"(?is){meterType}\s*(\d+\.\d{{3}})\s*(\d+\.\d{{3}})\s*[A-Z]?\s*(\d*\.\d{{3}})\s*([\d,]+\.\d{{2}})");
 
         if (rowMatches.Count > 0)
         {
@@ -735,6 +1164,30 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             return result;
         }
 
+        var invoiceLineMatches = Regex.Matches(
+            text,
+            $@"(?is)\b{meterType}\b[\s\S]{{0,180}}?Previous\s*:\s*(\d+(?:\.\d+)?)\s*,\s*Current\s*:\s*(\d+(?:\.\d+)?)[\s\S]{{0,80}}?Usage\s*:\s*([0-9][0-9\s,.]{{0,50}})");
+
+        foreach (var invoiceLineMatch in invoiceLineMatches.Cast<Match>())
+        {
+            var oldReading = TryParseDecimal(invoiceLineMatch.Groups[1].Value);
+            var newReading = TryParseDecimal(invoiceLineMatch.Groups[2].Value);
+            var amount = TryParseInvoiceMeterAmount(invoiceLineMatch.Groups[3].Value, oldReading, newReading);
+
+            if (amount.HasValue)
+            {
+                // Statements are ordered oldest to newest; retain the latest complete meter line.
+                result.OldReading = oldReading;
+                result.NewReading = newReading;
+                result.LeviedAmount = amount;
+            }
+        }
+
+        if (result.OldReading.HasValue)
+        {
+            return result;
+        }
+
         var oldMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?old\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
         var newMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,120}}?new\s*read(?:ing)?\s*[:\-]?\s*(\d+(?:\.\d+)?)");
         var leviedMatch = Regex.Match(text, $@"(?i){meterType}[\s\S]{{0,200}}?(levied\s*amount|amount\s*incl\s*vat|amount)\s*[:\-]?\s*(?:R)?\s*([\d,]+(?:\.\d{{1,2}})?)");
@@ -744,6 +1197,23 @@ public class PropertyDashboardManager : IPropertyDashboardManager
         result.LeviedAmount = TryParseDecimal(leviedMatch.Groups[2].Value);
 
         return result;
+    }
+
+    private static decimal? TryParseInvoiceMeterAmount(string usageAndAmountText, decimal? oldReading, decimal? newReading)
+    {
+        var compactText = Regex.Replace(usageAndAmountText, @"[\s,]", string.Empty);
+        if (oldReading.HasValue && newReading.HasValue)
+        {
+            var expectedUsage = newReading.Value - oldReading.Value;
+            var expectedUsageText = expectedUsage.ToString("0.###", CultureInfo.InvariantCulture);
+            if (compactText.StartsWith(expectedUsageText, StringComparison.OrdinalIgnoreCase))
+            {
+                compactText = compactText[expectedUsageText.Length..];
+            }
+        }
+
+        var amountMatch = Regex.Match(compactText, @"^(\d+\.\d{2})");
+        return TryParseDecimal(amountMatch.Groups[1].Value);
     }
 
     private static AccountChargeResult ParseAccountChargeByKeyword(string text, string keywordPattern)
@@ -810,6 +1280,200 @@ public class PropertyDashboardManager : IPropertyDashboardManager
     }
 
 
+    private static AccountChargeResult ParseTaxCharge(string text, string keywordPattern)
+    {
+        var accountRowsResult = ParseTaxChargeFromAccountRows(text, keywordPattern);
+        return accountRowsResult.Amount.HasValue
+            ? accountRowsResult
+            : ParseAccountChargeByKeyword(text, keywordPattern);
+    }
+
+
+
+    private static decimal? ParseBodyCorporateLineAmount(string text, string labelPattern, string? excludePattern = null)
+    {
+        var labelMatches = Regex.Matches(text, labelPattern, RegexOptions.IgnoreCase);
+        foreach (Match labelMatch in labelMatches.Cast<Match>())
+        {
+            var lineEndMatch = Regex.Match(text[labelMatch.Index..], @"(?=\d{4}-\d{2}-\d{2}(?:Invoice|Journal|STANDARD|Balance)|120\+ days|BANKING DETAILS|Total Due)", RegexOptions.IgnoreCase);
+            var maxLength = lineEndMatch.Success && lineEndMatch.Index > 0
+                ? lineEndMatch.Index
+                : Math.Min(180, text.Length - labelMatch.Index);
+            var line = text.Substring(labelMatch.Index, maxLength);
+
+            if (!string.IsNullOrWhiteSpace(excludePattern) && Regex.IsMatch(line, excludePattern, RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
+            line = Regex.Replace(line, @"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}", string.Empty, RegexOptions.IgnoreCase);
+            var amountMatch = Regex.Match(line, @"\d+(?:\.\d{2})");
+            var amount = TryParseDecimal(amountMatch.Value);
+            if (amount.HasValue)
+            {
+                return amount.Value;
+            }
+        }
+
+        return null;
+    }
+
+    private static decimal? GetTaxValueOrNull(List<decimal> values, int index)
+    {
+        return index >= 0 && index < values.Count ? values[index] : null;
+    }
+
+    private static List<decimal> ParseTaxChargeValues(string text, string keywordPattern)
+    {
+        return ParseTaxChargeRows(text, keywordPattern)
+            .Select(row => ParseLastStatementMoneyValue(row.Row))
+            .Where(amount => amount.HasValue)
+            .Select(amount => Math.Abs(amount!.Value))
+            .ToList();
+    }
+
+    private static AccountChargeResult ParseTaxChargeFromAccountRows(string text, string keywordPattern)
+    {
+        var result = new AccountChargeResult();
+        var accountSection = GetSection(text, "ACCOUNT DETAILS", "120+ DAYS");
+        if (string.IsNullOrWhiteSpace(accountSection))
+        {
+            return result;
+        }
+
+        decimal total = 0m;
+
+        foreach (var row in ParseTaxChargeRows(text, keywordPattern))
+        {
+            var amount = ParseLastStatementMoneyValue(row.Row);
+            if (!amount.HasValue)
+            {
+                continue;
+            }
+
+            total += amount.Value;
+
+            if (string.IsNullOrWhiteSpace(result.Date))
+            {
+                result.Date = row.Date;
+                result.Code = row.Code;
+            }
+        }
+
+        if (total != 0m)
+        {
+            result.Amount = total;
+        }
+
+        return result;
+    }
+
+
+    private static List<(string Row, string Date, string Code)> ParseTaxChargeRows(string text, string keywordPattern)
+    {
+        var accountSection = GetSection(text, "ACCOUNT DETAILS", "120+ DAYS");
+        if (string.IsNullOrWhiteSpace(accountSection))
+        {
+            return [];
+        }
+
+        var rowStarts = Regex.Matches(accountSection, @"\d{2}[\-/]\d{2}[\-/]\d{4}\d{4,8}")
+            .Cast<Match>()
+            .ToList();
+
+        var rows = new List<(string Row, string Date, string Code)>();
+
+        for (var index = 0; index < rowStarts.Count; index++)
+        {
+            var rowStart = rowStarts[index];
+            var nextStart = index + 1 < rowStarts.Count ? rowStarts[index + 1].Index : accountSection.Length;
+            var row = accountSection[rowStart.Index..nextStart];
+
+            if (Regex.IsMatch(row, keywordPattern, RegexOptions.IgnoreCase))
+            {
+                rows.Add((row, rowStart.Value[..10], rowStart.Value[10..]));
+            }
+        }
+
+        return rows;
+    }
+
+    private static decimal? ParseLastStatementMoneyValue(string row)
+    {
+        var matches = Regex.Matches(row, @"\d+(?:,\d{3})*(?:\.\d{2})-?")
+            .Cast<Match>()
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        var token = matches[^1].Value;
+        var isNegative = token.EndsWith("-", StringComparison.Ordinal);
+        var amount = TryParseDecimal(isNegative ? token[..^1] : token);
+
+        if (!amount.HasValue)
+        {
+            return null;
+        }
+
+        return isNegative ? -amount.Value : amount.Value;
+    }
+
+
+
+
+    private static List<RenterPaymentMatchVm> BuildRenterPaymentMatches(string text, List<ActiveLeasePaymentMatchDataModel> renters)
+    {
+        var matches = new List<RenterPaymentMatchVm>();
+
+        foreach (var renter in renters)
+        {
+            var reference = renter.PaymentReference?.Trim() ?? string.Empty;
+            var payments = reference.Length >= 3 ? ParsePaymentRows(text, reference) : new List<PaymentCandidateVm>();
+            var paidTotal = payments.Sum(x => x.Amount);
+            var expectedAmount = renter.ExpectedMonthlyTotal;
+            var rentAmount = renter.LatestRent;
+            var warning = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(reference))
+            {
+                warning = "No payment reference saved for this renter.";
+            }
+            else if (payments.Count == 0)
+            {
+                warning = "No payment found in the bank PDF for this renter.";
+            }
+            else if (rentAmount.HasValue && paidTotal < rentAmount.Value)
+            {
+                warning = $"Paid {FormatMoney(paidTotal)}, which is less than rent {FormatMoney(rentAmount.Value)}.";
+            }
+            else if (expectedAmount.HasValue && paidTotal < expectedAmount.Value)
+            {
+                warning = $"Paid rent but not all services: paid {FormatMoney(paidTotal)}, expected rent plus services {FormatMoney(expectedAmount.Value)}.";
+            }
+
+            matches.Add(new RenterPaymentMatchVm
+            {
+                PropertyId = renter.PropertyId,
+                PropertyName = renter.PropertyName,
+                LeaseId = renter.LeaseId,
+                TenantId = renter.TenantId,
+                TenantName = renter.TenantName,
+                PaymentReference = reference,
+                ExpectedAmount = expectedAmount,
+                PaidTotal = paidTotal,
+                HasPayment = payments.Count > 0,
+                IsShortPaid = expectedAmount.HasValue && paidTotal > 0 && paidTotal < expectedAmount.Value,
+                Warning = warning,
+                Payments = payments
+            });
+        }
+
+        return matches;
+    }
+
 
     private static List<PaymentCandidateVm> ParsePaymentRows(string text, string descriptionFilter)
     {
@@ -833,7 +1497,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             var forwardWindowLength = Math.Min(140, Math.Max(0, text.Length - forwardStart));
             var forwardWindow = forwardWindowLength > 0 ? text.Substring(forwardStart, forwardWindowLength) : string.Empty;
 
-            var dateMatches = Regex.Matches(backWindow, @"(?i)(?<!\d)(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)");
+            var dateMatches = Regex.Matches(backWindow, @"(?i)(?<!\d)(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Sep|Oct|Okt|Nov|Dec|Des)");
             if (dateMatches.Count == 0)
             {
                 continue;
@@ -851,7 +1515,7 @@ public class PropertyDashboardManager : IPropertyDashboardManager
                 continue;
             }
 
-            var amount = TryParseDecimal(amountMatch.Groups[1].Value);
+            var amount = ParsePaymentAmount(forwardWindow, amountMatch);
             if (!amount.HasValue || amount.Value <= 0)
             {
                 continue;
@@ -871,6 +1535,54 @@ public class PropertyDashboardManager : IPropertyDashboardManager
             .OrderBy(x => x.PaidOn)
             .ThenBy(x => x.Amount)
             .ToList();
+    }
+
+
+    private static decimal? ParsePaymentAmount(string forwardWindow, Match amountMatch)
+    {
+        var amountText = amountMatch.Groups[1].Value;
+        var amount = TryParseDecimal(amountText);
+        if (!amount.HasValue)
+        {
+            return null;
+        }
+
+        if (ShouldTrimReferenceDigitBeforeAmount(forwardWindow, amountMatch, amount.Value, out var trimmedAmountText))
+        {
+            var trimmedAmount = TryParseDecimal(trimmedAmountText);
+            if (trimmedAmount.HasValue)
+            {
+                return trimmedAmount;
+            }
+        }
+
+        return amount;
+    }
+
+    private static bool ShouldTrimReferenceDigitBeforeAmount(string forwardWindow, Match amountMatch, decimal amount, out string trimmedAmountText)
+    {
+        trimmedAmountText = string.Empty;
+
+        if (amountMatch.Index <= 0 || amount < 25000m)
+        {
+            return false;
+        }
+
+        var previousCharacter = forwardWindow[amountMatch.Index - 1];
+        if (!char.IsLetterOrDigit(previousCharacter))
+        {
+            return false;
+        }
+
+        var value = amountMatch.Groups[1].Value;
+        var commaIndex = value.IndexOf(',');
+        if (commaIndex != 2)
+        {
+            return false;
+        }
+
+        trimmedAmountText = value[1..];
+        return true;
     }
 
     private static string BuildLooseDescriptionPattern(string description)
@@ -925,10 +1637,45 @@ public class PropertyDashboardManager : IPropertyDashboardManager
 
     private static bool TryParseStatementDate(string dateToken, int year, out DateTime date)
     {
+        var tokenMatch = Regex.Match(dateToken, @"(?i)^\s*(\d{1,2})\s*([A-Za-z]+)\s*$");
+        if (tokenMatch.Success
+            && int.TryParse(tokenMatch.Groups[1].Value, out var day)
+            && TryParseStatementMonth(tokenMatch.Groups[2].Value, out var month))
+        {
+            date = new DateTime(year, month, day);
+            return true;
+        }
+
         var composed = $"{dateToken} {year}";
 
         return DateTime.TryParseExact(composed, "d MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
                || DateTime.TryParseExact(composed, "dd MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+    }
+
+    private static bool TryParseStatementMonth(string monthToken, out int month)
+    {
+        month = monthToken.Trim().ToLowerInvariant() switch
+        {
+            "jan" => 1,
+            "feb" => 2,
+            "mar" => 3,
+            "mrt" => 3,
+            "apr" => 4,
+            "may" => 5,
+            "mei" => 5,
+            "jun" => 6,
+            "jul" => 7,
+            "aug" => 8,
+            "sep" => 9,
+            "oct" => 10,
+            "okt" => 10,
+            "nov" => 11,
+            "dec" => 12,
+            "des" => 12,
+            _ => 0
+        };
+
+        return month > 0;
     }
 
 

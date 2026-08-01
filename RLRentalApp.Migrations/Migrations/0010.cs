@@ -3,8 +3,8 @@ using FluentMigrator;
 namespace Database.Migrations;
 
 [Tags(TagNames.Rental)]
-[Migration(0005)]
-public class _0005_AddTenantDepositHeld : Migration
+[Migration(0010)]
+public class _0010_AddManualStatementEntry : Migration
 {
     public override void Down()
     {
@@ -13,6 +13,6 @@ public class _0005_AddTenantDepositHeld : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations/Scripts/0005.sql");
+        Execute.Script(@"Migrations/Scripts/0010.sql");
     }
 }

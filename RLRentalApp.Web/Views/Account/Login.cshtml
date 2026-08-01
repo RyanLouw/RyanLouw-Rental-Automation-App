@@ -38,6 +38,12 @@
             Login
         </button>
     </form>
+
+    <form asp-action="GoogleLogin" method="post" class="mt-3">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="returnUrl" value="@Model?.ReturnUrl" />
+        <button type="submit" class="btn btn-outline-danger w-100">Sign in with Google and connect Drive</button>
+    </form>
 </div>
 
 @section Scripts {

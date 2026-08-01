@@ -1,5 +1,239 @@
 # RyanLouw-Rental-Automation-App
 
+## Deploying to the existing DigitalOcean Droplet
+
+The production server runs Ubuntu 24.04 with Nginx on port 80, the ASP.NET app as
+`rlrentalapp.service` on `127.0.0.1:5000`, and PostgreSQL on `127.0.0.1:5432`.
+Because the Droplet has only 458 MiB RAM and 2.8 GB free disk, deployment uses the
+installed .NET runtime and systemd rather than Docker.
+
+The GitHub workflow tests and publishes both .NET projects on a GitHub runner,
+uploads only the published files, runs migrations, switches
+`/var/www/rlrentalapp/publish` to the new release, restarts the existing service,
+and checks the local HTTP endpoint. If startup fails, it switches back to the
+previous application files.
+
+### One-time server configuration
+
+Create a root-only environment file on the Droplet:
+
+```bash
+sudoedit /etc/rlrentalapp.env
+sudo chmod 600 /etc/rlrentalapp.env
+sudo chown root:root /etc/rlrentalapp.env
+```
+
+Use shell-compatible quoted values; never commit this file:
+
+```dotenv
+ASPNETCORE_ENVIRONMENT="Production"
+ASPNETCORE_URLS="http://127.0.0.1:5000"
+ConnectionStrings__rentaldb="Host=localhost;Port=5432;Database=rentaldb;Username=YOUR_USER;Password=YOUR_PASSWORD"
+GmailSmtp__Host="smtp.gmail.com"
+GmailSmtp__Port="587"
+GmailSmtp__EnableSsl="true"
+GmailSmtp__Username="you@example.com"
+GmailSmtp__AppPassword="YOUR_APP_PASSWORD"
+GmailSmtp__FromEmail="you@example.com"
+GmailSmtp__FromDisplayName="RLRentalApp"
+GoogleDrive__Enabled="false"
+GoogleDrive__ApplicationName="RLRentalApp"
+GoogleDrive__ClientId=""
+GoogleDrive__ClientSecret=""
+GoogleDrive__FolderId=""
+```
+
+For a brand-new database only, an initial administrator can be created by adding
+these lines temporarily with a unique password:
+
+```dotenv
+SeedAdmin__Email="admin@example.com"
+SeedAdmin__Password="A-UNIQUE-LONG-PASSWORD"
+```
+
+Restart once, confirm the account exists, and then remove both `SeedAdmin` lines.
+An existing production database does not need them.
+
+Make the existing service load it with `sudo systemctl edit rlrentalapp.service`:
+
+```ini
+[Service]
+EnvironmentFile=/etc/rlrentalapp.env
+```
+
+Then run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rlrentalapp.service
+sudo systemctl status rlrentalapp.service --no-pager
+curl --fail http://127.0.0.1:5000/
+```
+
+Do not proceed until the service and local request succeed. Back up the PostgreSQL
+database before the first automated migration.
+
+### GitHub production secrets
+
+Create a GitHub environment named `production` and add:
+
+| Secret | Value |
+| --- | --- |
+| `DIGITALOCEAN_HOST` | Droplet IP address |
+| `DIGITALOCEAN_USER` | `root` for the current server |
+| `DIGITALOCEAN_SSH_PRIVATE_KEY` | Dedicated deployment private key |
+| `DIGITALOCEAN_SSH_KNOWN_HOSTS` | Verified SSH host-key line |
+
+Never paste the private key or application passwords into an issue, pull request,
+or committed file. The workflow deploys pushes to `main` and can also be started
+manually from the Actions page.
+
+### Operations
+
+```bash
+systemctl status rlrentalapp.service --no-pager
+journalctl -u rlrentalapp.service -n 200 --no-pager
+nginx -t
+curl -I http://127.0.0.1:5000/
+```
+
+Nginx should remain the only public web listener. Port 5000 and PostgreSQL port
+5432 remain bound to localhost. Add a domain and HTTPS before using real tenant,
+login, or financial data over the public internet.
+
+## One-shot database migration script
+
+If you want one file to run now instead of opening all 10 migration files, generate a combined SQL script from the existing ordered migration scripts and run that single file with `psql`.
+
+> ⚠️ Important: migration `0009.sql` intentionally clears the demo/test rental data so you can start entering real property and renter data. Do not run the full script against a database that contains rental data you want to keep.
+
+### macOS / Linux / Git Bash
+
+```bash
+# Run from the repository root.
+set -euo pipefail
+
+mkdir -p build
+OUTPUT_FILE="build/full-rental-db-migration.sql"
+: > "$OUTPUT_FILE"
+
+for file in RLRentalApp.Migrations/Migrations/Scripts/*.sql; do
+  {
+    echo ""
+    echo "-- ============================================================"
+    echo "-- $file"
+    echo "-- ============================================================"
+    cat "$file"
+    echo ""
+  } >> "$OUTPUT_FILE"
+done
+
+echo "Created $OUTPUT_FILE"
+
+# Apply the one generated file. Replace the connection string with your database details.
+psql "Host=localhost;Port=5432;Database=rentaldb;Username=postgres;Password=your-password" -v ON_ERROR_STOP=1 -f "$OUTPUT_FILE"
+```
+
+### Windows PowerShell
+
+```powershell
+# Run from the repository root.
+$ErrorActionPreference = "Stop"
+
+New-Item -ItemType Directory -Force -Path build | Out-Null
+$outputFile = "build/full-rental-db-migration.sql"
+Set-Content -Path $outputFile -Value ""
+
+Get-ChildItem "RLRentalApp.Migrations/Migrations/Scripts/*.sql" | Sort-Object Name | ForEach-Object {
+    Add-Content -Path $outputFile -Value ""
+    Add-Content -Path $outputFile -Value "-- ============================================================"
+    Add-Content -Path $outputFile -Value "-- $($_.FullName)"
+    Add-Content -Path $outputFile -Value "-- ============================================================"
+    Get-Content $_.FullName | Add-Content -Path $outputFile
+    Add-Content -Path $outputFile -Value ""
+}
+
+Write-Host "Created $outputFile"
+
+# Apply the one generated file. Replace the connection string with your database details.
+psql "Host=localhost;Port=5432;Database=rentaldb;Username=postgres;Password=your-password" -v ON_ERROR_STOP=1 -f $outputFile
+```
+
+If you want to keep the demo/test data, use the normal migration runner instead of this full reset-style script, or remove the `0009.sql` section from `build/full-rental-db-migration.sql` before running it.
+
+
+## Going to a live database / production
+
+Use PostgreSQL for the live database and keep production secrets outside git.
+
+### 1. Create the live PostgreSQL database
+
+Create a hosted PostgreSQL database with SSL enabled. Keep these values from your provider:
+
+- Host
+- Port, normally `5432`
+- Database name, for example `rentaldb`
+- Username
+- Password
+- SSL requirement
+
+Before changing an existing live database, take a backup first.
+
+### 2. Configure the live connection string
+
+Set the production connection string as an environment variable on the server or hosting platform:
+
+```bash
+ConnectionStrings__rentaldb="Host=your-db-host;Port=5432;Database=rentaldb;Username=your-db-user;Password=your-db-password;SSL Mode=Require;Trust Server Certificate=true"
+```
+
+Do not put the live password in `appsettings.json`, `appsettings.Development.json`, or any committed file.
+
+### 3. Configure live email secrets
+
+Set the Gmail SMTP values as environment variables too:
+
+```bash
+GmailSmtp__Host="smtp.gmail.com"
+GmailSmtp__Port="587"
+GmailSmtp__EnableSsl="true"
+GmailSmtp__Username="yourgmail@gmail.com"
+GmailSmtp__AppPassword="your-16-char-app-password"
+GmailSmtp__FromEmail="yourgmail@gmail.com"
+GmailSmtp__FromDisplayName="MH & Sons Properties"
+```
+
+### 4. Run the rental database migrations once
+
+For a brand-new live database, run the migration project against the live connection string:
+
+```bash
+ConnectionStrings__rentaldb="Host=your-db-host;Port=5432;Database=rentaldb;Username=your-db-user;Password=your-db-password;SSL Mode=Require;Trust Server Certificate=true" \
+  dotnet run --project RLRentalApp.Migrations/RLRentalApp.Migrations.csproj
+```
+
+You can also use the one-shot SQL script above, but check `0009.sql` first because it truncates rental data. On a new empty live database that is fine; on a database with real data, do not run the truncation section.
+
+### 5. Start the web app
+
+Start `RLRentalApp.Web` with the same `ConnectionStrings__rentaldb` and `GmailSmtp__...` environment variables. When the web app starts, it automatically applies the ASP.NET Identity tables/migrations for login users.
+
+```bash
+ASPNETCORE_ENVIRONMENT="Production" \
+ConnectionStrings__rentaldb="Host=your-db-host;Port=5432;Database=rentaldb;Username=your-db-user;Password=your-db-password;SSL Mode=Require;Trust Server Certificate=true" \
+dotnet run --project RLRentalApp.Web/RLRentalApp.Web.csproj
+```
+
+### 6. Production checklist
+
+- Keep SSL required for the database connection.
+- Keep all passwords and app passwords in environment variables or a managed secret store.
+- Run migrations before pointing users at the app.
+- Confirm login works and change any default/admin password immediately.
+- Send one test statement email to yourself before emailing tenants.
+- Schedule automatic database backups with your hosting provider.
+- Do not run the `0009.sql` truncation step after real rental data exists.
+
 ## Gmail SMTP setup (send emails to tenants)
 
 Use the `GmailSmtp` section in `RLRentalApp.Web/appsettings.Development.json` (or environment variables in production).
@@ -77,6 +311,55 @@ Also note: when pasting the app password, remove spaces shown in Google's UI.
 - Before sending, the dashboard shows an email preview modal with the statement table and totals.
 
 
+## Automatic late-payment interest and demand emails
+
+Late-payment interest is not added by a scheduled background job. It is added immediately when you save newly detected payments from the dashboard bank-statement payment workflow. This applies to both the selected-property save and the all-renter payment save, because both use the same save-payment path.
+
+### When late interest is added
+
+The app adds late interest only after a payment is successfully saved as a new payment row. Duplicate payments are skipped first, so skipped duplicates do not create another interest charge or another email.
+
+For each saved payment, late interest is added when all of these are true:
+
+- The payment amount is more than zero.
+- The payment date is after the 4th day of that same month. For example, a payment dated the 5th or later can be charged interest; a payment dated the 1st through the 4th will not be charged late interest.
+- The tenant still had an outstanding balance before that payment was applied.
+- The app can match the saved payment back to its database payment row.
+- A late-interest or late-payment-letter row has not already been added for that same payment.
+
+### How the interest and fee are calculated
+
+The due date used by the calculation is the 4th of the payment month. The number of late days is the payment date minus that 4th-day due date.
+
+- If the late payment settles the full amount owed, the app adds only the late interest:
+
+  ```text
+  balance owed before payment x days late / 365 x 23%
+  ```
+
+- If the late payment does not settle the full amount owed, the app adds:
+
+  ```text
+  balance owed before payment x days late / 365 x 23%
+  + outstanding balance after payment x 30 / 365 x 23%
+  + R200 late payment letter fee
+  ```
+
+The statement description stores the maths that was used, so the tenant statement shows how the interest was calculated. The R200 late-payment-letter fee is only added when the account is still not fully paid after the payment.
+
+### When late-payment emails are sent
+
+The late-rent demand email is sent immediately after the late interest has been added, during the same save-payment action. The email is sent only when the tenant has an email address saved. If sending the email fails, the payment and late charges stay saved; the app does not roll back the payment just because the email could not be sent.
+
+The email subject is:
+
+```text
+Late rent - demand for payment - <payment date>
+```
+
+The email body includes the interest calculation, the interest amount, the optional R200 late-payment-letter line, the total late charges added, and the current balance that must be paid immediately.
+
+
 ## Safer secret storage (recommended)
 
 Use one of these two approaches so passwords are never committed:
@@ -123,3 +406,34 @@ For production, use environment variables or a managed secret store (Azure Key V
 - `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
 - Demo/default behavior is unchanged unless you add local secrets or environment variables.
 
+## Google Drive setup (save statement PDFs to your Drive)
+
+This app uses **Sign in with Google** and asks for Google Drive permission for the account you sign in with. It does not use a service-account JSON key. The permission allows the app to save statements to the folder you select, including a folder that existed before the app was connected.
+
+1. In Google Cloud Console, configure the **OAuth consent screen**. While the app is in **Testing**, open **Audience** (or **Test users**) and add every Google email that will sign in, such as the Drive-folder owner and your personal account. This avoids the Google `Error 403: access_denied` verification message.
+2. Create an **OAuth 2.0 Client ID** of type **Web application**.
+3. Add the **Google OAuth callback URI** `https://your-domain/signin-google` under **Authorized redirect URIs**. This is not the `Account/GoogleLoginCallback` route; the Google authentication handler receives the Google response at `/signin-google` first. For local development in this project, use `https://localhost:7241/signin-google`.
+4. Enable the **Google Drive API**.
+5. Create a folder in the Google Drive account you will use, and copy its folder ID from the URL.
+6. Add the OAuth client values outside git in `RLRentalApp.Web/appsettings.Local.json`:
+
+```json
+{
+  "GoogleDrive": {
+    "Enabled": true,
+    "ClientId": "your-oauth-client-id",
+    "ClientSecret": "your-oauth-client-secret",
+    "FolderId": "your-google-drive-folder-id"
+  }
+}
+```
+
+For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder. If you change the folder or Google Drive permission settings, sign out and connect Google again so Google can issue a fresh permission token.
+
+### Test the connection
+
+Use **Test Google Drive** at the top of the Property Dashboard. A successful test creates a timestamped folder and `connection-test.txt` in your configured Drive folder.
+
+### Uploaded source-document folders
+
+Set `GoogleDrive:Enabled` to `true` in the active configuration. The connection test and document uploads require it. When Google Drive is enabled, PDFs selected in **Did they pay?** are saved under `Bank/<year>/<month>/`. PDFs selected in **Add services** are saved under `Properties/<property name>/<year>/<month>/`. The app creates any missing folders automatically before uploading the PDF.

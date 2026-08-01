@@ -8,6 +8,17 @@
     <h1 class="mb-3">Property Dashboard</h1>
     <p class="text-muted mb-4">Choose a property to track payment status, services, rent, and extra notes.</p>
 
+    <section class="card border-secondary mb-3">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <div class="flex-grow-1">
+                <h2 class="h6 mb-1">Google Drive connection</h2>
+                <p class="text-muted mb-0">Uses your connected Google account to create a test folder and <code>connection-test.txt</code> file inside your configured Google Drive folder.</p>
+            </div>
+            <button class="btn btn-outline-secondary" type="button" id="testGoogleDriveBtn">Test Google Drive</button>
+            <div id="googleDriveTestMsg" class="alert mb-0 d-none" role="status"></div>
+        </div>
+    </section>
+
     <div id="selectedPropertyHeader" class="alert alert-primary d-none"></div>
 
     <section id="propertySwitcherSection" class="card shadow-sm mb-3 d-none">
@@ -36,6 +47,7 @@
         <h2 class="h5">Next Steps</h2>
         <div class="d-flex flex-wrap gap-2 mt-3">
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#didPayModal">Did they pay?</button>
+            <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#lateChargeModal">Late rent / interest</button>
             <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addServicesModal">Add services</button>
             <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addRentModal">Add rent</button>
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sendEmailModal">Send email</button>
@@ -75,6 +87,42 @@
     </div>
 </div>
 
+
+<div class="modal fade" id="lateChargeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5">Late rent / interest</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Use this when the renter did not pay, or when you want to add a late-rent interest/letter charge without saving a new payment first.</p>
+                <button class="btn btn-outline-warning mb-3" type="button" id="checkLateInterestBtn">Check if interest is needed</button>
+                <div id="lateInterestCheckMsg" class="alert d-none"></div>
+                <div class="mb-3">
+                    <label class="form-label" for="lateChargeDateInput">Charge date</label>
+                    <input class="form-control" type="date" id="lateChargeDateInput" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="manualLateInterestAmountInput">Interest amount</label>
+                    <input class="form-control" type="number" min="0" step="0.01" id="manualLateInterestAmountInput" />
+                    <div class="form-text">The check button can estimate this from the current balance and days after the 4th. You can change it before saving.</div>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="manualLateLetterFeeInput" />
+                    <label class="form-check-label" for="manualLateLetterFeeInput">Add R200 late payment letter fee</label>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="manualLateChargeNotesInput">Description / notes</label>
+                    <input class="form-control" id="manualLateChargeNotesInput" maxlength="300" value="Manual late rent interest" />
+                </div>
+                <button class="btn btn-warning" type="button" id="saveManualLateChargeBtn">Add late charges to statement</button>
+                <div id="manualLateChargeMsg" class="alert mt-3 d-none"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="didPayModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -83,23 +131,27 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Upload a bank statement PDF. We will pull entries where the description contains your search text.</p>
+                <p class="text-muted">Upload one bank statement PDF. The selected-property search uses the editable search text below. The all-renter check still uses each renter's saved database payment reference.</p>
                 <div class="mb-3">
-                    <label for="paymentDescriptionContains" class="form-label">Description contains</label>
-                    <input class="form-control" id="paymentDescriptionContains" value="Heino Huur" />
-                    <div class="form-text">Examples: <code>Heino Huur</code> or <code>Betaling Van Heino Huur</code>.</div>
+                    <label for="paymentDescriptionContains" class="form-label">Selected-property search text</label>
+                    <input class="form-control" id="paymentDescriptionContains" placeholder="Defaults to the selected renter's saved payment reference" />
+                    <div class="form-text">Only used by <strong>Search selected property only</strong>. Change this when this renter paid with a different reference.</div>
                 </div>
                 <div class="mb-3">
                     <label for="paymentPdfFile" class="form-label">Statement PDF</label>
                     <input class="form-control" type="file" id="paymentPdfFile" accept="application/pdf,.pdf" />
                 </div>
-                <button class="btn btn-primary" type="button" id="parsePaymentPdfBtn">Parse PDF</button>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-success" type="button" id="parseAllRentersPaymentPdfBtn">Check all renters in this PDF</button>
+                    <button class="btn btn-primary" type="button" id="parsePaymentPdfBtn">Search selected property only</button>
+                </div>
 
                 <div id="paymentPdfError" class="alert alert-danger mt-3 d-none"></div>
 
                 <div id="paymentResults" class="mt-3 d-none">
                     <h3 class="h6">Detected payments</h3>
-                    <p class="small text-muted mb-2">You can remove any row before saving. Duplicate same amount on the same day is automatically blocked.</p>
+                    <p class="small text-muted mb-2">All-renter mode uses each saved renter payment reference from the database. It warns when someone did not pay, paid less than rent, or paid rent but not services. You can remove any row before saving. Duplicate same amount on the same day is automatically blocked.</p>
+                    <div id="renterPaymentSummary" class="mb-3 d-none"></div>
                     <div class="table-responsive">
                         <table class="table table-sm table-striped">
                             <thead>
@@ -143,6 +195,11 @@
                     <label for="servicePdfFile" class="form-label">Services PDF</label>
                     <input class="form-control" type="file" id="servicePdfFile" accept="application/pdf,.pdf" />
                 </div>
+                <div class="mb-3">
+                    <label for="servicePdfPassword" class="form-label">PDF password (if needed)</label>
+                    <input class="form-control" type="password" id="servicePdfPassword" autocomplete="off" placeholder="Leave blank unless the PDF asks for a password" />
+                    <div class="form-text">Some water/electricity PDFs are protected. Enter that PDF password here before parsing.</div>
+                </div>
                 <button class="btn btn-primary" type="button" id="parseServicePdfBtn">Parse PDF</button>
 
                 <hr />
@@ -173,7 +230,77 @@
                         <input type="text" class="form-control" id="servicesNotesInput" placeholder="Captured manually or from PDF" />
                     </div>
                 </div>
-                <button class="btn btn-success mt-3" type="button" id="saveServicesBtn">Add services to statement</button>
+
+                <hr />
+                <h3 class="h6">Tax-only capture / edit</h3>
+                <p class="small text-muted mb-2">These values are saved to the property tax ledger only and do not appear on the tenant statement.</p>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicElectricityTaxAmountInput">Basic electricity</label>
+                        <input type="number" step="0.01" class="form-control" id="basicElectricityTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicWaterTaxAmountInput">Basic water</label>
+                        <input type="number" step="0.01" class="form-control" id="basicWaterTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicSewerageTaxAmountInput">Basic sewerage</label>
+                        <input type="number" step="0.01" class="form-control" id="basicSewerageTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesResidentialAmountInput">Property Rates Residential</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesResidentialAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesRebate1AmountInput">PROPERTY RATES REBATE 1</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesRebate1AmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesRebate2AmountInput">PROPERTY RATES REBATE 2</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesRebate2AmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesResidentialRebateAmountInput">Property Rates Residential REBATE</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesResidentialRebateAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="levyAmountInput">Levy</label>
+                        <input type="number" step="0.01" class="form-control" id="levyAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="csosAmountInput">CSOS</label>
+                        <input type="number" step="0.01" class="form-control" id="csosAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="hoaAmountInput">HOA</label>
+                        <input type="number" step="0.01" class="form-control" id="hoaAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="levySecurityAmountInput">Levy Security Levy</label>
+                        <input type="number" step="0.01" class="form-control" id="levySecurityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="communalElectricityAmountInput">Communal electricity</label>
+                        <input type="number" step="0.01" class="form-control" id="communalElectricityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="communalWaterAmountInput">Communal water</label>
+                        <input type="number" step="0.01" class="form-control" id="communalWaterAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityDemandChargeAmountInput">Electricity demand charge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityDemandChargeAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricitySurchargeAmountInput">Electricity surcharge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricitySurchargeAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityBasicChargeAmountInput">Electricity basic charge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityBasicChargeAmountInput" />
+                    </div>
+                </div>
+                <button class="btn btn-success mt-3" type="button" id="saveServicesBtn">Add services and tax entries</button>
                 <div id="saveServicesMsg" class="alert mt-3 d-none"></div>
 
                 <div id="servicePdfError" class="alert alert-danger mt-3 d-none"></div>
@@ -207,6 +334,27 @@
                         <li>Amount incl VAT: <strong id="refuseAmount">-</strong></li>
                     </ul>
 
+
+
+                    <h3 class="h6">Tax-only values</h3>
+                    <ul class="mb-3">
+                        <li>Basic electricity: <strong id="basicElectricityTaxAmount">-</strong></li>
+                        <li>Basic water: <strong id="basicWaterTaxAmount">-</strong></li>
+                        <li>Basic sewerage: <strong id="basicSewerageTaxAmount">-</strong></li>
+                        <li>Property Rates Residential: <strong id="propertyRatesResidentialAmount">-</strong></li>
+                        <li>PROPERTY RATES REBATE 1: <strong id="propertyRatesRebate1Amount">-</strong></li>
+                        <li>PROPERTY RATES REBATE 2: <strong id="propertyRatesRebate2Amount">-</strong></li>
+                        <li>Property Rates Residential REBATE: <strong id="propertyRatesResidentialRebateAmount">-</strong></li>
+                        <li>Levy: <strong id="levyAmount">-</strong></li>
+                        <li>CSOS: <strong id="csosAmount">-</strong></li>
+                        <li>HOA: <strong id="hoaAmount">-</strong></li>
+                        <li>Levy Security Levy: <strong id="levySecurityAmount">-</strong></li>
+                        <li>Communal electricity: <strong id="communalElectricityAmount">-</strong></li>
+                        <li>Communal water: <strong id="communalWaterAmount">-</strong></li>
+                        <li>Electricity demand charge: <strong id="electricityDemandChargeAmount">-</strong></li>
+                        <li>Electricity surcharge: <strong id="electricitySurchargeAmount">-</strong></li>
+                        <li>Electricity basic charge: <strong id="electricityBasicChargeAmount">-</strong></li>
+                    </ul>
                     <details>
                         <summary>Raw text preview</summary>
                         <pre id="servicePdfRawText" class="small mt-2 mb-0"></pre>
@@ -216,6 +364,8 @@
         </div>
     </div>
 </div>
+
+
 
 <div class="modal fade" id="addRentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -338,6 +488,8 @@
 @section Scripts {
     <script>
         (() => {
+            const testGoogleDriveBtn = document.getElementById('testGoogleDriveBtn');
+            const googleDriveTestMsg = document.getElementById('googleDriveTestMsg');
             const propertySelect = document.getElementById('propertySelect');
             const confirmButton = document.getElementById('confirmPropertyBtn');
             const selectedHeader = document.getElementById('selectedPropertyHeader');
@@ -356,6 +508,7 @@
             const switchPropertyBtn = document.getElementById('switchPropertyBtn');
             const parseServicePdfBtn = document.getElementById('parseServicePdfBtn');
             const servicePdfFile = document.getElementById('servicePdfFile');
+            const servicePdfPassword = document.getElementById('servicePdfPassword');
             const servicePdfError = document.getElementById('servicePdfError');
             const servicePdfResults = document.getElementById('servicePdfResults');
             const electricityOldReading = document.getElementById('electricityOldReading');
@@ -379,20 +532,62 @@
             const servicesNotesInput = document.getElementById('servicesNotesInput');
             const saveServicesBtn = document.getElementById('saveServicesBtn');
             const saveServicesMsg = document.getElementById('saveServicesMsg');
+            const basicElectricityTaxAmountInput = document.getElementById('basicElectricityTaxAmountInput');
+            const basicWaterTaxAmountInput = document.getElementById('basicWaterTaxAmountInput');
+            const basicSewerageTaxAmountInput = document.getElementById('basicSewerageTaxAmountInput');
+            const propertyRatesResidentialAmountInput = document.getElementById('propertyRatesResidentialAmountInput');
+            const propertyRatesRebate1AmountInput = document.getElementById('propertyRatesRebate1AmountInput');
+            const propertyRatesRebate2AmountInput = document.getElementById('propertyRatesRebate2AmountInput');
+            const propertyRatesResidentialRebateAmountInput = document.getElementById('propertyRatesResidentialRebateAmountInput');
+            const levyAmountInput = document.getElementById('levyAmountInput');
+            const csosAmountInput = document.getElementById('csosAmountInput');
+            const hoaAmountInput = document.getElementById('hoaAmountInput');
+            const levySecurityAmountInput = document.getElementById('levySecurityAmountInput');
+            const communalElectricityAmountInput = document.getElementById('communalElectricityAmountInput');
+            const communalWaterAmountInput = document.getElementById('communalWaterAmountInput');
+            const electricityDemandChargeAmountInput = document.getElementById('electricityDemandChargeAmountInput');
+            const electricitySurchargeAmountInput = document.getElementById('electricitySurchargeAmountInput');
+            const electricityBasicChargeAmountInput = document.getElementById('electricityBasicChargeAmountInput');
+            const basicElectricityTaxAmount = document.getElementById('basicElectricityTaxAmount');
+            const basicWaterTaxAmount = document.getElementById('basicWaterTaxAmount');
+            const basicSewerageTaxAmount = document.getElementById('basicSewerageTaxAmount');
+            const propertyRatesResidentialAmount = document.getElementById('propertyRatesResidentialAmount');
+            const propertyRatesRebate1Amount = document.getElementById('propertyRatesRebate1Amount');
+            const propertyRatesRebate2Amount = document.getElementById('propertyRatesRebate2Amount');
+            const propertyRatesResidentialRebateAmount = document.getElementById('propertyRatesResidentialRebateAmount');
+            const levyAmount = document.getElementById('levyAmount');
+            const csosAmount = document.getElementById('csosAmount');
+            const hoaAmount = document.getElementById('hoaAmount');
+            const levySecurityAmount = document.getElementById('levySecurityAmount');
+            const communalElectricityAmount = document.getElementById('communalElectricityAmount');
+            const communalWaterAmount = document.getElementById('communalWaterAmount');
+            const electricityDemandChargeAmount = document.getElementById('electricityDemandChargeAmount');
+            const electricitySurchargeAmount = document.getElementById('electricitySurchargeAmount');
+            const electricityBasicChargeAmount = document.getElementById('electricityBasicChargeAmount');
             const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
             const rentAmountInput = document.getElementById('rentAmountInput');
             const rentNotesInput = document.getElementById('rentNotesInput');
             const saveRentBtn = document.getElementById('saveRentBtn');
             const saveRentMsg = document.getElementById('saveRentMsg');
             const parsePaymentPdfBtn = document.getElementById('parsePaymentPdfBtn');
+            const parseAllRentersPaymentPdfBtn = document.getElementById('parseAllRentersPaymentPdfBtn');
             const paymentPdfFile = document.getElementById('paymentPdfFile');
             const paymentPdfError = document.getElementById('paymentPdfError');
             const paymentResults = document.getElementById('paymentResults');
             const paymentTableBody = document.getElementById('paymentTableBody');
             const paymentNotesInput = document.getElementById('paymentNotesInput');
+            const checkLateInterestBtn = document.getElementById('checkLateInterestBtn');
+            const lateInterestCheckMsg = document.getElementById('lateInterestCheckMsg');
+            const lateChargeDateInput = document.getElementById('lateChargeDateInput');
+            const manualLateInterestAmountInput = document.getElementById('manualLateInterestAmountInput');
+            const manualLateLetterFeeInput = document.getElementById('manualLateLetterFeeInput');
+            const manualLateChargeNotesInput = document.getElementById('manualLateChargeNotesInput');
+            const saveManualLateChargeBtn = document.getElementById('saveManualLateChargeBtn');
+            const manualLateChargeMsg = document.getElementById('manualLateChargeMsg');
             const savePaymentsBtn = document.getElementById('savePaymentsBtn');
             const savePaymentsMsg = document.getElementById('savePaymentsMsg');
             const paymentPdfRawText = document.getElementById('paymentPdfRawText');
+            const renterPaymentSummary = document.getElementById('renterPaymentSummary');
             const paymentDescriptionContains = document.getElementById('paymentDescriptionContains');
             const sendEmailModal = document.getElementById('sendEmailModal');
             const previewEmailTo = document.getElementById('previewEmailTo');
@@ -404,6 +599,7 @@
             const sendTenantEmailMsg = document.getElementById('sendTenantEmailMsg');
 
             let selectedPropertyId = null;
+            let currentPropertyStatus = null;
 
             if (!pickerElement) {
                 return;
@@ -427,6 +623,34 @@
                 rentEffectiveMonthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             }
 
+            if (lateChargeDateInput) {
+                const now = new Date();
+                lateChargeDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            }
+
+
+            testGoogleDriveBtn?.addEventListener('click', async () => {
+                testGoogleDriveBtn.disabled = true;
+                googleDriveTestMsg.classList.add('d-none');
+
+                try {
+                    const response = await fetch('/Home/TestGoogleDrive', { method: 'POST' });
+                    const payload = await response.json();
+
+                    googleDriveTestMsg.className = response.ok ? 'alert alert-success mb-0' : 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = response.ok
+                        ? `Connected. Created "${payload.testFolderName}" with "${payload.testFileName}" in your configured Google Drive folder.`
+                        : (payload.message || 'Google Drive test failed.');
+                    googleDriveTestMsg.classList.remove('d-none');
+                } catch {
+                    googleDriveTestMsg.className = 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = 'Google Drive test failed. Check your connection and configuration.';
+                    googleDriveTestMsg.classList.remove('d-none');
+                } finally {
+                    testGoogleDriveBtn.disabled = false;
+                }
+            });
+
             propertySelect?.addEventListener('change', () => {
                 confirmButton.disabled = !propertySelect.value;
             });
@@ -443,9 +667,14 @@
 
                 selectedPropertyId = propertyId;
                 const status = await response.json();
+                currentPropertyStatus = status;
 
                 if (rentAmountInput && status.latestRent !== null && status.latestRent !== undefined) {
                     rentAmountInput.value = status.latestRent;
+                }
+
+                if (paymentDescriptionContains) {
+                    paymentDescriptionContains.value = status.paymentReference || '';
                 }
 
                 selectedHeader.classList.remove('d-none');
@@ -461,6 +690,7 @@
                     ['Has Active Lease', status.hasActiveLease ? 'Yes' : 'No'],
                     ['Tenant', status.tenantName || 'N/A'],
                     ['Tenant Email', status.tenantEmail || 'N/A'],
+                    ['Payment Reference', status.paymentReference || 'N/A'],
                     ['Opening Outstanding', Number(status.openingOutstanding).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })],
                     ['Lease Start', status.leaseStartDate ? new Date(status.leaseStartDate).toLocaleDateString() : 'N/A'],
                     ['Latest Rent', status.latestRent !== null ? Number(status.latestRent).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : 'N/A'],
@@ -563,6 +793,10 @@
 
                 const formData = new FormData();
                 formData.append('pdfFile', file);
+                formData.append('propertyId', selectedPropertyId || '0');
+                if (servicePdfPassword?.value) {
+                    formData.append('pdfPassword', servicePdfPassword.value);
+                }
 
                 const response = await fetch('/Home/ParseServicePdf', {
                     method: 'POST',
@@ -601,13 +835,90 @@
                 waterAmountInput.value = payload.water.leviedAmount ?? '';
                 sewerageAmountInput.value = payload.sewerage.amountInclVat ?? '';
                 refuseAmountInput.value = payload.refuse.amountInclVat ?? '';
+
+                basicElectricityTaxAmount.textContent = money(payload.basicElectricityAmount);
+                basicWaterTaxAmount.textContent = money(payload.basicWaterAmount);
+                basicSewerageTaxAmount.textContent = money(payload.basicSewerageAmount);
+                propertyRatesResidentialAmount.textContent = money(payload.propertyRatesResidentialAmount);
+                propertyRatesRebate1Amount.textContent = money(payload.propertyRatesRebate1Amount);
+                propertyRatesRebate2Amount.textContent = money(payload.propertyRatesRebate2Amount);
+                propertyRatesResidentialRebateAmount.textContent = money(payload.propertyRatesResidentialRebateAmount);
+                levyAmount.textContent = money(payload.levyAmount);
+                csosAmount.textContent = money(payload.csosAmount);
+                hoaAmount.textContent = money(payload.hoaAmount);
+                levySecurityAmount.textContent = money(payload.levySecurityAmount);
+                communalElectricityAmount.textContent = money(payload.communalElectricityAmount);
+                communalWaterAmount.textContent = money(payload.communalWaterAmount);
+                electricityDemandChargeAmount.textContent = money(payload.electricityDemandChargeAmount);
+                electricitySurchargeAmount.textContent = money(payload.electricitySurchargeAmount);
+                electricityBasicChargeAmount.textContent = money(payload.electricityBasicChargeAmount);
+
+                basicElectricityTaxAmountInput.value = payload.basicElectricityAmount ?? '';
+                basicWaterTaxAmountInput.value = payload.basicWaterAmount ?? '';
+                basicSewerageTaxAmountInput.value = payload.basicSewerageAmount ?? '';
+                propertyRatesResidentialAmountInput.value = payload.propertyRatesResidentialAmount ?? '';
+                propertyRatesRebate1AmountInput.value = payload.propertyRatesRebate1Amount ?? '';
+                propertyRatesRebate2AmountInput.value = payload.propertyRatesRebate2Amount ?? '';
+                propertyRatesResidentialRebateAmountInput.value = payload.propertyRatesResidentialRebateAmount ?? '';
+                levyAmountInput.value = payload.levyAmount ?? '';
+                csosAmountInput.value = payload.csosAmount ?? '';
+                hoaAmountInput.value = payload.hoaAmount ?? '';
+                levySecurityAmountInput.value = payload.levySecurityAmount ?? '';
+                communalElectricityAmountInput.value = payload.communalElectricityAmount ?? '';
+                communalWaterAmountInput.value = payload.communalWaterAmount ?? '';
+                electricityDemandChargeAmountInput.value = payload.electricityDemandChargeAmount ?? '';
+                electricitySurchargeAmountInput.value = payload.electricitySurchargeAmount ?? '';
+                electricityBasicChargeAmountInput.value = payload.electricityBasicChargeAmount ?? '';
                 servicePdfResults?.classList.remove('d-none');
             });
 
 
 
 
+
+
             let parsedPayments = [];
+            let renterPaymentMatches = [];
+
+            const renderRenterPaymentSummary = () => {
+                if (!renterPaymentSummary) {
+                    return;
+                }
+
+                if (!renterPaymentMatches.length) {
+                    renterPaymentSummary.classList.add('d-none');
+                    renterPaymentSummary.innerHTML = '';
+                    return;
+                }
+
+                const rows = renterPaymentMatches.map(match => {
+                    const paidTotal = (match.payments || []).reduce((total, payment) => total + Number(payment.amount || 0), 0);
+                    const expectedAmount = match.expectedAmount === null || match.expectedAmount === undefined ? null : Number(match.expectedAmount);
+                    const warning = expectedAmount !== null && paidTotal > expectedAmount
+                        ? `Paid ${money(paidTotal)}, which is more than the expected ${money(expectedAmount)}. Check the amount before saving.`
+                        : match.warning;
+                    const rowClass = warning ? 'table-warning' : 'table-success';
+                    return `
+                        <tr class="${rowClass}">
+                            <td>${match.propertyName}</td>
+                            <td>${match.tenantName}</td>
+                            <td><code>${match.paymentReference || '-'}</code></td>
+                            <td class="text-end">${match.expectedAmount !== null && match.expectedAmount !== undefined ? Number(match.expectedAmount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : '-'}</td>
+                            <td class="text-end">${Number(paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td>${warning || 'Paid'}</td>
+                        </tr>`;
+                }).join('');
+
+                renterPaymentSummary.innerHTML = `
+                    <h4 class="h6">All renter payment check</h4>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Property</th><th>Renter</th><th>Reference</th><th class="text-end">Expected</th><th class="text-end">Paid</th><th>Status / warning</th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>`;
+                renterPaymentSummary.classList.remove('d-none');
+            };
 
             const renderPaymentRows = () => {
                 if (!paymentTableBody) {
@@ -616,13 +927,26 @@
 
                 paymentTableBody.innerHTML = parsedPayments.map((payment, index) => `
                     <tr>
-                        <td>${new Date(payment.paidOn).toLocaleDateString()}</td>
-                        <td>${payment.description}</td>
-                        <td class="text-end">${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td><input class="form-control form-control-sm payment-date" data-index="${index}" type="date" value="${new Date(payment.paidOn).toISOString().slice(0, 10)}" /></td>
+                        <td><input class="form-control form-control-sm payment-description" data-index="${index}" value="${payment.description}" /></td>
+                        <td><input class="form-control form-control-sm payment-amount text-end" data-index="${index}" type="number" min="0" step="0.01" value="${payment.amount}" /></td>
                         <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-index="${index}" type="button">Delete</button></td>
                     </tr>
                 `).join('');
+
+                renderRenterPaymentSummary();
             };
+
+            paymentTableBody?.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLInputElement)) return;
+                const index = Number(target.dataset.index);
+                if (Number.isNaN(index) || !parsedPayments[index]) return;
+                if (target.classList.contains('payment-date')) parsedPayments[index].paidOn = target.value;
+                if (target.classList.contains('payment-description')) parsedPayments[index].description = target.value;
+                if (target.classList.contains('payment-amount')) parsedPayments[index].amount = Number(target.value);
+                renderPaymentRows();
+            });
 
             paymentTableBody?.addEventListener('click', (event) => {
                 const target = event.target;
@@ -640,7 +964,11 @@
                     return;
                 }
 
-                parsedPayments.splice(index, 1);
+                const removed = parsedPayments.splice(index, 1)[0];
+                renterPaymentMatches.forEach(match => {
+                    match.payments = (match.payments || []).filter(payment => payment !== removed);
+                    match.paidTotal = (match.payments || []).reduce((total, payment) => total + Number(payment.amount || 0), 0);
+                });
                 renderPaymentRows();
             });
 
@@ -648,6 +976,8 @@
                 paymentPdfError?.classList.add('d-none');
                 paymentResults?.classList.add('d-none');
                 savePaymentsMsg?.classList.add('d-none');
+                lateInterestCheckMsg?.classList.add('d-none');
+                renterPaymentMatches = [];
 
                 const file = paymentPdfFile?.files?.[0];
                 if (!file) {
@@ -677,14 +1007,146 @@
                     return;
                 }
 
+                renterPaymentMatches = [];
                 parsedPayments = payload.payments || [];
                 renderPaymentRows();
                 paymentPdfRawText.textContent = payload.rawTextPreview || '';
                 paymentResults?.classList.remove('d-none');
             });
 
+
+            parseAllRentersPaymentPdfBtn?.addEventListener('click', async () => {
+                paymentPdfError?.classList.add('d-none');
+                paymentResults?.classList.add('d-none');
+                savePaymentsMsg?.classList.add('d-none');
+                lateInterestCheckMsg?.classList.add('d-none');
+
+                const file = paymentPdfFile?.files?.[0];
+                if (!file) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = 'Please select a PDF first.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('pdfFile', file);
+
+                const response = await fetch('/Home/ParseAllRentersPaymentPdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    if (paymentPdfError) {
+                        paymentPdfError.textContent = payload.errorMessage || 'Could not parse this PDF.';
+                        paymentPdfError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                renterPaymentMatches = payload.renterMatches || [];
+                parsedPayments = renterPaymentMatches.flatMap(match => match.payments || []);
+                renderPaymentRows();
+                paymentPdfRawText.textContent = payload.rawTextPreview || '';
+                paymentResults?.classList.remove('d-none');
+            });
+
+
+            checkLateInterestBtn?.addEventListener('click', () => {
+                manualLateChargeMsg?.classList.add('d-none');
+
+                if (!lateInterestCheckMsg) {
+                    return;
+                }
+
+                if (!currentPropertyStatus) {
+                    lateInterestCheckMsg.className = 'alert alert-info';
+                    lateInterestCheckMsg.textContent = 'Choose a property first so the app can check the current balance.';
+                    lateInterestCheckMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const chargeDate = lateChargeDateInput?.value ? new Date(`${lateChargeDateInput.value}T00:00:00`) : new Date();
+                const dueDate = new Date(chargeDate.getFullYear(), chargeDate.getMonth(), 4);
+                const daysLate = Math.floor((chargeDate - dueDate) / 86400000);
+                const currentBalance = Number(currentPropertyStatus.currentBalance || 0);
+
+                if (daysLate <= 0) {
+                    lateInterestCheckMsg.className = 'alert alert-success';
+                    lateInterestCheckMsg.textContent = 'No late interest is needed yet: the selected charge date is on or before the 4th.';
+                    lateInterestCheckMsg.classList.remove('d-none');
+                    return;
+                }
+
+                if (currentBalance <= 0) {
+                    lateInterestCheckMsg.className = 'alert alert-success';
+                    lateInterestCheckMsg.textContent = 'No late interest is needed because this renter does not currently have an outstanding balance.';
+                    lateInterestCheckMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const estimatedInterest = Math.round((currentBalance * daysLate / 365 * 0.23) * 100) / 100;
+                if (manualLateInterestAmountInput) {
+                    manualLateInterestAmountInput.value = estimatedInterest.toFixed(2);
+                }
+                if (manualLateLetterFeeInput) {
+                    manualLateLetterFeeInput.checked = true;
+                }
+
+                lateInterestCheckMsg.className = 'alert alert-warning';
+                lateInterestCheckMsg.textContent = `Late interest may be needed: current balance ${money(currentBalance)}, ${daysLate} day(s) after the 4th, estimated interest ${money(estimatedInterest)}. The R200 late payment letter fee has been selected; adjust the amount or untick it before saving if needed.`;
+                lateInterestCheckMsg.classList.remove('d-none');
+            });
+
+            saveManualLateChargeBtn?.addEventListener('click', async () => {
+                lateInterestCheckMsg?.classList.add('d-none');
+
+                if (!manualLateChargeMsg || !selectedPropertyId) {
+                    return;
+                }
+
+                const interestAmount = manualLateInterestAmountInput?.value ? Number(manualLateInterestAmountInput.value) : 0;
+                const addLetterFee = Boolean(manualLateLetterFeeInput?.checked);
+                if ((!interestAmount || interestAmount <= 0) && !addLetterFee) {
+                    manualLateChargeMsg.className = 'alert alert-danger mt-3';
+                    manualLateChargeMsg.textContent = 'Enter an interest amount or tick the R200 late payment letter fee.';
+                    manualLateChargeMsg.classList.remove('d-none');
+                    return;
+                }
+
+                const response = await fetch('/Home/SaveManualLateCharge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        propertyId: Number(selectedPropertyId),
+                        chargeDate: lateChargeDateInput?.value || new Date().toISOString().slice(0, 10),
+                        interestAmount,
+                        addLetterFee,
+                        notes: manualLateChargeNotesInput?.value || 'Manual late rent interest'
+                    })
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    manualLateChargeMsg.className = 'alert alert-danger mt-3';
+                    manualLateChargeMsg.textContent = payload.message || 'Could not add late charges.';
+                    manualLateChargeMsg.classList.remove('d-none');
+                    return;
+                }
+
+                manualLateChargeMsg.className = 'alert alert-success mt-3';
+                manualLateChargeMsg.textContent = payload.message || 'Late charges added.';
+                manualLateChargeMsg.classList.remove('d-none');
+                await loadProperty(selectedPropertyId, false);
+            });
+
             savePaymentsBtn?.addEventListener('click', async () => {
                 savePaymentsMsg?.classList.add('d-none');
+                lateInterestCheckMsg?.classList.add('d-none');
 
                 if (!selectedPropertyId) {
                     return;
@@ -700,16 +1162,34 @@
                 const body = {
                     propertyId: Number(selectedPropertyId),
                     payments: parsedPayments,
+                    renterMatches: renterPaymentMatches,
                     notes: paymentNotesInput?.value || ''
                 };
 
-                const response = await fetch('/Home/SavePayments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
+                const formData = new FormData();
+                formData.append('requestJson', JSON.stringify(body));
+                const bankPdf = paymentPdfFile?.files?.[0];
+                if (bankPdf) formData.append('pdfFile', bankPdf);
 
-                const payload = await response.json();
+                savePaymentsBtn.disabled = true;
+                savePaymentsMsg.className = 'alert alert-info mt-3';
+                savePaymentsMsg.textContent = bankPdf
+                    ? 'Saving payment values and uploading the bank PDF to Google Drive. Please wait...'
+                    : 'Saving payment values. Please wait...';
+                savePaymentsMsg.classList.remove('d-none');
+
+                let response;
+                let payload;
+                try {
+                    response = await fetch('/Home/SavePayments', { method: 'POST', body: formData });
+                    payload = await response.json();
+                } catch {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = 'The save request did not finish. Check your connection and try again.';
+                    return;
+                } finally {
+                    savePaymentsBtn.disabled = false;
+                }
 
                 if (!response.ok) {
                     savePaymentsMsg.className = 'alert alert-danger mt-3';
@@ -758,6 +1238,22 @@
                     waterAmount: waterAmountInput.value ? Number(waterAmountInput.value) : null,
                     sewerageAmount: sewerageAmountInput.value ? Number(sewerageAmountInput.value) : null,
                     refuseAmount: refuseAmountInput.value ? Number(refuseAmountInput.value) : null,
+                    basicElectricityAmount: basicElectricityTaxAmountInput.value ? Number(basicElectricityTaxAmountInput.value) : null,
+                    basicWaterAmount: basicWaterTaxAmountInput.value ? Number(basicWaterTaxAmountInput.value) : null,
+                    basicSewerageAmount: basicSewerageTaxAmountInput.value ? Number(basicSewerageTaxAmountInput.value) : null,
+                    propertyRatesResidentialAmount: propertyRatesResidentialAmountInput.value ? Number(propertyRatesResidentialAmountInput.value) : null,
+                    propertyRatesRebate1Amount: propertyRatesRebate1AmountInput.value ? Number(propertyRatesRebate1AmountInput.value) : null,
+                    propertyRatesRebate2Amount: propertyRatesRebate2AmountInput.value ? Number(propertyRatesRebate2AmountInput.value) : null,
+                    propertyRatesResidentialRebateAmount: propertyRatesResidentialRebateAmountInput.value ? Number(propertyRatesResidentialRebateAmountInput.value) : null,
+                    levyAmount: levyAmountInput.value ? Number(levyAmountInput.value) : null,
+                    csosAmount: csosAmountInput.value ? Number(csosAmountInput.value) : null,
+                    hoaAmount: hoaAmountInput.value ? Number(hoaAmountInput.value) : null,
+                    levySecurityAmount: levySecurityAmountInput.value ? Number(levySecurityAmountInput.value) : null,
+                    communalElectricityAmount: communalElectricityAmountInput.value ? Number(communalElectricityAmountInput.value) : null,
+                    communalWaterAmount: communalWaterAmountInput.value ? Number(communalWaterAmountInput.value) : null,
+                    electricityDemandChargeAmount: electricityDemandChargeAmountInput.value ? Number(electricityDemandChargeAmountInput.value) : null,
+                    electricitySurchargeAmount: electricitySurchargeAmountInput.value ? Number(electricitySurchargeAmountInput.value) : null,
+                    electricityBasicChargeAmount: electricityBasicChargeAmountInput.value ? Number(electricityBasicChargeAmountInput.value) : null,
                     notes: servicesNotesInput.value || ''
                 };
 

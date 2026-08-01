@@ -1,22 +1,17 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Use local PostgreSQL connection string instead of Docker Postgres
+var rentalDb = builder.AddConnectionString("rentaldb");
 
-var postgres = builder.AddPostgres("rentalapp-postgres")
-    .WithLifetime(ContainerLifetime.Persistent)
-    .WithDataVolume("rentalapp-postgres");
-
-var rentalDb = postgres.AddDatabase("rentaldb");
-
-// Migration project (runs first)
+// Migration project
 var migrations = builder.AddProject<Projects.RLRentalApp_Migrations>("database-migrations")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
-    .WithReference(rentalDb)
-    .WaitFor(rentalDb);
+    .WithReference(rentalDb);
 
 // Web project
 builder.AddProject<Projects.RLRentalApp_Web>("web")
     .WithExplicitStart()
-    .WithReference(rentalDb)
-    .WaitFor(migrations);
+    .WithReference(rentalDb);
+    
 
 await builder.Build().RunAsync();
