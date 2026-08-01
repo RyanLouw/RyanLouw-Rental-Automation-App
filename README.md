@@ -8,7 +8,8 @@ Because the Droplet has only 458 MiB RAM and 2.8 GB free disk, deployment uses t
 installed .NET runtime and systemd rather than Docker.
 
 The GitHub workflow tests and publishes both .NET projects on a GitHub runner,
-uploads only the published files, runs migrations, switches
+uploads only the published files, validates the configured database connection and
+runs migrations before stopping the current service, then switches
 `/var/www/rlrentalapp/publish` to the new release, restarts the existing service,
 and checks the local HTTP endpoint. If startup fails, it switches back to the
 previous application files.
@@ -72,6 +73,21 @@ curl --fail http://127.0.0.1:5000/
 
 Do not proceed until the service and local request succeed. Back up the PostgreSQL
 database before the first automated migration.
+
+If deployment reports PostgreSQL error `28P01`, the username or password in
+`ConnectionStrings__rentaldb` does not match PostgreSQL. Correct the root-only
+environment file, restart the service, and confirm that it connects successfully
+before retrying the workflow:
+
+```bash
+sudoedit /etc/rlrentalapp.env
+sudo systemctl restart rlrentalapp.service
+sudo journalctl -u rlrentalapp.service -n 50 --no-pager
+curl --fail http://127.0.0.1:5000/
+```
+
+The deployment database preflight runs before the release symlink is changed, so
+an invalid credential cannot replace a healthy current release.
 
 ### GitHub production secrets
 
