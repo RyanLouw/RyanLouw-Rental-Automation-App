@@ -20,6 +20,30 @@ html {
 body {
   margin-bottom: 60px;
 }
+
+.tax-hero {
+  background: linear-gradient(135deg, #eef6ff, #f5f3ff 55%, #ecfdf3);
+  border: 1px solid #e4e7ec;
+  border-radius: 1.25rem;
+}
+
+.tax-filter-card,
+.tax-table-card {
+  border: 1px solid #e4e7ec;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.tax-table-card .card-header { background: #f8fafc; padding: 1rem 1.25rem; }
+.tax-grid { font-size: .8rem; min-width: max-content; }
+.tax-grid th:first-child { left: 0; min-width: 13rem; position: sticky; z-index: 2; }
+.tax-grid thead th { background: #eef2f6; white-space: nowrap; }
+.tax-grid tbody th { background: #fff; }
+.tax-grid tfoot th { background: #eaf2ff; }
+.tax-grid td { min-width: 7.5rem; }
+.tax-grid .form-control { border-color: transparent; min-width: 7rem; }
+.tax-grid .form-control:focus { border-color: #86b7fe; }
+.sticky-tax-actions { background: rgba(255,255,255,.96); border-radius: 1rem; bottom: 1rem; position: sticky; z-index: 5; }
 .property-dashboard .card {
   border-radius: 0.75rem;
 }

@@ -1,0 +1,127 @@
+@model RLRentalApp.Models.TaxReportVm
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Tax report";
+}
+
+<div class="tax-report pb-5">
+    <div class="tax-hero p-4 p-lg-5 mb-4">
+        <span class="badge rounded-pill text-bg-primary mb-2">Tax workspace</span>
+        <h1 class="display-6 fw-bold mb-2">Build a property tax report</h1>
+        <p class="text-muted mb-0">Choose a property and month range, add ledger descriptions to Revenue or Expenses, adjust any value, and export the finished report to PDF.</p>
+    </div>
+
+    <form method="get" asp-action="Index" class="card tax-filter-card shadow-sm mb-4">
+        <div class="card-body row g-3 align-items-end">
+            <div class="col-lg-5"><label class="form-label fw-semibold">Property</label><select class="form-select form-select-lg" name="propertyId" required><option value="">Select a property</option>@foreach (var property in Model.Properties){<option value="@property.Id" selected="@(Model.PropertyId == property.Id)">@property.Name — @property.AddressLine1</option>}</select></div>
+            <div class="col-sm-4 col-lg-2"><label class="form-label fw-semibold">From month</label><input class="form-control" type="month" name="fromMonth" value="@Model.FromMonth.ToString("yyyy-MM")" required /></div>
+            <div class="col-sm-4 col-lg-2"><label class="form-label fw-semibold">To month</label><input class="form-control" type="month" name="toMonth" value="@Model.ToMonth.ToString("yyyy-MM")" required /></div>
+            <div class="col-sm-4 col-lg-3"><button class="btn btn-primary w-100" type="submit">Build report</button></div>
+        </div>
+    </form>
+
+    @if (Model.PropertyId is > 0 && Model.FromMonth > Model.ToMonth)
+    {
+        <div class="alert alert-danger">The From month must be before or equal to the To month.</div>
+    }
+    else if (Model.IsLoaded)
+    {
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row gap-3 align-items-lg-end">
+                    <div class="flex-grow-1"><label class="form-label fw-semibold">Ledger description</label><select id="tax-description" class="form-select"><option value="">Select a unique description</option>@foreach (var description in Model.Descriptions){<option value="@description">@description</option>}</select><div class="form-text">Descriptions are filtered to @Model.PropertyName. Revenue uses positive entries; Expenses uses negative entries.</div></div>
+                    <button class="btn btn-success" type="button" data-add-ledger="Revenue">+ Add to Revenue</button>
+                    <button class="btn btn-danger" type="button" data-add-ledger="Expenses">+ Add to Expenses</button>
+                </div>
+                @if (Model.Descriptions.Count == 0)<div class="alert alert-warning mt-3 mb-0">No tax ledger descriptions exist for this property yet.</div>
+            </div>
+        </div>
+
+        <form id="tax-pdf-form" asp-action="GeneratePdf" method="post">
+            <input id="report-json" type="hidden" name="reportJson" />
+            <div id="tax-tables"></div>
+            <div class="sticky-tax-actions d-flex justify-content-between align-items-center gap-3 mt-4 p-3 shadow">
+                <span class="text-muted small">All amount cells are editable. Changes are included in the PDF.</span>
+                <button class="btn btn-primary btn-lg" type="submit">Download PDF</button>
+            </div>
+        </form>
+
+        <script id="tax-entry-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(Model.Entries))</script>
+        <script id="tax-report-meta" type="application/json">@Html.Raw(JsonSerializer.Serialize(new { Model.PropertyId, Model.PropertyName, FromMonth = Model.FromMonth.ToString("yyyy-MM"), ToMonth = Model.ToMonth.ToString("yyyy-MM"), Model.Months }))</script>
+    }
+</div>
+
+@section Scripts {
+<script>
+(() => {
+    const host = document.getElementById('tax-tables');
+    if (!host) return;
+    const entries = JSON.parse(document.getElementById('tax-entry-data').textContent);
+    const meta = JSON.parse(document.getElementById('tax-report-meta').textContent);
+    const sections = [
+        { name: 'Revenue', rows: [] },
+        { name: 'Expenses', rows: [] },
+        { name: 'Repairs and Maintenance', rows: ['Building', 'Electrical', 'Plumbing', 'Pool', 'Maintenance retainer', 'Pest control'].map(blankRow) },
+        { name: 'Administration', rows: ['Telephone', 'Computer and printing', 'Stationery', 'Travel', 'Legal', 'Advertisement', 'Web and domain hosting', 'Tax-related expense', 'Bank charges', 'Income tax', 'Interest expense'].map(blankRow) }
+    ];
+
+    function blankRow(description) { return { description, values: meta.Months.map(() => 0) }; }
+    function ledgerRow(description, sectionName) {
+        const row = blankRow(description);
+        entries.forEach(entry => {
+            if (entry.Description !== description) return;
+            const amount = Number(entry.Amount);
+            if ((sectionName === 'Revenue' && amount <= 0) || (sectionName === 'Expenses' && amount >= 0)) return;
+            const month = entry.EntryDate.substring(0, 7);
+            const index = meta.Months.indexOf(month);
+            if (index >= 0) row.values[index] += sectionName === 'Expenses' ? Math.abs(amount) : amount;
+        });
+        return row;
+    }
+    function money(value) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function render() {
+        host.innerHTML = '';
+        sections.forEach((section, sectionIndex) => {
+            const card = document.createElement('section');
+            card.className = 'card tax-table-card shadow-sm mb-4';
+            const rows = section.rows.map((row, rowIndex) => `<tr><th><input class="form-control form-control-sm tax-row-name" value="${escapeHtml(row.description)}" data-section="${sectionIndex}" data-row="${rowIndex}" aria-label="Row description"></th>${row.values.map((value, valueIndex) => `<td><input class="form-control form-control-sm text-end tax-value" type="number" step="0.01" value="${value.toFixed(2)}" data-section="${sectionIndex}" data-row="${rowIndex}" data-value="${valueIndex}" aria-label="${escapeHtml(row.description)} ${meta.Months[valueIndex]}"></td>`).join('')}<td class="text-end fw-semibold row-total">${money(row.values.reduce((a,b) => a+b, 0))}</td><td><button class="btn btn-sm btn-outline-danger delete-row" type="button" data-section="${sectionIndex}" data-row="${rowIndex}" aria-label="Delete row">×</button></td></tr>`).join('');
+            card.innerHTML = `<div class="card-header d-flex justify-content-between align-items-center"><h2 class="h4 mb-0">${section.name}</h2><button class="btn btn-sm btn-outline-secondary add-custom-row" type="button" data-section="${sectionIndex}">+ Custom row</button></div><div class="table-responsive"><table class="table table-bordered table-sm mb-0 tax-grid"><thead><tr><th>Description</th>${meta.Months.map(m => `<th class="text-end">${m}</th>`).join('')}<th class="text-end">Total</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="${meta.Months.length + 3}" class="text-center text-muted py-4">Add a ledger description above or create a custom row.</td></tr>`}</tbody><tfoot><tr><th>TOTAL</th>${meta.Months.map((_, i) => `<th class="text-end">${money(section.rows.reduce((sum, row) => sum + row.values[i], 0))}</th>`).join('')}<th class="text-end">${money(section.rows.reduce((sum,row) => sum + row.values.reduce((a,b) => a+b,0),0))}</th><th></th></tr></tfoot></table></div>`;
+            host.appendChild(card);
+        });
+    }
+    function escapeHtml(value) { const div = document.createElement('div'); div.textContent = value; return div.innerHTML.replaceAll('"', '&quot;'); }
+    document.querySelectorAll('[data-add-ledger]').forEach(button => button.addEventListener('click', () => {
+        const description = document.getElementById('tax-description').value;
+        if (!description) return;
+        const section = sections.find(x => x.name === button.dataset.addLedger);
+        if (!section.rows.some(x => x.description === description)) section.rows.push(ledgerRow(description, section.name));
+        render();
+    }));
+    host.addEventListener('input', event => {
+        const element = event.target;
+        const section = sections[Number(element.dataset.section)];
+        const row = section?.rows[Number(element.dataset.row)];
+        if (!row) return;
+        if (element.classList.contains('tax-row-name')) row.description = element.value;
+    });
+    host.addEventListener('change', event => {
+        const element = event.target;
+        if (!element.classList.contains('tax-value')) return;
+        sections[Number(element.dataset.section)].rows[Number(element.dataset.row)].values[Number(element.dataset.value)] = Number(element.value) || 0;
+        render();
+    });
+    host.addEventListener('click', event => {
+        const button = event.target.closest('button'); if (!button) return;
+        const sectionIndex = Number(button.dataset.section);
+        if (button.classList.contains('add-custom-row')) sections[sectionIndex].rows.push(blankRow('Custom item'));
+        if (button.classList.contains('delete-row')) sections[sectionIndex].rows.splice(Number(button.dataset.row), 1);
+        render();
+    });
+    document.getElementById('tax-pdf-form').addEventListener('submit', () => {
+        document.getElementById('report-json').value = JSON.stringify({ propertyId: meta.PropertyId, propertyName: meta.PropertyName, fromMonth: meta.FromMonth, toMonth: meta.ToMonth, months: meta.Months, sections });
+    });
+    render();
+})();
+</script>
+}
