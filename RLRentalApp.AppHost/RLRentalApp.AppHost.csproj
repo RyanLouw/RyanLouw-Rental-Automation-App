@@ -14,7 +14,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RLRentalApp.Migrations\RLRentalApp.Migrations.csproj" />
-    <ProjectReference Include="..\RLRentalApp.ServiceDefaults\RLRentalApp.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\RLRentalApp.ServiceDefaults\RLRentalApp.ServiceDefaults.csproj"
+                      IsAspireProjectResource="false" />
     <ProjectReference Include="..\RLRentalApp.Web\RLRentalApp.Web.csproj" />
   </ItemGroup>
 

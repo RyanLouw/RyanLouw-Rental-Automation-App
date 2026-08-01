@@ -1,0 +1,138 @@
+name: Test and deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+          cache: true
+          cache-dependency-path: "**/*.csproj"
+      - run: dotnet restore RLRentalApp.sln
+      - run: dotnet build RLRentalApp.sln --configuration Release --no-restore
+      - run: dotnet test RLRentalApp.sln --configuration Release --no-build
+      - name: Publish applications
+        run: |
+          dotnet publish RLRentalApp.Web/RLRentalApp.Web.csproj -c Release --no-build -o artifact/web
+          dotnet publish RLRentalApp.Migrations/RLRentalApp.Migrations.csproj -c Release --no-build -o artifact/migrations
+          tar -C artifact -czf rlrentalapp-publish.tar.gz web migrations
+      - uses: actions/upload-artifact@v5
+        with:
+          name: production-publish
+          path: rlrentalapp-publish.tar.gz
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: production-publish
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DIGITALOCEAN_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DIGITALOCEAN_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Upload published release
+        env:
+          DEPLOY_HOST: ${{ secrets.DIGITALOCEAN_HOST }}
+          DEPLOY_USER: ${{ secrets.DIGITALOCEAN_USER }}
+        run: |
+          scp rlrentalapp-publish.tar.gz \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/rlrentalapp-${{ github.sha }}.tar.gz"
+      - name: Migrate and switch release
+        env:
+          DEPLOY_HOST: ${{ secrets.DIGITALOCEAN_HOST }}
+          DEPLOY_USER: ${{ secrets.DIGITALOCEAN_USER }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "RELEASE_SHA='$RELEASE_SHA' bash -s" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          app_dir=/var/www/rlrentalapp
+          release_dir="$app_dir/releases/$RELEASE_SHA"
+          archive="/tmp/rlrentalapp-$RELEASE_SHA.tar.gz"
+          env_file=/etc/rlrentalapp.env
+          service=rlrentalapp.service
+
+          report_failure() {
+            local exit_code=$?
+            echo "Deployment failed at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
+            echo "Service state:" >&2
+            systemctl --no-pager --full status "$service" >&2 || true
+            echo "Recent service logs:" >&2
+            journalctl -u "$service" -n 50 --no-pager >&2 || true
+            exit "$exit_code"
+          }
+          trap report_failure ERR
+
+          echo "Checking server prerequisites..."
+          command -v dotnet >/dev/null
+          command -v curl >/dev/null
+          test -f "$archive"
+          test -s "$env_file"
+          bash -n "$env_file"
+
+          echo "Extracting release $RELEASE_SHA..."
+          mkdir -p "$release_dir"
+          tar -xzf "$archive" -C "$release_dir"
+          chmod -R go-w "$release_dir"
+          test -f "$release_dir/web/RLRentalApp.Web.dll"
+          test -f "$release_dir/migrations/RLRentalApp.Migrations.dll"
+
+          echo "Loading production configuration..."
+          set -a
+          # The file is root-owned and uses shell-compatible KEY="value" lines.
+          source "$env_file"
+          set +a
+
+          echo "Running database migrations..."
+          dotnet "$release_dir/migrations/RLRentalApp.Migrations.dll"
+
+          previous_publish=$(readlink -f "$app_dir/publish" || true)
+          if [[ -d "$app_dir/publish" && ! -L "$app_dir/publish" ]]; then
+            previous_publish="$app_dir/legacy-$(date +%Y%m%d%H%M%S)"
+            mv "$app_dir/publish" "$previous_publish"
+          fi
+
+          echo "Switching the application release..."
+          systemctl stop "$service"
+          ln -sfn "$release_dir/web" "$app_dir/publish"
+          if ! systemctl start "$service" || \
+             ! curl --fail --silent --show-error --retry 10 --retry-delay 2 \
+               http://127.0.0.1:5000/ >/dev/null; then
+            systemctl stop "$service" || true
+            if [[ -n "$previous_publish" && -d "$previous_publish" ]]; then
+              ln -sfn "$previous_publish" "$app_dir/publish"
+              systemctl start "$service"
+            fi
+            exit 1
+          fi
+
+          echo "Deployment health check passed."
+          rm -f "$archive"
+          find "$app_dir/releases" -mindepth 1 -maxdepth 1 -type d \
+            ! -path "$release_dir" -mtime +7 -exec rm -rf {} +
+          systemctl --no-pager --full status "$service"
+          REMOTE_SCRIPT

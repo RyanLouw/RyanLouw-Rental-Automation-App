@@ -111,8 +111,8 @@ public class PropertyDashboardManagerTests
         var statement = await sut.GetPropertyStatementAsync(2, selectedMonth);
 
         Assert.NotNull(statement);
-        var rentRow = Assert.Single(statement!.Entries.Where(x => x.StatementEntryId == 10));
-        var manualRow = Assert.Single(statement.Entries.Where(x => x.StatementEntryId == 11));
+        var rentRow = Assert.Single(statement!.Entries, x => x.StatementEntryId == 10);
+        var manualRow = Assert.Single(statement.Entries, x => x.StatementEntryId == 11);
         Assert.True(rentRow.CanEdit);
         Assert.False(manualRow.CanEdit);
     }
