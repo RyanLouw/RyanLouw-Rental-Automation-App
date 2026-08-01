@@ -1,5 +1,106 @@
 # RyanLouw-Rental-Automation-App
 
+## Deploying to the existing DigitalOcean Droplet
+
+The production server runs Ubuntu 24.04 with Nginx on port 80, the ASP.NET app as
+`rlrentalapp.service` on `127.0.0.1:5000`, and PostgreSQL on `127.0.0.1:5432`.
+Because the Droplet has only 458 MiB RAM and 2.8 GB free disk, deployment uses the
+installed .NET runtime and systemd rather than Docker.
+
+The GitHub workflow tests and publishes both .NET projects on a GitHub runner,
+uploads only the published files, runs migrations, switches
+`/var/www/rlrentalapp/publish` to the new release, restarts the existing service,
+and checks the local HTTP endpoint. If startup fails, it switches back to the
+previous application files.
+
+### One-time server configuration
+
+Create a root-only environment file on the Droplet:
+
+```bash
+sudoedit /etc/rlrentalapp.env
+sudo chmod 600 /etc/rlrentalapp.env
+sudo chown root:root /etc/rlrentalapp.env
+```
+
+Use shell-compatible quoted values; never commit this file:
+
+```dotenv
+ASPNETCORE_ENVIRONMENT="Production"
+ASPNETCORE_URLS="http://127.0.0.1:5000"
+ConnectionStrings__rentaldb="Host=localhost;Port=5432;Database=rentaldb;Username=YOUR_USER;Password=YOUR_PASSWORD"
+GmailSmtp__Host="smtp.gmail.com"
+GmailSmtp__Port="587"
+GmailSmtp__EnableSsl="true"
+GmailSmtp__Username="you@example.com"
+GmailSmtp__AppPassword="YOUR_APP_PASSWORD"
+GmailSmtp__FromEmail="you@example.com"
+GmailSmtp__FromDisplayName="RLRentalApp"
+GoogleDrive__Enabled="false"
+GoogleDrive__ApplicationName="RLRentalApp"
+GoogleDrive__ClientId=""
+GoogleDrive__ClientSecret=""
+GoogleDrive__FolderId=""
+```
+
+For a brand-new database only, an initial administrator can be created by adding
+these lines temporarily with a unique password:
+
+```dotenv
+SeedAdmin__Email="admin@example.com"
+SeedAdmin__Password="A-UNIQUE-LONG-PASSWORD"
+```
+
+Restart once, confirm the account exists, and then remove both `SeedAdmin` lines.
+An existing production database does not need them.
+
+Make the existing service load it with `sudo systemctl edit rlrentalapp.service`:
+
+```ini
+[Service]
+EnvironmentFile=/etc/rlrentalapp.env
+```
+
+Then run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rlrentalapp.service
+sudo systemctl status rlrentalapp.service --no-pager
+curl --fail http://127.0.0.1:5000/
+```
+
+Do not proceed until the service and local request succeed. Back up the PostgreSQL
+database before the first automated migration.
+
+### GitHub production secrets
+
+Create a GitHub environment named `production` and add:
+
+| Secret | Value |
+| --- | --- |
+| `DIGITALOCEAN_HOST` | Droplet IP address |
+| `DIGITALOCEAN_USER` | `root` for the current server |
+| `DIGITALOCEAN_SSH_PRIVATE_KEY` | Dedicated deployment private key |
+| `DIGITALOCEAN_SSH_KNOWN_HOSTS` | Verified SSH host-key line |
+
+Never paste the private key or application passwords into an issue, pull request,
+or committed file. The workflow deploys pushes to `main` and can also be started
+manually from the Actions page.
+
+### Operations
+
+```bash
+systemctl status rlrentalapp.service --no-pager
+journalctl -u rlrentalapp.service -n 200 --no-pager
+nginx -t
+curl -I http://127.0.0.1:5000/
+```
+
+Nginx should remain the only public web listener. Port 5000 and PostgreSQL port
+5432 remain bound to localhost. Add a domain and HTTPS before using real tenant,
+login, or financial data over the public internet.
+
 ## One-shot database migration script
 
 If you want one file to run now instead of opening all 10 migration files, generate a combined SQL script from the existing ordered migration scripts and run that single file with `psql`.
@@ -304,3 +405,35 @@ For production, use environment variables or a managed secret store (Azure Key V
 - The app still reads `appsettings.json` and `appsettings.Development.json` exactly as before.
 - `appsettings.Local.json` is **optional** and only overrides values if you create it locally.
 - Demo/default behavior is unchanged unless you add local secrets or environment variables.
+
+## Google Drive setup (save statement PDFs to your Drive)
+
+This app uses **Sign in with Google** and asks for Google Drive permission for the account you sign in with. It does not use a service-account JSON key. The permission allows the app to save statements to the folder you select, including a folder that existed before the app was connected.
+
+1. In Google Cloud Console, configure the **OAuth consent screen**. While the app is in **Testing**, open **Audience** (or **Test users**) and add every Google email that will sign in, such as the Drive-folder owner and your personal account. This avoids the Google `Error 403: access_denied` verification message.
+2. Create an **OAuth 2.0 Client ID** of type **Web application**.
+3. Add the **Google OAuth callback URI** `https://your-domain/signin-google` under **Authorized redirect URIs**. This is not the `Account/GoogleLoginCallback` route; the Google authentication handler receives the Google response at `/signin-google` first. For local development in this project, use `https://localhost:7241/signin-google`.
+4. Enable the **Google Drive API**.
+5. Create a folder in the Google Drive account you will use, and copy its folder ID from the URL.
+6. Add the OAuth client values outside git in `RLRentalApp.Web/appsettings.Local.json`:
+
+```json
+{
+  "GoogleDrive": {
+    "Enabled": true,
+    "ClientId": "your-oauth-client-id",
+    "ClientSecret": "your-oauth-client-secret",
+    "FolderId": "your-google-drive-folder-id"
+  }
+}
+```
+
+For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder. If you change the folder or Google Drive permission settings, sign out and connect Google again so Google can issue a fresh permission token.
+
+### Test the connection
+
+Use **Test Google Drive** at the top of the Property Dashboard. A successful test creates a timestamped folder and `connection-test.txt` in your configured Drive folder.
+
+### Uploaded source-document folders
+
+Set `GoogleDrive:Enabled` to `true` in the active configuration. The connection test and document uploads require it. When Google Drive is enabled, PDFs selected in **Did they pay?** are saved under `Bank/<year>/<month>/`. PDFs selected in **Add services** are saved under `Properties/<property name>/<year>/<month>/`. The app creates any missing folders automatically before uploading the PDF.

@@ -8,6 +8,17 @@
     <h1 class="mb-3">Property Dashboard</h1>
     <p class="text-muted mb-4">Choose a property to track payment status, services, rent, and extra notes.</p>
 
+    <section class="card border-secondary mb-3">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <div class="flex-grow-1">
+                <h2 class="h6 mb-1">Google Drive connection</h2>
+                <p class="text-muted mb-0">Uses your connected Google account to create a test folder and <code>connection-test.txt</code> file inside your configured Google Drive folder.</p>
+            </div>
+            <button class="btn btn-outline-secondary" type="button" id="testGoogleDriveBtn">Test Google Drive</button>
+            <div id="googleDriveTestMsg" class="alert mb-0 d-none" role="status"></div>
+        </div>
+    </section>
+
     <div id="selectedPropertyHeader" class="alert alert-primary d-none"></div>
 
     <section id="propertySwitcherSection" class="card shadow-sm mb-3 d-none">
@@ -219,7 +230,77 @@
                         <input type="text" class="form-control" id="servicesNotesInput" placeholder="Captured manually or from PDF" />
                     </div>
                 </div>
-                <button class="btn btn-success mt-3" type="button" id="saveServicesBtn">Add services to statement</button>
+
+                <hr />
+                <h3 class="h6">Tax-only capture / edit</h3>
+                <p class="small text-muted mb-2">These values are saved to the property tax ledger only and do not appear on the tenant statement.</p>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicElectricityTaxAmountInput">Basic electricity</label>
+                        <input type="number" step="0.01" class="form-control" id="basicElectricityTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicWaterTaxAmountInput">Basic water</label>
+                        <input type="number" step="0.01" class="form-control" id="basicWaterTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="basicSewerageTaxAmountInput">Basic sewerage</label>
+                        <input type="number" step="0.01" class="form-control" id="basicSewerageTaxAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesResidentialAmountInput">Property Rates Residential</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesResidentialAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesRebate1AmountInput">PROPERTY RATES REBATE 1</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesRebate1AmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesRebate2AmountInput">PROPERTY RATES REBATE 2</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesRebate2AmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="propertyRatesResidentialRebateAmountInput">Property Rates Residential REBATE</label>
+                        <input type="number" step="0.01" class="form-control" id="propertyRatesResidentialRebateAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="levyAmountInput">Levy</label>
+                        <input type="number" step="0.01" class="form-control" id="levyAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="csosAmountInput">CSOS</label>
+                        <input type="number" step="0.01" class="form-control" id="csosAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="hoaAmountInput">HOA</label>
+                        <input type="number" step="0.01" class="form-control" id="hoaAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="levySecurityAmountInput">Levy Security Levy</label>
+                        <input type="number" step="0.01" class="form-control" id="levySecurityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="communalElectricityAmountInput">Communal electricity</label>
+                        <input type="number" step="0.01" class="form-control" id="communalElectricityAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="communalWaterAmountInput">Communal water</label>
+                        <input type="number" step="0.01" class="form-control" id="communalWaterAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityDemandChargeAmountInput">Electricity demand charge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityDemandChargeAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricitySurchargeAmountInput">Electricity surcharge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricitySurchargeAmountInput" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="electricityBasicChargeAmountInput">Electricity basic charge</label>
+                        <input type="number" step="0.01" class="form-control" id="electricityBasicChargeAmountInput" />
+                    </div>
+                </div>
+                <button class="btn btn-success mt-3" type="button" id="saveServicesBtn">Add services and tax entries</button>
                 <div id="saveServicesMsg" class="alert mt-3 d-none"></div>
 
                 <div id="servicePdfError" class="alert alert-danger mt-3 d-none"></div>
@@ -253,6 +334,27 @@
                         <li>Amount incl VAT: <strong id="refuseAmount">-</strong></li>
                     </ul>
 
+
+
+                    <h3 class="h6">Tax-only values</h3>
+                    <ul class="mb-3">
+                        <li>Basic electricity: <strong id="basicElectricityTaxAmount">-</strong></li>
+                        <li>Basic water: <strong id="basicWaterTaxAmount">-</strong></li>
+                        <li>Basic sewerage: <strong id="basicSewerageTaxAmount">-</strong></li>
+                        <li>Property Rates Residential: <strong id="propertyRatesResidentialAmount">-</strong></li>
+                        <li>PROPERTY RATES REBATE 1: <strong id="propertyRatesRebate1Amount">-</strong></li>
+                        <li>PROPERTY RATES REBATE 2: <strong id="propertyRatesRebate2Amount">-</strong></li>
+                        <li>Property Rates Residential REBATE: <strong id="propertyRatesResidentialRebateAmount">-</strong></li>
+                        <li>Levy: <strong id="levyAmount">-</strong></li>
+                        <li>CSOS: <strong id="csosAmount">-</strong></li>
+                        <li>HOA: <strong id="hoaAmount">-</strong></li>
+                        <li>Levy Security Levy: <strong id="levySecurityAmount">-</strong></li>
+                        <li>Communal electricity: <strong id="communalElectricityAmount">-</strong></li>
+                        <li>Communal water: <strong id="communalWaterAmount">-</strong></li>
+                        <li>Electricity demand charge: <strong id="electricityDemandChargeAmount">-</strong></li>
+                        <li>Electricity surcharge: <strong id="electricitySurchargeAmount">-</strong></li>
+                        <li>Electricity basic charge: <strong id="electricityBasicChargeAmount">-</strong></li>
+                    </ul>
                     <details>
                         <summary>Raw text preview</summary>
                         <pre id="servicePdfRawText" class="small mt-2 mb-0"></pre>
@@ -262,6 +364,8 @@
         </div>
     </div>
 </div>
+
+
 
 <div class="modal fade" id="addRentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -384,6 +488,8 @@
 @section Scripts {
     <script>
         (() => {
+            const testGoogleDriveBtn = document.getElementById('testGoogleDriveBtn');
+            const googleDriveTestMsg = document.getElementById('googleDriveTestMsg');
             const propertySelect = document.getElementById('propertySelect');
             const confirmButton = document.getElementById('confirmPropertyBtn');
             const selectedHeader = document.getElementById('selectedPropertyHeader');
@@ -426,6 +532,38 @@
             const servicesNotesInput = document.getElementById('servicesNotesInput');
             const saveServicesBtn = document.getElementById('saveServicesBtn');
             const saveServicesMsg = document.getElementById('saveServicesMsg');
+            const basicElectricityTaxAmountInput = document.getElementById('basicElectricityTaxAmountInput');
+            const basicWaterTaxAmountInput = document.getElementById('basicWaterTaxAmountInput');
+            const basicSewerageTaxAmountInput = document.getElementById('basicSewerageTaxAmountInput');
+            const propertyRatesResidentialAmountInput = document.getElementById('propertyRatesResidentialAmountInput');
+            const propertyRatesRebate1AmountInput = document.getElementById('propertyRatesRebate1AmountInput');
+            const propertyRatesRebate2AmountInput = document.getElementById('propertyRatesRebate2AmountInput');
+            const propertyRatesResidentialRebateAmountInput = document.getElementById('propertyRatesResidentialRebateAmountInput');
+            const levyAmountInput = document.getElementById('levyAmountInput');
+            const csosAmountInput = document.getElementById('csosAmountInput');
+            const hoaAmountInput = document.getElementById('hoaAmountInput');
+            const levySecurityAmountInput = document.getElementById('levySecurityAmountInput');
+            const communalElectricityAmountInput = document.getElementById('communalElectricityAmountInput');
+            const communalWaterAmountInput = document.getElementById('communalWaterAmountInput');
+            const electricityDemandChargeAmountInput = document.getElementById('electricityDemandChargeAmountInput');
+            const electricitySurchargeAmountInput = document.getElementById('electricitySurchargeAmountInput');
+            const electricityBasicChargeAmountInput = document.getElementById('electricityBasicChargeAmountInput');
+            const basicElectricityTaxAmount = document.getElementById('basicElectricityTaxAmount');
+            const basicWaterTaxAmount = document.getElementById('basicWaterTaxAmount');
+            const basicSewerageTaxAmount = document.getElementById('basicSewerageTaxAmount');
+            const propertyRatesResidentialAmount = document.getElementById('propertyRatesResidentialAmount');
+            const propertyRatesRebate1Amount = document.getElementById('propertyRatesRebate1Amount');
+            const propertyRatesRebate2Amount = document.getElementById('propertyRatesRebate2Amount');
+            const propertyRatesResidentialRebateAmount = document.getElementById('propertyRatesResidentialRebateAmount');
+            const levyAmount = document.getElementById('levyAmount');
+            const csosAmount = document.getElementById('csosAmount');
+            const hoaAmount = document.getElementById('hoaAmount');
+            const levySecurityAmount = document.getElementById('levySecurityAmount');
+            const communalElectricityAmount = document.getElementById('communalElectricityAmount');
+            const communalWaterAmount = document.getElementById('communalWaterAmount');
+            const electricityDemandChargeAmount = document.getElementById('electricityDemandChargeAmount');
+            const electricitySurchargeAmount = document.getElementById('electricitySurchargeAmount');
+            const electricityBasicChargeAmount = document.getElementById('electricityBasicChargeAmount');
             const rentEffectiveMonthInput = document.getElementById('rentEffectiveMonthInput');
             const rentAmountInput = document.getElementById('rentAmountInput');
             const rentNotesInput = document.getElementById('rentNotesInput');
@@ -489,6 +627,29 @@
                 const now = new Date();
                 lateChargeDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             }
+
+
+            testGoogleDriveBtn?.addEventListener('click', async () => {
+                testGoogleDriveBtn.disabled = true;
+                googleDriveTestMsg.classList.add('d-none');
+
+                try {
+                    const response = await fetch('/Home/TestGoogleDrive', { method: 'POST' });
+                    const payload = await response.json();
+
+                    googleDriveTestMsg.className = response.ok ? 'alert alert-success mb-0' : 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = response.ok
+                        ? `Connected. Created "${payload.testFolderName}" with "${payload.testFileName}" in your configured Google Drive folder.`
+                        : (payload.message || 'Google Drive test failed.');
+                    googleDriveTestMsg.classList.remove('d-none');
+                } catch {
+                    googleDriveTestMsg.className = 'alert alert-danger mb-0';
+                    googleDriveTestMsg.textContent = 'Google Drive test failed. Check your connection and configuration.';
+                    googleDriveTestMsg.classList.remove('d-none');
+                } finally {
+                    testGoogleDriveBtn.disabled = false;
+                }
+            });
 
             propertySelect?.addEventListener('change', () => {
                 confirmButton.disabled = !propertySelect.value;
@@ -632,6 +793,7 @@
 
                 const formData = new FormData();
                 formData.append('pdfFile', file);
+                formData.append('propertyId', selectedPropertyId || '0');
                 if (servicePdfPassword?.value) {
                     formData.append('pdfPassword', servicePdfPassword.value);
                 }
@@ -673,8 +835,44 @@
                 waterAmountInput.value = payload.water.leviedAmount ?? '';
                 sewerageAmountInput.value = payload.sewerage.amountInclVat ?? '';
                 refuseAmountInput.value = payload.refuse.amountInclVat ?? '';
+
+                basicElectricityTaxAmount.textContent = money(payload.basicElectricityAmount);
+                basicWaterTaxAmount.textContent = money(payload.basicWaterAmount);
+                basicSewerageTaxAmount.textContent = money(payload.basicSewerageAmount);
+                propertyRatesResidentialAmount.textContent = money(payload.propertyRatesResidentialAmount);
+                propertyRatesRebate1Amount.textContent = money(payload.propertyRatesRebate1Amount);
+                propertyRatesRebate2Amount.textContent = money(payload.propertyRatesRebate2Amount);
+                propertyRatesResidentialRebateAmount.textContent = money(payload.propertyRatesResidentialRebateAmount);
+                levyAmount.textContent = money(payload.levyAmount);
+                csosAmount.textContent = money(payload.csosAmount);
+                hoaAmount.textContent = money(payload.hoaAmount);
+                levySecurityAmount.textContent = money(payload.levySecurityAmount);
+                communalElectricityAmount.textContent = money(payload.communalElectricityAmount);
+                communalWaterAmount.textContent = money(payload.communalWaterAmount);
+                electricityDemandChargeAmount.textContent = money(payload.electricityDemandChargeAmount);
+                electricitySurchargeAmount.textContent = money(payload.electricitySurchargeAmount);
+                electricityBasicChargeAmount.textContent = money(payload.electricityBasicChargeAmount);
+
+                basicElectricityTaxAmountInput.value = payload.basicElectricityAmount ?? '';
+                basicWaterTaxAmountInput.value = payload.basicWaterAmount ?? '';
+                basicSewerageTaxAmountInput.value = payload.basicSewerageAmount ?? '';
+                propertyRatesResidentialAmountInput.value = payload.propertyRatesResidentialAmount ?? '';
+                propertyRatesRebate1AmountInput.value = payload.propertyRatesRebate1Amount ?? '';
+                propertyRatesRebate2AmountInput.value = payload.propertyRatesRebate2Amount ?? '';
+                propertyRatesResidentialRebateAmountInput.value = payload.propertyRatesResidentialRebateAmount ?? '';
+                levyAmountInput.value = payload.levyAmount ?? '';
+                csosAmountInput.value = payload.csosAmount ?? '';
+                hoaAmountInput.value = payload.hoaAmount ?? '';
+                levySecurityAmountInput.value = payload.levySecurityAmount ?? '';
+                communalElectricityAmountInput.value = payload.communalElectricityAmount ?? '';
+                communalWaterAmountInput.value = payload.communalWaterAmount ?? '';
+                electricityDemandChargeAmountInput.value = payload.electricityDemandChargeAmount ?? '';
+                electricitySurchargeAmountInput.value = payload.electricitySurchargeAmount ?? '';
+                electricityBasicChargeAmountInput.value = payload.electricityBasicChargeAmount ?? '';
                 servicePdfResults?.classList.remove('d-none');
             });
+
+
 
 
 
@@ -694,15 +892,20 @@
                 }
 
                 const rows = renterPaymentMatches.map(match => {
-                    const rowClass = match.warning ? 'table-warning' : 'table-success';
+                    const paidTotal = (match.payments || []).reduce((total, payment) => total + Number(payment.amount || 0), 0);
+                    const expectedAmount = match.expectedAmount === null || match.expectedAmount === undefined ? null : Number(match.expectedAmount);
+                    const warning = expectedAmount !== null && paidTotal > expectedAmount
+                        ? `Paid ${money(paidTotal)}, which is more than the expected ${money(expectedAmount)}. Check the amount before saving.`
+                        : match.warning;
+                    const rowClass = warning ? 'table-warning' : 'table-success';
                     return `
                         <tr class="${rowClass}">
                             <td>${match.propertyName}</td>
                             <td>${match.tenantName}</td>
                             <td><code>${match.paymentReference || '-'}</code></td>
                             <td class="text-end">${match.expectedAmount !== null && match.expectedAmount !== undefined ? Number(match.expectedAmount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' }) : '-'}</td>
-                            <td class="text-end">${Number(match.paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
-                            <td>${match.warning || 'Paid'}</td>
+                            <td class="text-end">${Number(paidTotal).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                            <td>${warning || 'Paid'}</td>
                         </tr>`;
                 }).join('');
 
@@ -724,15 +927,26 @@
 
                 paymentTableBody.innerHTML = parsedPayments.map((payment, index) => `
                     <tr>
-                        <td>${new Date(payment.paidOn).toLocaleDateString()}</td>
-                        <td>${payment.description}</td>
-                        <td class="text-end">${Number(payment.amount).toLocaleString(undefined, { style: 'currency', currency: 'ZAR' })}</td>
+                        <td><input class="form-control form-control-sm payment-date" data-index="${index}" type="date" value="${new Date(payment.paidOn).toISOString().slice(0, 10)}" /></td>
+                        <td><input class="form-control form-control-sm payment-description" data-index="${index}" value="${payment.description}" /></td>
+                        <td><input class="form-control form-control-sm payment-amount text-end" data-index="${index}" type="number" min="0" step="0.01" value="${payment.amount}" /></td>
                         <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-index="${index}" type="button">Delete</button></td>
                     </tr>
                 `).join('');
 
                 renderRenterPaymentSummary();
             };
+
+            paymentTableBody?.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLInputElement)) return;
+                const index = Number(target.dataset.index);
+                if (Number.isNaN(index) || !parsedPayments[index]) return;
+                if (target.classList.contains('payment-date')) parsedPayments[index].paidOn = target.value;
+                if (target.classList.contains('payment-description')) parsedPayments[index].description = target.value;
+                if (target.classList.contains('payment-amount')) parsedPayments[index].amount = Number(target.value);
+                renderPaymentRows();
+            });
 
             paymentTableBody?.addEventListener('click', (event) => {
                 const target = event.target;
@@ -952,13 +1166,30 @@
                     notes: paymentNotesInput?.value || ''
                 };
 
-                const response = await fetch('/Home/SavePayments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
+                const formData = new FormData();
+                formData.append('requestJson', JSON.stringify(body));
+                const bankPdf = paymentPdfFile?.files?.[0];
+                if (bankPdf) formData.append('pdfFile', bankPdf);
 
-                const payload = await response.json();
+                savePaymentsBtn.disabled = true;
+                savePaymentsMsg.className = 'alert alert-info mt-3';
+                savePaymentsMsg.textContent = bankPdf
+                    ? 'Saving payment values and uploading the bank PDF to Google Drive. Please wait...'
+                    : 'Saving payment values. Please wait...';
+                savePaymentsMsg.classList.remove('d-none');
+
+                let response;
+                let payload;
+                try {
+                    response = await fetch('/Home/SavePayments', { method: 'POST', body: formData });
+                    payload = await response.json();
+                } catch {
+                    savePaymentsMsg.className = 'alert alert-danger mt-3';
+                    savePaymentsMsg.textContent = 'The save request did not finish. Check your connection and try again.';
+                    return;
+                } finally {
+                    savePaymentsBtn.disabled = false;
+                }
 
                 if (!response.ok) {
                     savePaymentsMsg.className = 'alert alert-danger mt-3';
@@ -1007,6 +1238,22 @@
                     waterAmount: waterAmountInput.value ? Number(waterAmountInput.value) : null,
                     sewerageAmount: sewerageAmountInput.value ? Number(sewerageAmountInput.value) : null,
                     refuseAmount: refuseAmountInput.value ? Number(refuseAmountInput.value) : null,
+                    basicElectricityAmount: basicElectricityTaxAmountInput.value ? Number(basicElectricityTaxAmountInput.value) : null,
+                    basicWaterAmount: basicWaterTaxAmountInput.value ? Number(basicWaterTaxAmountInput.value) : null,
+                    basicSewerageAmount: basicSewerageTaxAmountInput.value ? Number(basicSewerageTaxAmountInput.value) : null,
+                    propertyRatesResidentialAmount: propertyRatesResidentialAmountInput.value ? Number(propertyRatesResidentialAmountInput.value) : null,
+                    propertyRatesRebate1Amount: propertyRatesRebate1AmountInput.value ? Number(propertyRatesRebate1AmountInput.value) : null,
+                    propertyRatesRebate2Amount: propertyRatesRebate2AmountInput.value ? Number(propertyRatesRebate2AmountInput.value) : null,
+                    propertyRatesResidentialRebateAmount: propertyRatesResidentialRebateAmountInput.value ? Number(propertyRatesResidentialRebateAmountInput.value) : null,
+                    levyAmount: levyAmountInput.value ? Number(levyAmountInput.value) : null,
+                    csosAmount: csosAmountInput.value ? Number(csosAmountInput.value) : null,
+                    hoaAmount: hoaAmountInput.value ? Number(hoaAmountInput.value) : null,
+                    levySecurityAmount: levySecurityAmountInput.value ? Number(levySecurityAmountInput.value) : null,
+                    communalElectricityAmount: communalElectricityAmountInput.value ? Number(communalElectricityAmountInput.value) : null,
+                    communalWaterAmount: communalWaterAmountInput.value ? Number(communalWaterAmountInput.value) : null,
+                    electricityDemandChargeAmount: electricityDemandChargeAmountInput.value ? Number(electricityDemandChargeAmountInput.value) : null,
+                    electricitySurchargeAmount: electricitySurchargeAmountInput.value ? Number(electricitySurchargeAmountInput.value) : null,
+                    electricityBasicChargeAmount: electricityBasicChargeAmountInput.value ? Number(electricityBasicChargeAmountInput.value) : null,
                     notes: servicesNotesInput.value || ''
                 };
 

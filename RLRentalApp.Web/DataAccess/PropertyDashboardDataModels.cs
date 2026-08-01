@@ -28,6 +28,15 @@ public sealed class ServiceChargeInsertDataModel
     public string Notes { get; set; } = string.Empty;
 }
 
+
+public sealed class PropertyTaxEntryInsertDataModel
+{
+    public int PropertyId { get; set; }
+    public DateTime EntryDate { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+}
+
 public sealed class StatementSnapshotDataModel
 {
     public decimal AmountThroughMonth { get; set; }
