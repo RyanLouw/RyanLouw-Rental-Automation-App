@@ -75,10 +75,11 @@ jobs:
           archive="/tmp/rlrentalapp-$RELEASE_SHA.tar.gz"
           env_file=/etc/rlrentalapp.env
           service=rlrentalapp.service
+          deployment_stage="initialization"
 
           report_failure() {
             local exit_code=$?
-            echo "Deployment failed at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
+            echo "Deployment failed during $deployment_stage at remote script line ${BASH_LINENO[0]} (exit $exit_code)." >&2
             echo "Service state:" >&2
             systemctl --no-pager --full status "$service" >&2 || true
             echo "Recent service logs:" >&2
@@ -87,6 +88,7 @@ jobs:
           }
           trap report_failure ERR
 
+          deployment_stage="server prerequisite checks"
           echo "Checking server prerequisites..."
           command -v dotnet >/dev/null
           command -v curl >/dev/null
@@ -94,6 +96,7 @@ jobs:
           test -s "$env_file"
           bash -n "$env_file"
 
+          deployment_stage="release extraction"
           echo "Extracting release $RELEASE_SHA..."
           mkdir -p "$release_dir"
           tar -xzf "$archive" -C "$release_dir"
@@ -101,12 +104,14 @@ jobs:
           test -f "$release_dir/web/RLRentalApp.Web.dll"
           test -f "$release_dir/migrations/RLRentalApp.Migrations.dll"
 
+          deployment_stage="production configuration loading"
           echo "Loading production configuration..."
           set -a
           # The file is root-owned and uses shell-compatible KEY="value" lines.
           source "$env_file"
           set +a
 
+          deployment_stage="database migrations"
           echo "Running database migrations..."
           dotnet "$release_dir/migrations/RLRentalApp.Migrations.dll"
 
@@ -116,6 +121,7 @@ jobs:
             mv "$app_dir/publish" "$previous_publish"
           fi
 
+          deployment_stage="application release switch"
           echo "Switching the application release..."
           systemctl stop "$service"
           ln -sfn "$release_dir/web" "$app_dir/publish"
