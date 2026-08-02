@@ -201,6 +201,7 @@
                     <div class="form-text">Some water/electricity PDFs are protected. Enter that PDF password here before parsing.</div>
                 </div>
                 <button class="btn btn-primary" type="button" id="parseServicePdfBtn">Parse PDF</button>
+                <div id="servicePdfUploadMsg" class="alert mt-3 d-none" role="status"></div>
 
                 <hr />
                 <h3 class="h6">Manual capture / edit</h3>
@@ -510,6 +511,7 @@
             const servicePdfFile = document.getElementById('servicePdfFile');
             const servicePdfPassword = document.getElementById('servicePdfPassword');
             const servicePdfError = document.getElementById('servicePdfError');
+            const servicePdfUploadMsg = document.getElementById('servicePdfUploadMsg');
             const servicePdfResults = document.getElementById('servicePdfResults');
             const electricityOldReading = document.getElementById('electricityOldReading');
             const electricityNewReading = document.getElementById('electricityNewReading');
@@ -600,6 +602,8 @@
 
             let selectedPropertyId = null;
             let currentPropertyStatus = null;
+            let servicesDocumentMessage = 'No services PDF has been uploaded in this session.';
+            let servicesDocumentUploaded = false;
 
             if (!pickerElement) {
                 return;
@@ -780,6 +784,7 @@
 
             parseServicePdfBtn?.addEventListener('click', async () => {
                 servicePdfError?.classList.add('d-none');
+                servicePdfUploadMsg?.classList.add('d-none');
                 servicePdfResults?.classList.add('d-none');
 
                 const file = servicePdfFile?.files?.[0];
@@ -811,6 +816,18 @@
                         servicePdfError.classList.remove('d-none');
                     }
                     return;
+                }
+
+                if (servicePdfUploadMsg) {
+                    servicesDocumentUploaded = Boolean(payload.documentUploaded);
+                    servicesDocumentMessage = payload.documentMessage || (servicesDocumentUploaded
+                        ? 'Services PDF saved to Google Drive successfully.'
+                        : 'Services PDF was not saved to Google Drive.');
+                    servicePdfUploadMsg.className = payload.documentUploaded
+                        ? 'alert alert-success mt-3'
+                        : 'alert alert-danger mt-3';
+                    servicePdfUploadMsg.textContent = servicesDocumentMessage;
+                    servicePdfUploadMsg.classList.remove('d-none');
                 }
 
                 electricityOldReading.textContent = payload.electricity.oldReading ?? '-';
@@ -1210,7 +1227,10 @@
                     statementMonthInput.value = `${firstSaved.getFullYear()}-${String(firstSaved.getMonth() + 1).padStart(2, '0')}`;
                 }
 
-                savePaymentsMsg.textContent = `${payload.message}${savedRowsText} Tip: open View statement and click Reload for the saved month.`;
+                const documentStatus = payload.documentMessage || (bankPdf
+                    ? (payload.documentUploaded ? 'Bank statement PDF saved to Google Drive successfully.' : 'Bank statement PDF was not saved to Google Drive.')
+                    : 'No bank statement PDF was selected for upload.');
+                savePaymentsMsg.textContent = `${payload.message}${savedRowsText} ${documentStatus} Tip: open View statement and click Reload for the saved month.`;
                 savePaymentsMsg.classList.remove('d-none');
 
                 await loadProperty(selectedPropertyId, false);
@@ -1272,8 +1292,10 @@
                     return;
                 }
 
-                saveServicesMsg.className = 'alert alert-success mt-3';
-                saveServicesMsg.textContent = payload.message;
+                saveServicesMsg.className = servicesDocumentUploaded
+                    ? 'alert alert-success mt-3'
+                    : 'alert alert-warning mt-3';
+                saveServicesMsg.textContent = `${payload.message} ${servicesDocumentMessage}`;
                 saveServicesMsg.classList.remove('d-none');
 
                 await loadProperty(selectedPropertyId, false);

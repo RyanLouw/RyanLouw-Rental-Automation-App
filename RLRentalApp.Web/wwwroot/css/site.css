@@ -21,6 +21,58 @@ body {
   margin-bottom: 60px;
 }
 
+.login-page {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: calc(100vh - 10rem);
+}
+
+.login-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  box-shadow: 0 1rem 2.5rem rgba(15, 23, 42, 0.1);
+  max-width: 28rem;
+  padding: 2.5rem;
+  width: 100%;
+}
+
+.google-sign-in-button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  color: #3c4043;
+  display: flex;
+  font-family: Arial, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  gap: 0.9rem;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+
+.google-sign-in-button:hover {
+  background: #f8faff;
+  border-color: #d2e3fc;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3);
+}
+
+.google-sign-in-button:focus-visible {
+  outline: 3px solid rgba(66, 133, 244, 0.3);
+  outline-offset: 2px;
+}
+
+.google-sign-in-icon {
+  flex: 0 0 18px;
+  height: 18px;
+  width: 18px;
+}
+
 .tax-hero {
   background: linear-gradient(135deg, #eef6ff, #f5f3ff 55%, #ecfdf3);
   border: 1px solid #e4e7ec;

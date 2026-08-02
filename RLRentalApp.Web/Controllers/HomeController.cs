@@ -122,7 +122,24 @@ public class HomeController : Controller
         }
 
         var property = await _propertyDashboardManager.GetPropertyStatusAsync(propertyId);
-        if (property is not null) await UploadDriveDocumentAsync(pdfFile!, ["Properties", SafeFolderName(property.PropertyName), DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
+        if (property is null)
+        {
+            result.DocumentMessage = "The PDF was parsed, but it was not saved to Google Drive because the property could not be found.";
+            return Json(result);
+        }
+
+        try
+        {
+            await UploadDriveDocumentAsync(pdfFile!, ["Properties", SafeFolderName(property.PropertyName), DateTime.UtcNow.Year.ToString(), DateTime.UtcNow.ToString("MM")]);
+            result.DocumentUploaded = true;
+            result.DocumentMessage = "Services PDF saved to Google Drive successfully.";
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "The services PDF was parsed but its Google Drive upload failed.");
+            result.DocumentMessage = $"The PDF was parsed, but it was not saved to Google Drive: {GetGoogleDriveConnectionErrorMessage(exception)}";
+        }
+
         return Json(result);
     }
 
@@ -203,11 +220,28 @@ public class HomeController : Controller
             catch (Exception exception)
             {
                 _logger.LogWarning(exception, "Payment values were saved but the bank PDF upload failed.");
-                return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"Payment values were saved, but the bank PDF was not uploaded: {GetGoogleDriveConnectionErrorMessage(exception)}", savedPayments = result.SavedPayments });
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    message = $"Payment values were saved, but the bank PDF was not uploaded: {GetGoogleDriveConnectionErrorMessage(exception)}",
+                    savedPayments = result.SavedPayments,
+                    documentUploaded = false
+                });
             }
         }
 
-        return Json(result);
+        return Json(new
+        {
+            result.Success,
+            result.Message,
+            result.AddedCount,
+            result.SkippedDuplicates,
+            result.SavedPayments,
+            result.RenterMatches,
+            documentUploaded = pdfFile is not null && pdfFile.Length > 0,
+            documentMessage = pdfFile is not null && pdfFile.Length > 0
+                ? "Bank statement PDF saved to Google Drive successfully."
+                : "Payment values were saved. No bank statement PDF was selected for upload."
+        });
     }
 
 

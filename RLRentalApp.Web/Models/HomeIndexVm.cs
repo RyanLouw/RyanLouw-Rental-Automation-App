@@ -102,6 +102,8 @@ public class ServicePdfParseResultVm
 {
     public bool Success { get; set; }
     public string? ErrorMessage { get; set; }
+    public bool DocumentUploaded { get; set; }
+    public string DocumentMessage { get; set; } = string.Empty;
     public ElectricityParseVm Electricity { get; set; } = new();
     public WaterParseVm Water { get; set; } = new();
     public SewerageParseVm Sewerage { get; set; } = new();
