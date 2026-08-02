@@ -291,7 +291,9 @@ public class HomeController : Controller
     {
         await using var stream = new MemoryStream();
         await pdfFile.CopyToAsync(stream);
-        await _googleDriveStorageService.UploadFileToFoldersAsync(pdfFile.FileName, stream.ToArray(), pdfFile.ContentType ?? "application/pdf", folderNames);
+        var fileId = await _googleDriveStorageService.UploadFileToFoldersAsync(pdfFile.FileName, stream.ToArray(), pdfFile.ContentType ?? "application/pdf", folderNames);
+        if (string.IsNullOrWhiteSpace(fileId))
+            throw new InvalidOperationException("Google Drive did not confirm that the document was saved. No file ID was returned.");
     }
 
     private static string SafeFolderName(string name) => string.Concat(name.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '-' : character)).Trim();

@@ -27,7 +27,7 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
 
     public async Task<GoogleDriveConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled) throw new InvalidOperationException("GoogleDrive:Enabled must be true before testing or uploading documents.");
+        EnsureEnabled();
         using var driveService = await CreateDriveServiceAsync(cancellationToken);
         var suffix = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         var testFolderName = $"RLRentalApp-GoogleDrive-Test-{suffix}";
@@ -35,14 +35,21 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
         var testFileName = "connection-test.txt";
         await using var content = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"Google Drive connection succeeded at {DateTime.UtcNow:O}."));
         var upload = driveService.Files.Create(new GoogleFile { Name = testFileName, Parents = [folder.Id] }, content, "text/plain");
+        upload.Fields = "id";
         var uploadResult = await upload.UploadAsync(cancellationToken);
         if (uploadResult.Exception is not null) throw uploadResult.Exception;
-        return new GoogleDriveConnectionTestResult { TestFolderName = testFolderName, TestFolderId = folder.Id ?? string.Empty, TestFileName = testFileName, TestFileId = upload.ResponseBody?.Id ?? string.Empty };
+        return new GoogleDriveConnectionTestResult
+        {
+            TestFolderName = testFolderName,
+            TestFolderId = GetUploadedFileId(folder.Id, testFolderName),
+            TestFileName = testFileName,
+            TestFileId = GetUploadedFileId(upload.ResponseBody?.Id, testFileName)
+        };
     }
 
-    public async Task<string?> UploadFileToFoldersAsync(string fileName, byte[] content, string contentType, IReadOnlyList<string> folderNames, CancellationToken cancellationToken = default)
+    public async Task<string> UploadFileToFoldersAsync(string fileName, byte[] content, string contentType, IReadOnlyList<string> folderNames, CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled) return null;
+        EnsureEnabled();
         using var driveService = await CreateDriveServiceAsync(cancellationToken);
         var parentId = _options.FolderId;
         foreach (var folderName in folderNames.Where(x => !string.IsNullOrWhiteSpace(x)))
@@ -55,19 +62,32 @@ public class GoogleDriveStorageService : IGoogleDriveStorageService
         request.Fields = "id";
         var result = await request.UploadAsync(cancellationToken);
         if (result.Exception is not null) throw result.Exception;
-        return request.ResponseBody?.Id;
+        return GetUploadedFileId(request.ResponseBody?.Id, fileName);
     }
 
-    public async Task<string?> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
+    public async Task<string> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled) return null;
+        EnsureEnabled();
         using var driveService = await CreateDriveServiceAsync(cancellationToken);
         await using var uploadStream = new MemoryStream(content);
         var request = driveService.Files.Create(new GoogleFile { Name = fileName, Parents = [_options.FolderId] }, uploadStream, contentType);
         request.Fields = "id";
         var result = await request.UploadAsync(cancellationToken);
         if (result.Exception is not null) throw result.Exception;
-        return request.ResponseBody?.Id;
+        return GetUploadedFileId(request.ResponseBody?.Id, fileName);
+    }
+
+    private void EnsureEnabled()
+    {
+        if (!_options.Enabled)
+            throw new InvalidOperationException("Google Drive is disabled. Set GoogleDrive:Enabled to true and configure ClientId, ClientSecret, and FolderId, then restart the app.");
+    }
+
+    private static string GetUploadedFileId(string? fileId, string fileName)
+    {
+        return !string.IsNullOrWhiteSpace(fileId)
+            ? fileId
+            : throw new InvalidOperationException($"Google Drive did not confirm that '{fileName}' was saved. No file ID was returned.");
     }
 
     private static async Task<string> GetOrCreateFolderAsync(DriveService driveService, string parentId, string folderName, CancellationToken cancellationToken)

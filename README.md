@@ -37,12 +37,17 @@ GmailSmtp__Username="you@example.com"
 GmailSmtp__AppPassword="YOUR_APP_PASSWORD"
 GmailSmtp__FromEmail="you@example.com"
 GmailSmtp__FromDisplayName="RLRentalApp"
-GoogleDrive__Enabled="false"
+GoogleDrive__Enabled="true"
 GoogleDrive__ApplicationName="RLRentalApp"
-GoogleDrive__ClientId=""
-GoogleDrive__ClientSecret=""
-GoogleDrive__FolderId=""
+GoogleDrive__ClientId="YOUR_GOOGLE_OAUTH_CLIENT_ID"
+GoogleDrive__ClientSecret="YOUR_GOOGLE_OAUTH_CLIENT_SECRET"
+GoogleDrive__FolderId="YOUR_GOOGLE_DRIVE_FOLDER_ID"
 ```
+
+All four `GoogleDrive` values are required for uploads. `Enabled=false` deliberately
+disables both the connection test and uploads; do not leave it false on a server
+that should store documents. After changing `/etc/rlrentalapp.env`, restart the
+service with `sudo systemctl restart rlrentalapp.service` so the new values load.
 
 For a brand-new database only, an initial administrator can be created by adding
 these lines temporarily with a unique password:
