@@ -25,13 +25,11 @@ jobs:
       - run: dotnet restore RLRentalApp.sln
       - run: dotnet build RLRentalApp.sln --configuration Release --no-restore
       - run: dotnet test RLRentalApp.sln --configuration Release --no-build
-      - name: Publish application
+      - name: Publish applications
         run: |
           dotnet publish RLRentalApp.Web/RLRentalApp.Web.csproj -c Release --no-build -o artifact/web
-          # Temporarily disabled until the production database credentials are fixed:
-          # dotnet publish RLRentalApp.Migrations/RLRentalApp.Migrations.csproj -c Release --no-build -o artifact/migrations
-          # tar -C artifact -czf rlrentalapp-publish.tar.gz web migrations
-          tar -C artifact -czf rlrentalapp-publish.tar.gz web
+          dotnet publish RLRentalApp.Migrations/RLRentalApp.Migrations.csproj -c Release --no-build -o artifact/migrations
+          tar -C artifact -czf rlrentalapp-publish.tar.gz web migrations
       - uses: actions/upload-artifact@v5
         with:
           name: production-publish
@@ -63,7 +61,7 @@ jobs:
         run: |
           scp rlrentalapp-publish.tar.gz \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/rlrentalapp-${{ github.sha }}.tar.gz"
-      - name: Switch application release
+      - name: Migrate and switch application release
         env:
           DEPLOY_HOST: ${{ secrets.DIGITALOCEAN_HOST }}
           DEPLOY_USER: ${{ secrets.DIGITALOCEAN_USER }}
@@ -108,21 +106,21 @@ jobs:
           tar -xzf "$archive" -C "$release_dir"
           chmod -R go-w "$release_dir"
           test -f "$release_dir/web/RLRentalApp.Web.dll"
+          test -f "$release_dir/migrations/RLRentalApp.Migrations.dll"
 
-          # Database migrations are temporarily disabled until the production
-          # database credentials are fixed. Restore the migration publish above
-          # before re-enabling this block.
-          # test -f "$release_dir/migrations/RLRentalApp.Migrations.dll"
-          #
-          # deployment_stage="production configuration loading"
-          # echo "Loading production configuration..."
-          # set -a
-          # source "$env_file"
-          # set +a
-          #
-          # deployment_stage="database migrations"
-          # echo "Running database migrations..."
-          # dotnet "$release_dir/migrations/RLRentalApp.Migrations.dll"
+          deployment_stage="production configuration loading"
+          echo "Loading production configuration..."
+          set -a
+          source "$env_file"
+          set +a
+          test -n "${ConnectionStrings__rentaldb:-}"
+
+          deployment_stage="database connection and migrations"
+          echo "Checking the database connection and running migrations..."
+          if ! dotnet "$release_dir/migrations/RLRentalApp.Migrations.dll"; then
+            echo "Database preflight failed. Verify ConnectionStrings__rentaldb in $env_file before retrying the deployment." >&2
+            exit 1
+          fi
 
           previous_publish=$(readlink -f "$app_dir/publish" || true)
           if [[ -d "$app_dir/publish" && ! -L "$app_dir/publish" ]]; then

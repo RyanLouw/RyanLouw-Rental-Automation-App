@@ -8,7 +8,8 @@ Because the Droplet has only 458 MiB RAM and 2.8 GB free disk, deployment uses t
 installed .NET runtime and systemd rather than Docker.
 
 The GitHub workflow tests and publishes both .NET projects on a GitHub runner,
-uploads only the published files, runs migrations, switches
+uploads only the published files, validates the configured database connection and
+runs migrations before stopping the current service, then switches
 `/var/www/rlrentalapp/publish` to the new release, restarts the existing service,
 and checks the local HTTP endpoint. If startup fails, it switches back to the
 previous application files.
@@ -72,6 +73,21 @@ curl --fail http://127.0.0.1:5000/
 
 Do not proceed until the service and local request succeed. Back up the PostgreSQL
 database before the first automated migration.
+
+If deployment reports PostgreSQL error `28P01`, the username or password in
+`ConnectionStrings__rentaldb` does not match PostgreSQL. Correct the root-only
+environment file, restart the service, and confirm that it connects successfully
+before retrying the workflow:
+
+```bash
+sudoedit /etc/rlrentalapp.env
+sudo systemctl restart rlrentalapp.service
+sudo journalctl -u rlrentalapp.service -n 50 --no-pager
+curl --fail http://127.0.0.1:5000/
+```
+
+The deployment database preflight runs before the release symlink is changed, so
+an invalid credential cannot replace a healthy current release.
 
 ### GitHub production secrets
 
@@ -429,6 +445,12 @@ This app uses **Sign in with Google** and asks for Google Drive permission for t
 ```
 
 For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder. If you change the folder or Google Drive permission settings, sign out and connect Google again so Google can issue a fresh permission token.
+
+The Google authorization screen is intentionally shown when connecting so Google
+returns the offline refresh token required by later Drive uploads. If **Test Google
+Drive** says to connect the account, sign out of RLRentalApp and use **Sign in with
+Google and connect Drive** again; logging in with the local email/password form does
+not connect Google Drive.
 
 ### Test the connection
 
