@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Google.Apis.Drive.v3;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
 using RLRentalApp.Web.Data;
@@ -39,6 +40,21 @@ builder.Services.AddAuthentication()
         options.CallbackPath = "/signin-google";
         options.Scope.Add(DriveService.Scope.Drive);
         options.AccessType = "offline";
+        options.Events.OnRedirectToAuthorizationEndpoint = context =>
+        {
+            // Drive operations need a refresh token after the short-lived access
+            // token expires. Google may omit it for an account that previously
+            // granted consent unless the authorization screen is shown again.
+            var authorizationUri = QueryHelpers.AddQueryString(
+                context.RedirectUri,
+                new Dictionary<string, string?>
+                {
+                    ["prompt"] = "consent",
+                    ["include_granted_scopes"] = "true"
+                });
+            context.Response.Redirect(authorizationUri);
+            return Task.CompletedTask;
+        };
     });
 
 builder.Services.AddScoped<IPropertyDashboardDataAccess, PropertyDashboardDataAccess>();

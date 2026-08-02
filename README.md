@@ -446,6 +446,12 @@ This app uses **Sign in with Google** and asks for Google Drive permission for t
 
 For a live server, Google requires a real HTTPS domain, for example `https://rental.example.com/signin-google`; a bare HTTP server IP address cannot be used. Then choose **Sign in with Google and connect Drive** on the login page. Sign in with the Google account that owns or can edit the selected folder. If you change the folder or Google Drive permission settings, sign out and connect Google again so Google can issue a fresh permission token.
 
+The Google authorization screen is intentionally shown when connecting so Google
+returns the offline refresh token required by later Drive uploads. If **Test Google
+Drive** says to connect the account, sign out of RLRentalApp and use **Sign in with
+Google and connect Drive** again; logging in with the local email/password form does
+not connect Google Drive.
+
 ### Test the connection
 
 Use **Test Google Drive** at the top of the Property Dashboard. A successful test creates a timestamped folder and `connection-test.txt` in your configured Drive folder.
