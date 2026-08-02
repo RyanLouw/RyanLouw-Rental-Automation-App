@@ -4,48 +4,28 @@
     ViewData["Title"] = "Login";
 }
 
-<div class="container" style="max-width:400px; padding-top:80px;">
-    <h3 class="mb-4 text-center">RLRentalApp Login</h3>
-
-    <form asp-action="Login" method="post">
-        @Html.AntiForgeryToken()
-        <input type="hidden" asp-for="ReturnUrl" />
-
-        <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input asp-for="Email" class="form-control" />
-            <span asp-validation-for="Email" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input asp-for="Password" type="password" class="form-control" />
-            <span asp-validation-for="Password" class="text-danger"></span>
-        </div>
-
-        <div class="form-check mb-3">
-            <input asp-for="RememberMe" class="form-check-input" />
-            <label asp-for="RememberMe" class="form-check-label">
-                Remember me
-            </label>
-        </div>
+<div class="container login-page">
+    <div class="login-card">
+        <h1 class="h3 mb-2 text-center">Welcome to RLRentalApp</h1>
+        <p class="text-muted mb-4 text-center">Sign in securely with your Google account.</p>
 
         <div class="text-danger mb-2">
             @Html.ValidationSummary(false)
         </div>
 
-        <button type="submit" class="btn btn-primary w-100">
-            Login
-        </button>
-    </form>
-
-    <form asp-action="GoogleLogin" method="post" class="mt-3">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="returnUrl" value="@Model?.ReturnUrl" />
-        <button type="submit" class="btn btn-outline-danger w-100">Sign in with Google and connect Drive</button>
-    </form>
+        <form asp-action="GoogleLogin" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="@Model?.ReturnUrl" />
+            <button type="submit" class="google-sign-in-button">
+                <svg class="google-sign-in-icon" viewBox="0 0 18 18" aria-hidden="true">
+                    <path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.715v2.258h2.909c1.702-1.567 2.684-3.874 2.684-6.614Z" />
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.181l-2.909-2.258c-.806.54-1.835.859-3.047.859-2.344 0-4.328-1.585-5.037-3.714H.956v2.332A9 9 0 0 0 9 18Z" />
+                    <path fill="#FBBC05" d="M3.963 10.706A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.168.281-1.706V4.962H.956A9 9 0 0 0 0 9c0 1.452.347 2.827.956 4.038l3.007-2.332Z" />
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.507.454 3.44 1.346l2.581-2.581C13.463.892 11.426 0 9 0A9 9 0 0 0 .956 4.962l3.007 2.332C4.672 5.165 6.656 3.58 9 3.58Z" />
+                </svg>
+                <span>Sign in with Google</span>
+            </button>
+        </form>
+        <p class="small text-muted mt-3 mb-0 text-center">Google sign-in also connects Google Drive for document storage.</p>
+    </div>
 </div>
-
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}

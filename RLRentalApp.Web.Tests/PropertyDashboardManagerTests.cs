@@ -444,16 +444,16 @@ public class PropertyDashboardManagerTests
         public Task<GoogleDriveConnectionTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new GoogleDriveConnectionTestResult());
 
-        public Task<string?> UploadFileToFoldersAsync(string fileName, byte[] content, string contentType, IReadOnlyList<string> folderNames, CancellationToken cancellationToken = default)
+        public Task<string> UploadFileToFoldersAsync(string fileName, byte[] content, string contentType, IReadOnlyList<string> folderNames, CancellationToken cancellationToken = default)
             => UploadFileAsync(fileName, content, contentType, cancellationToken);
 
-        public Task<string?> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
+        public Task<string> UploadFileAsync(string fileName, byte[] content, string contentType, CancellationToken cancellationToken = default)
         {
             UploadCount++;
             LastFileName = fileName;
             LastContent = content;
             LastContentType = contentType;
-            return Task.FromResult<string?>("google-drive-file-id");
+            return Task.FromResult("google-drive-file-id");
         }
     }
 
